@@ -84,34 +84,29 @@ function DataSettings() {
     setDeleteDialogOpen(true);
   };
 
+  const deleteBatched = async (table: string) => {
+    const { data, error: selErr } = await supabase.from(table as any).select('id');
+    if (selErr) throw selErr;
+    if (!data || data.length === 0) return;
+    const ids = data.map((r: any) => r.id);
+    for (let i = 0; i < ids.length; i += 500) {
+      const { error } = await supabase.from(table as any).delete().in('id', ids.slice(i, i + 500));
+      if (error) throw error;
+    }
+  };
+
   const handleConfirmDelete = async () => {
     if (!deleteType) return;
-    
+
     setIsDeleting(true);
-    
+
     try {
       if (deleteType === "orders") {
-        const { error: itemsError } = await supabase
-          .from("li_order_items")
-          .delete()
-          .neq("id", "00000000-0000-0000-0000-000000000000");
-        
-        if (itemsError) throw itemsError;
-        
-        const { error: ordersError } = await supabase
-          .from("li_orders")
-          .delete()
-          .neq("id", "00000000-0000-0000-0000-000000000000");
-        
-        if (ordersError) throw ordersError;
+        await deleteBatched("li_order_items");
+        await deleteBatched("li_orders");
       } else {
         const table = deleteType === "customers" ? "li_customers" : "li_products";
-        const { error } = await supabase
-          .from(table)
-          .delete()
-          .neq("id", "00000000-0000-0000-0000-000000000000");
-        
-        if (error) throw error;
+        await deleteBatched(table);
       }
 
       toast.success(`${deleteConfig[deleteType].label} excluídos com sucesso!`);
