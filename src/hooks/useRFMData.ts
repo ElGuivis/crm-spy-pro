@@ -243,7 +243,7 @@ export function useRFMData(integrationId: string) {
     if (!integrationId) return;
 
     const channel = supabase
-      .channel(`rfm-snapshots-${integrationId}`)
+      .channel(`rfm-snapshots-${integrationId}-${Date.now()}`)
       .on(
         'postgres_changes',
         {

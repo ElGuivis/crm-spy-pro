@@ -222,7 +222,7 @@ export function useIntegrationData({ category }: UseIntegrationDataOptions) {
     if (!tenantId) return;
 
     const channel = supabase
-      .channel(`integrations-${category}`)
+      .channel(`integrations-${category}-${Date.now()}`)
       .on(
         'postgres_changes',
         {

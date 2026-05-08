@@ -137,7 +137,7 @@ export function useConversations(inboxId: string | null, filters?: ConversationF
     if (!tenantId) return;
 
     const channel = supabase
-      .channel(`atendimentos-conversations-realtime-${tenantId}`)
+      .channel(`atendimentos-conv-${tenantId}-${Date.now()}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'conversations', filter: `tenant_id=eq.${tenantId}` },
@@ -178,7 +178,7 @@ export function useMessages(conversationId: string | null) {
     if (!conversationId) return;
 
     const channel = supabase
-      .channel(`atendimentos-messages-${conversationId}`)
+      .channel(`atendimentos-msg-${conversationId}-${Date.now()}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },

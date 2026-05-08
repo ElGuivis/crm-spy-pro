@@ -157,7 +157,7 @@ export function useBlingSalesData(integrationId: string) {
 
   useEffect(() => {
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    const channel = supabase.channel(`bling-orders-${integrationId}`)
+    const channel = supabase.channel(`bling-orders-${integrationId}-${Date.now()}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bling_orders', filter: `integration_id=eq.${integrationId}` }, () => {
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => { silentRefresh(); fetchStats(); }, 500);

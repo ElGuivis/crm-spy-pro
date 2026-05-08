@@ -85,7 +85,7 @@ export function useBlingSync(integrationId: string, syncType: string = 'all'): U
     if (!integrationId) return;
 
     const channel = supabase
-      .channel(`bling-sync-${integrationId}-${syncType}`)
+      .channel(`bling-sync-${integrationId}-${syncType}-${Date.now()}`)
       .on(
         'postgres_changes',
         {
