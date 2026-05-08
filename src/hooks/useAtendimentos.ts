@@ -58,6 +58,7 @@ export interface ConversationFilters {
 
 export function useConversations(inboxId: string | null, filters?: ConversationFilters) {
   const { tenantId } = useAuth();
+  const queryClient = useQueryClient();
 
   const { data: conversations = [], isLoading, refetch } = useQuery({
     queryKey: ['atendimentos-conversations', tenantId, inboxId, filters],
@@ -134,18 +135,18 @@ export function useConversations(inboxId: string | null, filters?: ConversationF
   // Realtime subscription
   useEffect(() => {
     if (!tenantId) return;
-    
+
     const channel = supabase
-      .channel('atendimentos-conversations-realtime')
+      .channel(`atendimentos-conversations-realtime-${tenantId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'conversations', filter: `tenant_id=eq.${tenantId}` },
-        () => { refetch(); }
+        () => { queryClient.invalidateQueries({ queryKey: ['atendimentos-conversations', tenantId] }); }
       )
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [tenantId, refetch]);
+  }, [tenantId, queryClient]);
 
   return { conversations, isLoading };
 }
