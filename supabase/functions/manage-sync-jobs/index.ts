@@ -158,7 +158,6 @@ serve(async (req) => {
       // Delete dependent records that have FK references to integrations
       await supabase.from("me_sync_jobs").delete().eq("integration_id", integration_id).eq("tenant_id", tenantId);
       await supabase.from("me_shipments").delete().eq("integration_id", integration_id).eq("tenant_id", tenantId);
-      await supabase.from("melhor_envio_connections").delete().eq("tenant_id", tenantId);
       await supabase.from("bling_sync_jobs").delete().eq("integration_id", integration_id).eq("tenant_id", tenantId);
       await supabase.from("bling_sync_logs").delete().eq("integration_id", integration_id).eq("tenant_id", tenantId);
 
