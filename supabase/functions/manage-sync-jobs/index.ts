@@ -155,19 +155,13 @@ serve(async (req) => {
       // Verify integration belongs to tenant via requireResource (IDOR protection)
       await requireResource(supabase, "integrations", integration_id, tenantId, req);
 
-      // Delete dependent records that have FK references to integrations
-      await supabase.from("me_sync_jobs").delete().eq("integration_id", integration_id).eq("tenant_id", tenantId);
-      await supabase.from("me_shipments").delete().eq("integration_id", integration_id).eq("tenant_id", tenantId);
-      await supabase.from("bling_sync_jobs").delete().eq("integration_id", integration_id).eq("tenant_id", tenantId);
-      await supabase.from("bling_sync_logs").delete().eq("integration_id", integration_id).eq("tenant_id", tenantId);
+      // Cascade delete via SQL function (handles all 38 FK-dependent tables)
+      const { error } = await supabase.rpc("delete_integration_cascade", {
+        p_integration_id: integration_id,
+        p_tenant_id: tenantId,
+      });
 
-      const { error } = await supabase
-        .from("integrations")
-        .delete()
-        .eq("id", integration_id)
-        .eq("tenant_id", tenantId);
-
-      if (error) throw error;
+      if (error) throw new Error(error.message);
       return json({ success: true });
     }
 
