@@ -46,15 +46,15 @@ export async function requireUserAuth(req: Request): Promise<UserAuthResult> {
     global: { headers: { Authorization: authHeader } },
   });
 
-  const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(token);
-  if (claimsError || !claimsData?.claims?.sub) {
+  const { data: { user }, error: userError } = await supabaseAuth.auth.getUser(token);
+  if (userError || !user) {
     throw new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401,
       headers: errorHeaders(req),
     });
   }
 
-  const userId = claimsData.claims.sub as string;
+  const userId = user.id;
 
   // Resolve tenant via RPC
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
