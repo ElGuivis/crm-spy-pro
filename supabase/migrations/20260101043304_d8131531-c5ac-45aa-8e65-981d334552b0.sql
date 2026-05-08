@@ -1,0 +1,2 @@
+-- Enable realtime for abandoned_carts table
+ALTER PUBLICATION supabase_realtime ADD TABLE public.abandoned_carts;

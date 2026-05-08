@@ -1,0 +1,1 @@
+ALTER TABLE public.integrations ADD COLUMN IF NOT EXISTS store_integration_id UUID REFERENCES public.integrations(id) ON DELETE SET NULL;

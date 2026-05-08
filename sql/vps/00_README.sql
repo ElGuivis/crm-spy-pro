@@ -1,0 +1,29 @@
+-- =============================================================================
+-- SPY PRO CRM - VPS DEPLOY: ORDEM DE EXECUÇÃO
+-- =============================================================================
+-- Execute os arquivos nesta ordem exata:
+--
+-- 1. sql/vps/01_extensions.sql      - Extensões PostgreSQL
+-- 2. sql/vps/02_enums.sql           - Tipos ENUM customizados
+-- 3. sql/vps/03_tables_core.sql     - Tabelas core (tenants, profiles, tokens, integrations)
+-- 4. sql/vps/04_tables_whatsapp.sql - WhatsApp, canais, contatos, conversas, mensagens
+-- 5. sql/vps/05_tables_loja_integrada.sql - Loja Integrada
+-- 6. sql/vps/06_tables_bling.sql    - Bling ERP
+-- 7. sql/vps/07_tables_melhor_envio.sql - Melhor Envio
+-- 8. sql/vps/08_tables_cashback.sql - Cashback e cupons
+-- 9. sql/vps/09_tables_ai.sql       - Agentes IA
+-- 10. sql/vps/10_tables_automations.sql - Automações, leads, campanhas, tags
+-- 11. sql/vps/11_tables_rfm.sql     - Análise RFM
+-- 12. sql/vps/12_tables_instagram.sql - Instagram (40 tabelas)
+-- 13. sql/vps/13_functions.sql      - Funções do banco (copiar de sql/04_functions.sql ou usar as do contexto)
+-- 14. sql/vps/14_rls_policies.sql   - RLS Policies (TODAS as tabelas têm RLS habilitado)
+-- 15. sql/vps/15_indexes.sql        - Índices de performance
+-- 16. sql/vps/16_storage.sql        - Storage buckets
+-- 17. sql/vps/17_realtime.sql       - Realtime subscriptions
+-- 18. sql/vps/18_cron_jobs.sql      - Cron jobs (substituir {SUPABASE_URL} e {SUPABASE_ANON_KEY})
+--
+-- IMPORTANTE: Todas as 108 tabelas têm RLS habilitado (ALTER TABLE ... ENABLE ROW LEVEL SECURITY)
+-- As Edge Functions (74) são deployadas via: supabase functions deploy --project-ref SEU_REF
+-- Os 27 secrets precisam ser configurados no dashboard do Supabase
+--
+-- Para referência completa, consulte: sql/VPS_SETUP_GUIDE.md

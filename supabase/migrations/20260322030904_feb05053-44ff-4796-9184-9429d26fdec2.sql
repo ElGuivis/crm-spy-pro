@@ -1,0 +1,2 @@
+ALTER TABLE public.team_invites ADD COLUMN IF NOT EXISTS invite_token_hash text;
+CREATE INDEX IF NOT EXISTS idx_team_invites_token_hash ON public.team_invites (invite_token_hash) WHERE invite_token_hash IS NOT NULL;

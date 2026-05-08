@@ -1,0 +1,1 @@
+ALTER TABLE public.inboxes ADD COLUMN integration_id UUID REFERENCES public.integrations(id) ON DELETE SET NULL;

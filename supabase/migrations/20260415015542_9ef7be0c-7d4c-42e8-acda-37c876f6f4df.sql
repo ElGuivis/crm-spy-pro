@@ -1,0 +1,1 @@
+ALTER TABLE public.reactivation_configs ADD COLUMN resend_interval_days integer DEFAULT 0;

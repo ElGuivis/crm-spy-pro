@@ -1,0 +1,1 @@
+SELECT cron.unschedule('melhor-envio-sync-hourly');

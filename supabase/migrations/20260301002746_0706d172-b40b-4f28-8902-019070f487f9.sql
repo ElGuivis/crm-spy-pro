@@ -1,0 +1,1 @@
+UPDATE me_sync_jobs SET status = 'failed', error_message = 'Cleaned up stuck job', completed_at = now() WHERE status = 'running' AND created_at < now() - interval '1 hour';

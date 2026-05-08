@@ -1,0 +1,1 @@
+ALTER TABLE public.oauth_states ADD COLUMN IF NOT EXISTS metadata jsonb DEFAULT '{}'::jsonb;

@@ -1,0 +1,1 @@
+ALTER TABLE public.email_integrations ADD COLUMN IF NOT EXISTS sender_name text;

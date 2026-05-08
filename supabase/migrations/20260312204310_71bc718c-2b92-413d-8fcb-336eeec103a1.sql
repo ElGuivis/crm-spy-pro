@@ -1,0 +1,4 @@
+ALTER TABLE public.email_integrations 
+  ADD COLUMN IF NOT EXISTS smtp_secure BOOLEAN DEFAULT false,
+  ADD COLUMN IF NOT EXISTS smtp_tls BOOLEAN DEFAULT true,
+  ADD COLUMN IF NOT EXISTS reply_to TEXT;
