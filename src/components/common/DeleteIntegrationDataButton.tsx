@@ -78,29 +78,29 @@ export function DeleteIntegrationDataButton({
           }
         }
         
-        // Delete main table records in batches to avoid statement timeout
-        const { data: mainRecords, error: mainSelectError } = await supabase
-          .from(tableInfo.table as any)
-          .select('id')
-          .eq('integration_id', integrationId);
+        // Delete main table records in batches — loop until all gone (Supabase caps SELECT at 1000)
+        while (true) {
+          const { data: mainRecords, error: mainSelectError } = await supabase
+            .from(tableInfo.table as any)
+            .select('id')
+            .eq('integration_id', integrationId)
+            .limit(500);
 
-        if (mainSelectError) {
-          log.error(`Error fetching ids from ${tableInfo.table}:`, mainSelectError);
-          throw mainSelectError;
-        }
+          if (mainSelectError) {
+            log.error(`Error fetching ids from ${tableInfo.table}:`, mainSelectError);
+            throw mainSelectError;
+          }
 
-        if (mainRecords && mainRecords.length > 0) {
+          if (!mainRecords || mainRecords.length === 0) break;
+
           const mainIds = mainRecords.map((r: any) => r.id);
-          for (let i = 0; i < mainIds.length; i += 500) {
-            const batch = mainIds.slice(i, i + 500);
-            const { error } = await supabase
-              .from(tableInfo.table as any)
-              .delete()
-              .in('id', batch);
-            if (error) {
-              log.error(`Error deleting from ${tableInfo.table}:`, error);
-              throw error;
-            }
+          const { error } = await supabase
+            .from(tableInfo.table as any)
+            .delete()
+            .in('id', mainIds);
+          if (error) {
+            log.error(`Error deleting from ${tableInfo.table}:`, error);
+            throw error;
           }
         }
       }

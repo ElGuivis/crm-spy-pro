@@ -85,12 +85,12 @@ function DataSettings() {
   };
 
   const deleteBatched = async (table: string) => {
-    const { data, error: selErr } = await supabase.from(table as any).select('id');
-    if (selErr) throw selErr;
-    if (!data || data.length === 0) return;
-    const ids = data.map((r: any) => r.id);
-    for (let i = 0; i < ids.length; i += 500) {
-      const { error } = await supabase.from(table as any).delete().in('id', ids.slice(i, i + 500));
+    while (true) {
+      const { data, error: selErr } = await supabase.from(table as any).select('id').limit(500);
+      if (selErr) throw selErr;
+      if (!data || data.length === 0) break;
+      const ids = data.map((r: any) => r.id);
+      const { error } = await supabase.from(table as any).delete().in('id', ids);
       if (error) throw error;
     }
   };
