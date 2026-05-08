@@ -26,7 +26,6 @@ dist-ssr
 # Secrets — NUNCA commitar
 .env
 .env.local
-.env.production
 
 # Migration artifacts — grandes e desnecessários no repo
 Lovable-to-IDE-main/
