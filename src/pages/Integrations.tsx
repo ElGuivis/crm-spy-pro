@@ -306,8 +306,11 @@ const IntegrationsPage = () => {
 
       toast.success("Integração removida com sucesso!");
       await fetchIntegrations();
-    } catch (error) {
+    } catch (error: any) {
       log.error("Error deleting integration:", error);
+      if (error?.context) {
+        error.context.json().then((body: any) => log.error("Response body:", JSON.stringify(body))).catch(() => {});
+      }
       toast.error("Erro ao remover integração");
     } finally {
       setDeleteDialogOpen(false);
