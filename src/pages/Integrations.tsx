@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { Plus, Search, RefreshCw, Loader2, Plug, Mail, Trash2, Edit, MoreVertical, CheckCircle2, XCircle, AlertCircle, Settings, Store, Palette, Star, Instagram } from "lucide-react";
+import { Plus, Search, RefreshCw, Loader2, Plug, Mail, Trash2, Edit, MoreVertical, CheckCircle2, XCircle, AlertCircle, Settings, Store, Palette, Star, Instagram, Download } from "lucide-react";
 import { getIntegrationLogoUrl } from "@/lib/integration-logos";
 import { Button } from "@/components/ui/button";
 import { AddIntegrationDialog } from "@/components/integrations/AddIntegrationDialog";
@@ -202,6 +202,33 @@ const IntegrationsPage = () => {
       fetchIntegrations();
     }
   }, [melhorEnvioStatus?.connected]);
+
+  const handleSyncAll = async (integration: Integration) => {
+    try {
+      if (integration.type === "loja_integrada") {
+        const { error } = await supabase.functions.invoke("li-sync", {
+          body: { syncType: "all", integrationId: integration.id },
+        });
+        if (error) throw error;
+        toast.success("Sincronização iniciada", {
+          description: "Clientes, produtos e pedidos serão sincronizados em segundo plano. Acompanhe o progresso nas páginas correspondentes.",
+        });
+      } else if (integration.type === "melhor_envio") {
+        const { error } = await supabase.functions.invoke("melhor-envio", {
+          body: { action: "sync_shipments" },
+        });
+        if (error) throw error;
+        toast.success("Sincronização iniciada", {
+          description: "Os envios serão sincronizados em segundo plano. Acompanhe o progresso na página Envios.",
+        });
+      } else {
+        toast.error("Sincronização não suportada para este tipo de integração");
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Falha ao iniciar sincronização";
+      toast.error("Erro ao sincronizar", { description: msg });
+    }
+  };
 
   const fetchIntegrations = async () => {
     try {
@@ -497,19 +524,31 @@ const IntegrationsPage = () => {
                         </DropdownMenuItem>
                       )}
                       {integration.type === "loja_integrada" && (
-                        <DropdownMenuItem onClick={() => setDialogOpen(true)}>
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          Reconectar
-                        </DropdownMenuItem>
+                        <>
+                          <DropdownMenuItem onClick={() => handleSyncAll(integration)}>
+                            <Download className="h-4 w-4 mr-2" />
+                            Sincronizar tudo
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setDialogOpen(true)}>
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Reconectar
+                          </DropdownMenuItem>
+                        </>
                       )}
                       {integration.type === "melhor_envio" && (
-                        <DropdownMenuItem onClick={() => {
-                          setMelhorEnvioDialogMode('connect');
-                          setMelhorEnvioDialogOpen(true);
-                        }}>
-                          <RefreshCw className="h-4 w-4 mr-2" />
-                          Reconectar
-                        </DropdownMenuItem>
+                        <>
+                          <DropdownMenuItem onClick={() => handleSyncAll(integration)}>
+                            <Download className="h-4 w-4 mr-2" />
+                            Sincronizar tudo
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            setMelhorEnvioDialogMode('connect');
+                            setMelhorEnvioDialogOpen(true);
+                          }}>
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Reconectar
+                          </DropdownMenuItem>
+                        </>
                       )}
                       {integration.type.startsWith("ai_") && (
                         <>

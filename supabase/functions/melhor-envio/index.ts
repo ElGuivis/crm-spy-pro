@@ -282,11 +282,34 @@ serve(async (req) => {
     }
 
     // =========================================================================
-    // TRUST BOUNDARY: All actions below — AUTHENTICATED via requireUserAuth
-    // tenant_id resolved from JWT, never from request body.
+    // TRUST BOUNDARY: All actions below — AUTHENTICATED via user JWT OR internal
+    // For user calls, tenant_id comes from JWT. For internal (cron watchdog),
+    // tenant_id and integrationId come from body. Only `sync_shipments` accepts
+    // internal auth — all other actions REQUIRE user JWT.
     // =========================================================================
-    const { requireUserAuth } = await import("../_shared/auth-guard.ts");
-    const { userId, tenantId } = await requireUserAuth(req);
+    const { requireUserAuth, requireUserOrInternalAuth } = await import("../_shared/auth-guard.ts");
+    let userId: string | undefined;
+    let tenantId: string;
+    if (action === "sync_shipments") {
+      const auth = await requireUserOrInternalAuth(req);
+      if (auth.isInternal) {
+        const bodyTenant = typeof bodyData.tenantId === "string" ? bodyData.tenantId : null;
+        if (!bodyTenant) {
+          return new Response(
+            JSON.stringify({ error: "tenantId required for internal call" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        tenantId = bodyTenant;
+      } else {
+        userId = auth.userId;
+        tenantId = auth.tenantId!;
+      }
+    } else {
+      const auth = await requireUserAuth(req);
+      userId = auth.userId;
+      tenantId = auth.tenantId;
+    }
 
     switch (action) {
       // ==================== AUTHORIZE ====================

@@ -40,33 +40,35 @@ export function useSyncStatus(integrationId: string, syncType: string) {
       const entityType = syncType === 'customers' ? 'customers' : syncType === 'products' ? 'products' : 'orders';
       const { data } = await supabase
         .from('li_sync_state')
-        .select('last_synced_at')
+        .select('last_synced_at, last_offset, updated_at')
         .eq('integration_id', integrationId)
         .eq('entity_type', entityType)
         .maybeSingle();
 
-      const current = data?.last_synced_at || '';
-      const changed = current && current !== s.baseline;
+      const offset = data?.last_offset ?? 0;
+      const updatedAt = data?.updated_at ? new Date(data.updated_at).getTime() : 0;
+      const stalledMs = Date.now() - updatedAt;
+      const fullyDone = offset === 0 && data?.last_synced_at && data.last_synced_at !== s.baseline;
 
-      if (changed || s.attempts >= 60) {
+      if (fullyDone) {
         s.active = false;
-        setSyncStatus({
-          ...INITIAL_STATUS,
-          status: changed ? 'completed' : 'failed',
-        });
+        setSyncStatus({ ...INITIAL_STATUS, status: 'completed' });
         setTimeout(() => setSyncStatus(INITIAL_STATUS), 3000);
         return;
       }
 
-      const delay = Math.min(2000 * Math.pow(1.3, s.attempts - 1), 10000);
+      // Auto re-trigger if sync has stalled (no update in 30s) but data still pending
+      if (offset > 0 && stalledMs > 30_000) {
+        try {
+          await supabase.functions.invoke('li-sync', { body: { syncType, integrationId } });
+        } catch { /* ignore — next poll will retry */ }
+      }
+
+      const delay = Math.min(3000 * Math.pow(1.2, Math.min(s.attempts - 1, 15)), 15000);
       pollTimerRef.current = window.setTimeout(poll, delay);
     } catch {
-      if (s.attempts < 60) {
-        pollTimerRef.current = window.setTimeout(poll, 5000);
-      } else {
-        s.active = false;
-        setSyncStatus({ ...INITIAL_STATUS, status: 'failed' });
-      }
+      const delay = Math.min(3000 * Math.pow(1.2, Math.min(s.attempts - 1, 10)), 15000);
+      pollTimerRef.current = window.setTimeout(poll, delay);
     }
   }, [integrationId, syncType]);
 

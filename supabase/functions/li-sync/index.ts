@@ -4,16 +4,17 @@ import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
 
 declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
-import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
+import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
 const LI_API_BASE = 'https://api.awsli.com.br/v1';
 const PAGE_SIZE = 50;
-const RATE_LIMIT_DELAY = 300;
-const MAX_ORDERS_PER_RUN = 500;
-const MAX_ITEMS_PER_RUN = 500;
+const RATE_LIMIT_DELAY = 200;
+const SYNC_TIME_BUDGET_MS = 110_000; // 110s budget within waitUntil's ~150s limit
 
 let lastRequestTime = 0;
+// Module-level logger used by background sync functions (runFullSync, sync helpers)
+const log = createLogger("li-sync", "bg");
 
 async function rateLimitedFetch(url: string, authHeader: string): Promise<Response> {
   const now = Date.now();
@@ -33,12 +34,15 @@ async function rateLimitedFetch(url: string, authHeader: string): Promise<Respon
 }
 
 Deno.serve(async (req) => {
+  // Pre-compute CORS headers so they are always available, even if something throws
+  const corsHeaders = getRestrictedCorsHeaders(req);
 
-  const cid = getCorrelationId(req);
-  const log = createLogger("li-sync", cid);
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const cid = getCorrelationId(req);
+  const reqLog = createLogger("li-sync", cid);
 
   try {
     const auth = await requireUserOrInternalAuth(req);
@@ -92,7 +96,7 @@ Deno.serve(async (req) => {
 
     // Handle register-webhook action
     if (action === 'register-webhook') {
-      log.info(`[LI-SYNC] Registering webhooks for integration ${intId}`);
+      reqLog.info(`[LI-SYNC] Registering webhooks for integration ${intId}`);
       const result = await registerWebhooks(supabase, intId, authHeader, supabaseUrl);
       return new Response(JSON.stringify(result), {
         status: result.success ? 200 : 500,
@@ -100,9 +104,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    log.info(`[LI-SYNC] Starting sync - type: ${syncType || 'all'}, integration: ${integrationId}`);
+    reqLog.info(`[LI-SYNC] Starting sync - type: ${syncType || 'all'}, integration: ${integrationId}`);
 
     const syncId = crypto.randomUUID();
+    const isFirstSync = !integration.last_sync_at;
+
+    // Mark sync as started immediately so the UI unblocks regardless of how long the background task takes
+    await supabase.from('integrations').update({
+      last_sync_at: new Date().toISOString(),
+      initial_sync_completed: true,
+      error_message: null,
+    }).eq('id', intId);
 
     EdgeRuntime.waitUntil(runFullSync(supabase, intId, tenantId, authHeader, syncType || 'all', syncId));
 
@@ -110,14 +122,16 @@ Deno.serve(async (req) => {
       success: true,
       message: 'Sincronização iniciada',
       syncId,
-      isFirstSync: !integration.last_sync_at,
+      isFirstSync,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : 'Unknown error';
-    log.error('[LI-SYNC] Error:', msg);
+    // Auth guard throws a Response with CORS headers already set — return it directly
+    if (error instanceof Response) return error;
+    const msg = error instanceof Error ? error.message : String(error);
+    reqLog.error('[LI-SYNC] Error:', msg);
     return new Response(JSON.stringify({ success: false, error: msg }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -125,18 +139,25 @@ Deno.serve(async (req) => {
 });
 
 async function getOrCreateSyncState(supabase: ServiceClient, integrationId: string, tenantId: string, entityType: string) {
-  let { data } = await supabase.from('li_sync_state')
-    .select('id, integration_id, entity_type, last_synced_at, last_offset, current_page, total_pages, sync_status, extra')
+  const { data, error } = await supabase.from('li_sync_state')
+    .select('id, integration_id, entity_type, last_synced_at, last_offset, last_cursor, records_synced, total_count')
     .eq('integration_id', integrationId)
     .eq('entity_type', entityType)
     .maybeSingle();
 
+  if (error) {
+    log.error(`[LI-SYNC] getOrCreateSyncState select error: ${error.message}`);
+  }
+
   if (!data) {
-    const { data: created } = await supabase.from('li_sync_state').insert({
+    const { data: created, error: insErr } = await supabase.from('li_sync_state').insert({
       integration_id: integrationId, tenant_id: tenantId,
       entity_type: entityType,
     }).select().single();
-    data = created;
+    if (insErr) {
+      log.error(`[LI-SYNC] getOrCreateSyncState insert error: ${insErr.message}`);
+    }
+    return created;
   }
   return data;
 }
@@ -150,50 +171,77 @@ async function updateSyncState(supabase: ServiceClient, stateId: string, updates
 
 async function runFullSync(
   supabase: ServiceClient, integrationId: string, tenantId: string,
-  authHeader: string, syncType: string, syncId: string
+  authHeader: string, syncType: string, _syncId: string
 ) {
+  log.info(`[LI-SYNC] runFullSync started for ${syncType} at ${new Date().toISOString()}`);
+
   const types = syncType === 'all' ? ['customers', 'products', 'orders'] : [syncType];
-  const results: Record<string, number> = {};
+  const deadline = Date.now() + SYNC_TIME_BUDGET_MS;
+  const totalSynced: Record<string, number> = {};
 
   for (const type of types) {
-    try {
-      log.info(`[LI-SYNC] Starting ${type} sync...`);
-      let synced = 0;
+    totalSynced[type] = 0;
+    log.info(`[LI-SYNC] ${type}: starting sync loop...`);
 
-      if (type === 'customers') {
-        synced = await syncAllCustomers(supabase, integrationId, tenantId, authHeader);
-      } else if (type === 'products') {
-        synced = await syncAllProducts(supabase, integrationId, tenantId, authHeader);
-      } else if (type === 'orders') {
-        synced = await syncAllOrders(supabase, integrationId, tenantId, authHeader);
+    let typeDone = false;
+    while (!typeDone && Date.now() < deadline) {
+      let batchSynced = 0;
+      try {
+        if (type === 'customers') batchSynced = await syncAllCustomers(supabase, integrationId, tenantId, authHeader, deadline);
+        else if (type === 'products') batchSynced = await syncAllProducts(supabase, integrationId, tenantId, authHeader, deadline);
+        else if (type === 'orders') batchSynced = await syncAllOrders(supabase, integrationId, tenantId, authHeader, deadline);
+        totalSynced[type] += batchSynced;
+      } catch (e: unknown) {
+        log.error(`[LI-SYNC] ${type} batch failed:`, (e as Error).message);
+        break;
       }
 
-      results[type] = synced;
-      log.info(`[LI-SYNC] ${type}: synced ${synced} records`);
-
-      const state = await getOrCreateSyncState(supabase, integrationId, tenantId, type);
-      if (state?.id) {
-        await updateSyncState(supabase, state.id, {
-          last_synced_at: new Date().toISOString(),
-          last_cursor: new Date().toISOString(),
-          records_synced: synced,
-        });
-      }
-    } catch (e: unknown) {
-      log.error(`[LI-SYNC] ${type} failed:`, e.message);
-      results[type] = -1;
+      const { data: st } = await supabase.from('li_sync_state')
+        .select('last_offset').eq('integration_id', integrationId).eq('entity_type', type).maybeSingle();
+      typeDone = (st?.last_offset ?? 0) === 0;
+      if (!typeDone) log.info(`[LI-SYNC] ${type}: batch done (${batchSynced} items), more data pending...`);
     }
+
+    const state = await getOrCreateSyncState(supabase, integrationId, tenantId, type);
+    if (state?.id) {
+      await updateSyncState(supabase, state.id, {
+        last_synced_at: new Date().toISOString(),
+        records_synced: totalSynced[type],
+      });
+    }
+
+    log.info(`[LI-SYNC] ${type}: complete — ${totalSynced[type]} total, done=${typeDone}`);
   }
 
-  await supabase.from('integrations').update({
-    last_sync_at: new Date().toISOString(),
-    initial_sync_completed: true,
-    error_message: null,
-  }).eq('id', integrationId);
+  log.info('[LI-SYNC] All sync loops finished:', totalSynced);
 
-  // Auto-register webhooks after successful sync
-  try {
+  // Check whether all types are fully done (offset = 0)
+  const checkTypes = syncType === 'all' ? ['customers', 'products', 'orders'] : [syncType];
+  const pendingStates = await Promise.all(checkTypes.map(async t => {
+    const { data } = await supabase.from('li_sync_state')
+      .select('last_offset').eq('integration_id', integrationId).eq('entity_type', t).maybeSingle();
+    return { type: t, offset: data?.last_offset ?? 0 };
+  }));
+  const pendingTypes = pendingStates.filter(s => s.offset > 0).map(s => s.type);
+
+  if (pendingTypes.length > 0) {
+    log.warn(`[LI-SYNC] Time budget exhausted — still pending: ${pendingTypes.join(', ')}. Triggering continuation...`);
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    // Fire-and-forget continuation — best effort. The frontend also re-triggers on stalled sync.
+    for (const t of pendingTypes) {
+      fetch(`${supabaseUrl}/functions/v1/li-sync`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${serviceKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ integrationId, syncType: t }),
+      }).catch(() => { /* ignore */ });
+    }
+    return;
+  }
+
+  // ── All data synced — register webhooks if not already registered ──
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  try {
     const appKey = Deno.env.get('LOJA_INTEGRADA_APP_KEY')!;
     const { data: intData } = await supabase.from('integrations')
       .select('api_key, metadata').eq('id', integrationId).single();
@@ -201,33 +249,52 @@ async function runFullSync(
       const authH = `chave_api ${intData.api_key} aplicacao ${appKey}`;
       const existingMeta = (intData.metadata && typeof intData.metadata === 'object') ? intData.metadata as Record<string, unknown> : {};
       if (!existingMeta.webhooks_registered_at) {
-        log.info('[LI-SYNC] Auto-registering webhooks after sync...');
+        log.info('[LI-SYNC] All data synced — registering LI webhooks for real-time updates...');
         await registerWebhooks(supabase, integrationId, authH, supabaseUrl);
       }
     }
   } catch (webhookErr: unknown) {
-    log.error('[LI-SYNC] Auto-register webhooks failed (non-fatal):', webhookErr.message);
+    log.error('[LI-SYNC] Webhook registration failed (non-fatal):', (webhookErr as Error).message);
   }
 
-  log.info('[LI-SYNC] Full sync completed:', results);
+  log.info('[LI-SYNC] Full sync complete — real-time webhook mode active');
 }
 
 // =================== CUSTOMERS ===================
 async function syncAllCustomers(
-  supabase: ServiceClient, integrationId: string, tenantId: string, authHeader: string
+  supabase: ServiceClient, integrationId: string, tenantId: string, authHeader: string, deadline: number
 ): Promise<number> {
+  const syncState = await getOrCreateSyncState(supabase, integrationId, tenantId, 'customers');
+
   let synced = 0;
-  let offset = 0;
+  let offset = syncState?.last_offset || 0;
   let hasMore = true;
 
-  while (hasMore && synced < MAX_ITEMS_PER_RUN) {
+  log.info(`[LI-SYNC] Customers: resuming from offset=${offset}`);
+
+  while (hasMore && Date.now() < deadline) {
     const res = await rateLimitedFetch(`${LI_API_BASE}/cliente?limit=${PAGE_SIZE}&offset=${offset}`, authHeader);
-    if (!res.ok) break;
+    if (!res.ok) {
+      log.error(`[LI-SYNC] Customers list fetch failed: status=${res.status} offset=${offset}`);
+      break;
+    }
     const data = await res.json();
     const objects = data.objects || [];
-    if (objects.length === 0) break;
+    const totalCount = data.meta?.total_count;
+    if (typeof totalCount === 'number' && syncState?.id) {
+      await supabase.from('li_sync_state').update({ total_count: totalCount }).eq('id', syncState.id);
+    }
 
+    if (objects.length === 0) {
+      offset = 0;
+      hasMore = false;
+      if (syncState?.id) await supabase.from('li_sync_state').update({ last_offset: 0, updated_at: new Date().toISOString() }).eq('id', syncState.id);
+      break;
+    }
+
+    let processedInPage = 0;
     for (const obj of objects) {
+      if (Date.now() >= deadline) break;
       try {
         const detailRes = await rateLimitedFetch(`${LI_API_BASE}/cliente/${obj.id}`, authHeader);
         if (!detailRes.ok) continue;
@@ -236,7 +303,7 @@ async function syncAllCustomers(
         const enderecos = Array.isArray(c.enderecos) ? c.enderecos : [];
         const principalAddr = enderecos.find((e: Record<string, unknown>) => e.principal) || enderecos[0] || null;
 
-        await supabase.from('li_customers').upsert({
+        const { error: upErr } = await supabase.from('li_customers').upsert({
           integration_id: integrationId, tenant_id: tenantId,
           loja_integrada_customer_id: c.id,
           name: c.nome || 'Sem nome',
@@ -248,40 +315,64 @@ async function syncAllCustomers(
           updated_at_remote: c.data_modificacao || null,
           updated_at_local: new Date().toISOString(),
         }, { onConflict: 'integration_id,loja_integrada_customer_id' });
-        synced++;
+        if (upErr) {
+          log.error(`[LI-SYNC] Customer ${c.id} upsert error: ${upErr.message} | code=${upErr.code} | details=${upErr.details}`);
+        } else {
+          synced++;
+        }
+        processedInPage++;
       } catch (e: unknown) {
-        log.error(`[LI-SYNC] Customer ${obj.id} error:`, e.message);
+        log.error(`[LI-SYNC] Customer ${obj.id} error:`, (e as Error).message);
+        processedInPage++;
       }
     }
 
-    offset += objects.length;
-    hasMore = objects.length >= PAGE_SIZE;
+    offset += processedInPage;
+    const isEndOfData = objects.length < PAGE_SIZE && processedInPage === objects.length;
+    hasMore = !isEndOfData;
+    if (syncState?.id) await supabase.from('li_sync_state').update({ last_offset: isEndOfData ? 0 : offset, updated_at: new Date().toISOString() }).eq('id', syncState.id);
   }
   return synced;
 }
 
 // =================== PRODUCTS ===================
 async function syncAllProducts(
-  supabase: ServiceClient, integrationId: string, tenantId: string, authHeader: string
+  supabase: ServiceClient, integrationId: string, tenantId: string, authHeader: string, deadline: number
 ): Promise<number> {
+  const syncState = await getOrCreateSyncState(supabase, integrationId, tenantId, 'products');
+
   let synced = 0;
-  let offset = 0;
+  let offset = syncState?.last_offset || 0;
   let hasMore = true;
 
-  while (hasMore && synced < MAX_ITEMS_PER_RUN) {
+  log.info(`[LI-SYNC] Products: resuming from offset=${offset}`);
+
+  while (hasMore && Date.now() < deadline) {
     const res = await rateLimitedFetch(`${LI_API_BASE}/produto?limit=${PAGE_SIZE}&offset=${offset}`, authHeader);
     if (!res.ok) break;
     const data = await res.json();
     const objects = data.objects || [];
-    if (objects.length === 0) break;
+    const totalCount = data.meta?.total_count;
+    if (typeof totalCount === 'number' && syncState?.id) {
+      await supabase.from('li_sync_state').update({ total_count: totalCount }).eq('id', syncState.id);
+    }
 
+    if (objects.length === 0) {
+      offset = 0;
+      hasMore = false;
+      if (syncState?.id) await supabase.from('li_sync_state').update({ last_offset: 0, updated_at: new Date().toISOString() }).eq('id', syncState.id);
+      break;
+    }
+
+    let processedInPage = 0;
     for (const obj of objects) {
+      if (Date.now() >= deadline) break;
       try {
         const detailRes = await rateLimitedFetch(`${LI_API_BASE}/produto/${obj.id}`, authHeader);
         if (!detailRes.ok) continue;
         const p = await detailRes.json();
 
-        await supabase.from('li_products').upsert({
+        const { error: upErr } = await supabase.from('li_products').upsert({
           integration_id: integrationId, tenant_id: tenantId,
           loja_integrada_product_id: p.id,
           sku: p.sku || null,
@@ -298,28 +389,31 @@ async function syncAllProducts(
           updated_at_remote: p.data_modificacao || null,
           updated_at_local: new Date().toISOString(),
         }, { onConflict: 'integration_id,loja_integrada_product_id' });
-        synced++;
+        if (upErr) {
+          log.error(`[LI-SYNC] Product ${p.id} upsert error: ${upErr.message} | code=${upErr.code} | details=${upErr.details}`);
+        } else {
+          synced++;
+        }
+        processedInPage++;
       } catch (e: unknown) {
-        log.error(`[LI-SYNC] Product ${obj.id} error:`, e.message);
+        log.error(`[LI-SYNC] Product ${obj.id} error:`, (e as Error).message);
+        processedInPage++;
       }
     }
 
-    offset += objects.length;
-    hasMore = objects.length >= PAGE_SIZE;
+    offset += processedInPage;
+    const isEndOfData = objects.length < PAGE_SIZE && processedInPage === objects.length;
+    hasMore = !isEndOfData;
+    if (syncState?.id) await supabase.from('li_sync_state').update({ last_offset: isEndOfData ? 0 : offset, updated_at: new Date().toISOString() }).eq('id', syncState.id);
   }
   return synced;
 }
 
 // =================== ORDERS ===================
 async function syncAllOrders(
-  supabase: ServiceClient, integrationId: string, tenantId: string, authHeader: string
+  supabase: ServiceClient, integrationId: string, tenantId: string, authHeader: string, deadline: number
 ): Promise<number> {
-  // Get saved offset to resume from where we left off
-  const { data: syncState } = await supabase.from('li_sync_state')
-    .select('id, integration_id, entity_type, last_synced_at, last_offset, current_page, total_pages, sync_status, extra')
-    .eq('integration_id', integrationId)
-    .eq('entity_type', 'orders')
-    .maybeSingle();
+  const syncState = await getOrCreateSyncState(supabase, integrationId, tenantId, 'orders');
 
   let synced = 0;
   let offset = syncState?.last_offset || 0;
@@ -328,16 +422,14 @@ async function syncAllOrders(
 
   log.info(`[LI-SYNC] Orders: resuming from offset=${offset}`);
 
-  while (hasMore && synced < MAX_ORDERS_PER_RUN) {
-    // Use /pedido/search which returns fuller data
+  while (hasMore && Date.now() < deadline) {
     const url = `${LI_API_BASE}/pedido/search?limit=${PAGE_SIZE}&offset=${offset}`;
     log.info(`[LI-SYNC] Fetching orders: offset=${offset}, synced=${synced}`);
     const res = await rateLimitedFetch(url, authHeader);
-    
+
     let objects: Record<string, unknown>[] = [];
-    
+
     if (!res.ok) {
-      // Fallback to non-search endpoint
       const fallbackUrl = `${LI_API_BASE}/pedido?limit=${PAGE_SIZE}&offset=${offset}`;
       const fallbackRes = await rateLimitedFetch(fallbackUrl, authHeader);
       if (!fallbackRes.ok) {
@@ -350,52 +442,54 @@ async function syncAllOrders(
       const data = await res.json();
       objects = data.objects || [];
       log.info(`[LI-SYNC] Orders page: ${objects.length} objects, total=${data.meta?.total_count || 'N/A'}`);
+      const totalCount = data.meta?.total_count;
+      if (typeof totalCount === 'number' && syncState?.id) {
+        await supabase.from('li_sync_state').update({ total_count: totalCount }).eq('id', syncState.id);
+      }
     }
 
     if (objects.length === 0) {
-      // All orders fetched, reset offset for next full sync
       offset = 0;
       hasMore = false;
       log.info(`[LI-SYNC] All orders fetched, resetting offset to 0`);
+      if (syncState?.id) {
+        await supabase.from('li_sync_state').update({ last_offset: 0, updated_at: new Date().toISOString() }).eq('id', syncState.id);
+      }
       break;
     }
 
+    let processedInPage = 0;
     for (const obj of objects) {
-      if (synced >= MAX_ORDERS_PER_RUN) break;
+      if (Date.now() >= deadline) break;
       try {
-        // Fetch full details using order NUMBER (not id) - the LI API uses numero as identifier
         const orderNumero = obj.numero || obj.id;
         const detailRes = await rateLimitedFetch(`${LI_API_BASE}/pedido/${orderNumero}`, authHeader);
         let orderData: Record<string, unknown>;
-        
+
         if (detailRes.ok) {
           orderData = await detailRes.json();
         } else {
-          // Fallback to list data if detail fails
           log.warn(`[LI-SYNC] Order ${orderNumero} detail returned ${detailRes.status}, using list data`);
           orderData = obj;
         }
 
         await upsertOrderFromData(supabase, orderData, integrationId, tenantId);
         synced++;
-        if (synced % 50 === 0) {
-          log.info(`[LI-SYNC] Orders progress: ${synced} synced`);
-        }
+        processedInPage++;
+        if (synced % 50 === 0) log.info(`[LI-SYNC] Orders progress: ${synced} synced`);
       } catch (e: unknown) {
-        log.error(`[LI-SYNC] Order ${obj.id} error:`, e.message);
+        log.error(`[LI-SYNC] Order ${obj.id} error:`, (e as Error).message);
+        processedInPage++;
       }
     }
 
-    offset += objects.length;
-    hasMore = objects.length >= PAGE_SIZE && synced < MAX_ORDERS_PER_RUN;
-  }
+    offset += processedInPage;
+    const isEndOfData = objects.length < PAGE_SIZE && processedInPage === objects.length;
+    hasMore = !isEndOfData;
 
-  // Save the current offset so next run resumes from here
-  if (syncState?.id) {
-    await supabase.from('li_sync_state').update({
-      last_offset: offset,
-      updated_at: new Date().toISOString(),
-    }).eq('id', syncState.id);
+    if (syncState?.id) {
+      await supabase.from('li_sync_state').update({ last_offset: isEndOfData ? 0 : offset, updated_at: new Date().toISOString() }).eq('id', syncState.id);
+    }
   }
 
   log.info(`[LI-SYNC] Orders batch complete: ${synced} synced (offset ${startOffset} -> ${offset})`);

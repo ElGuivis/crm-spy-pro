@@ -161,6 +161,15 @@ serve(async (req) => {
       // Verify ownership via requireResource (IDOR protection)
       await requireResource(supabase, "email_integrations", id, tenantId, req);
 
+      // NULL out nullable FK references so configs are preserved
+      await supabase.from("birthday_configs").update({ email_integration_id: null }).eq("email_integration_id", id).eq("tenant_id", tenantId);
+      await supabase.from("cashback_configs").update({ email_integration_id: null }).eq("email_integration_id", id).eq("tenant_id", tenantId);
+      await supabase.from("order_notification_configs").update({ email_integration_id: null }).eq("email_integration_id", id).eq("tenant_id", tenantId);
+
+      // Delete child rows that directly depend on this email integration
+      await supabase.from("email_campaigns").delete().eq("email_integration_id", id).eq("tenant_id", tenantId);
+      await supabase.from("email_integration_senders").delete().eq("integration_id", id).eq("tenant_id", tenantId);
+
       const { error } = await supabase
         .from("email_integrations")
         .delete()

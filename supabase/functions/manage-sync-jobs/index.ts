@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { Client } from "https://deno.land/x/postgres@v0.17.0/mod.ts";
 import { requireUserAuth } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
@@ -155,13 +156,28 @@ serve(async (req) => {
       // Verify integration belongs to tenant via requireResource (IDOR protection)
       await requireResource(supabase, "integrations", integration_id, tenantId, req);
 
-      // Cascade delete via SQL function (handles all 38 FK-dependent tables)
-      const { error } = await supabase.rpc("delete_integration_cascade", {
-        p_integration_id: integration_id,
-        p_tenant_id: tenantId,
-      });
+      // Use direct DB connection to bypass PostgREST 8s statement_timeout.
+      // The cascade function touches 40+ tables and can exceed 8s on large datasets.
+      const dbUrl = Deno.env.get("SUPABASE_DB_URL");
+      if (!dbUrl) throw new Error("SUPABASE_DB_URL not set");
 
-      if (error) throw new Error(error.message);
+      const dbClient = new Client(dbUrl);
+      await dbClient.connect();
+      try {
+        await dbClient.queryArray("BEGIN");
+        await dbClient.queryArray("SET LOCAL statement_timeout = 0");
+        await dbClient.queryArray(
+          "SELECT public.delete_integration_cascade($1::uuid, $2::uuid)",
+          [integration_id, tenantId],
+        );
+        await dbClient.queryArray("COMMIT");
+      } catch (dbErr) {
+        await dbClient.queryArray("ROLLBACK").catch(() => {});
+        throw dbErr;
+      } finally {
+        await dbClient.end();
+      }
+
       return json({ success: true });
     }
 

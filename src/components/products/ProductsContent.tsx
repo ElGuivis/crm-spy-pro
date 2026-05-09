@@ -10,6 +10,7 @@ import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { DeleteIntegrationDataButton } from "@/components/common/DeleteIntegrationDataButton";
 import { SyncStatusBadge } from "@/components/common/SyncStatusBadge";
+import { SyncProgressBanner } from "@/components/common/SyncProgressBanner";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -38,6 +39,7 @@ export function ProductsContent({ integrationId }: ProductsContentProps) {
 
   return (
     <div className="space-y-6 p-6">
+      <SyncProgressBanner integrationId={integrationId} entityType="products" />
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">

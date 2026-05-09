@@ -52,6 +52,8 @@ import { useMelhorEnvio, useMelhorEnvioShipments, MelhorEnvioShipment } from '@/
 import { useMelhorEnvioSync } from '@/hooks/useMelhorEnvioSync';
 import { MelhorEnvioDialog } from '@/components/integrations/MelhorEnvioDialog';
 import { SyncStatusBadge } from '@/components/common/SyncStatusBadge';
+import { SyncProgressBanner } from '@/components/common/SyncProgressBanner';
+import { useAuth } from '@/contexts/AuthContext';
 import { DeleteIntegrationDataButton } from '@/components/common/DeleteIntegrationDataButton';
 import { ShipmentDetailsDialog } from '@/components/envios/ShipmentDetailsDialog';
 import { StoreLinker } from '@/components/envios/StoreLinker';
@@ -81,6 +83,7 @@ interface EnviosContentProps {
 }
 
 export function EnviosContent({ integrationId }: EnviosContentProps) {
+  const { tenantId } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'all');
@@ -368,6 +371,7 @@ export function EnviosContent({ integrationId }: EnviosContentProps) {
 
   return (
     <div className="p-6 space-y-6">
+      <SyncProgressBanner integrationId={integrationId} melhorEnvio tenantId={tenantId} />
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex items-center gap-3">

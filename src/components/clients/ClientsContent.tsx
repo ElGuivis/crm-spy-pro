@@ -12,6 +12,7 @@ import ClientDetailsDialog from "@/components/clients/ClientDetailsDialog";
 import type { Tables } from "@/integrations/supabase/types";
 import { DeleteIntegrationDataButton } from "@/components/common/DeleteIntegrationDataButton";
 import { SyncStatusBadge } from "@/components/common/SyncStatusBadge";
+import { SyncProgressBanner } from "@/components/common/SyncProgressBanner";
 
 import {
   Select,
@@ -325,6 +326,7 @@ export function ClientsContent({ integrationId }: ClientsContentProps) {
 
   return (
     <div className="space-y-6 p-6">
+      <SyncProgressBanner integrationId={integrationId} entityType="customers" />
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">

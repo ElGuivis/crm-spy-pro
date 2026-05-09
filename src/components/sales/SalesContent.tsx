@@ -21,6 +21,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useSyncStatus } from "@/hooks/useSyncStatus";
+import { SyncProgressBanner } from "@/components/common/SyncProgressBanner";
 import { DeleteIntegrationDataButton } from "@/components/common/DeleteIntegrationDataButton";
 import { SyncStatusBadge } from "@/components/common/SyncStatusBadge";
 import { LIOrderDetailsDialog } from "./LIOrderDetailsDialog";
@@ -520,6 +521,7 @@ export function SalesContent({ integrationId }: SalesContentProps) {
 
   return (
     <div className="space-y-6 p-6">
+      <SyncProgressBanner integrationId={integrationId} entityType="orders" />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
