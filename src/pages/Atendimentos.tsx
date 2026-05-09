@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useInboxes } from "@/hooks/useInboxes";
-import { useConversations } from "@/hooks/useAtendimentos";
+import { useConversations, useConversationsRealtime } from "@/hooks/useAtendimentos";
 import { InboxSelector } from "@/components/atendimentos/InboxSelector";
 import { ConversationList } from "@/components/atendimentos/ConversationList";
 import { ChatWindow } from "@/components/atendimentos/ChatWindow";
@@ -29,6 +29,7 @@ export default function Atendimentos() {
   // Mobile: track if we're viewing the chat (vs list)
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
 
+  useConversationsRealtime();
   const { conversations } = useConversations(selectedInboxId, {});
   
   const selectedConversation = useMemo(() => 

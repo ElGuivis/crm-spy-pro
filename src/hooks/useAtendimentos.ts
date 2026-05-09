@@ -56,10 +56,37 @@ export interface ConversationFilters {
   dateTo?: string;
 }
 
-export function useConversations(inboxId: string | null, filters?: ConversationFilters) {
+/**
+ * Subscribes to realtime conversation changes for the current tenant and
+ * invalidates every `['atendimentos-conversations', tenantId, ...]` query
+ * (React Query partial-key match) so all callers refetch.
+ *
+ * Call this ONCE near the top of the Atendimentos page tree. Multiple calls
+ * create redundant realtime channels — `useConversations` itself does NOT
+ * subscribe.
+ */
+export function useConversationsRealtime() {
   const { tenantId } = useAuth();
   const queryClient = useQueryClient();
-  const instanceId = useId();
+
+  useEffect(() => {
+    if (!tenantId) return;
+
+    const channel = supabase
+      .channel(`atendimentos-conv-${tenantId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'conversations', filter: `tenant_id=eq.${tenantId}` },
+        () => { queryClient.invalidateQueries({ queryKey: ['atendimentos-conversations', tenantId] }); }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [tenantId, queryClient]);
+}
+
+export function useConversations(inboxId: string | null, filters?: ConversationFilters) {
+  const { tenantId } = useAuth();
 
   const { data: conversations = [], isLoading, refetch } = useQuery({
     queryKey: ['atendimentos-conversations', tenantId, inboxId, filters],
@@ -132,22 +159,6 @@ export function useConversations(inboxId: string | null, filters?: ConversationF
     enabled: !!tenantId,
     refetchInterval: 15000,
   });
-
-  // Realtime subscription
-  useEffect(() => {
-    if (!tenantId) return;
-
-    const channel = supabase
-      .channel(`atendimentos-conv-${tenantId}-${instanceId}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'conversations', filter: `tenant_id=eq.${tenantId}` },
-        () => { queryClient.invalidateQueries({ queryKey: ['atendimentos-conversations', tenantId] }); }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [tenantId, queryClient, instanceId]);
 
   return { conversations, isLoading };
 }
