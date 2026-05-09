@@ -56,13 +56,6 @@ export const ME_SHIPMENT_COLUMNS = [
   'created_at', 'updated_at',
 ].join(', ');
 
-/** abandoned_carts — fields used in ai-chat context */
-export const ABANDONED_CART_COLUMNS = [
-  'id', 'tenant_id', 'external_id', 'customer_name', 'customer_phone',
-  'customer_email', 'cart_total', 'checkout_url', 'status',
-  'abandoned_at', 'contacted_at', 'recovered_at',
-].join(', ');
-
 /** generated_coupons — fields used in ai-chat context */
 export const COUPON_COLUMNS = [
   'id', 'tenant_id', 'code', 'discount_type', 'discount_value',

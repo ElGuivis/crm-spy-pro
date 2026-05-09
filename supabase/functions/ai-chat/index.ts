@@ -111,13 +111,6 @@ interface ShipmentRow {
   [key: string]: unknown;
 }
 
-/** Cart item from abandoned carts */
-interface CartItem {
-  name?: string;
-  produto_nome?: string;
-  quantity?: number;
-}
-
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 
 interface ChatRequest {
@@ -2477,7 +2470,6 @@ _Exemplo: 123.456.789-00 ou apenas os números: 12345678900_`;
       products: rawDataAccess.products ?? false,
       products_featured: rawDataAccess.products_featured ?? rawDataAccess.products ?? false,
       products_catalog: rawDataAccess.products_catalog ?? false,
-      abandoned_carts: rawDataAccess.abandoned_carts ?? true,
       coupons: rawDataAccess.coupons ?? true,
       cashback: rawDataAccess.cashback ?? false,
       smart_search: rawDataAccess.smart_search ?? true,
@@ -2498,7 +2490,7 @@ _Exemplo: 123.456.789-00 ou apenas os números: 12345678900_`;
 
     const {
       extractedDataContext, specificOrderInfo, customerInfo, ordersInfo,
-      abandonedCartInfo, couponsInfo, cashbackInfo, productsInfo,
+      couponsInfo, cashbackInfo, productsInfo,
     } = enrichedCtx;
 
     // Build system prompt - use agent's prompt if available, otherwise global
@@ -2518,7 +2510,6 @@ ${extractedDataContext}
 ${specificOrderInfo}
 ${customerInfo}
 ${ordersInfo}
-${abandonedCartInfo}
 ${couponsInfo}
 ${cashbackInfo}
 ${productsInfo}

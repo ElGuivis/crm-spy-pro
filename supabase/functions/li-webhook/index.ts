@@ -303,9 +303,6 @@ async function processOrder(
 
   // Trigger cashback check
   await checkCashback(supabase, order, customerId, tenantId, supabaseUrl, supabaseKey);
-  
-  // Check abandoned cart recovery
-  await checkAbandonedCartRecovery(supabase, order, tenantId);
 
   log.info(`[WEBHOOK] Order ${order.numero} upserted`);
 }
@@ -407,29 +404,3 @@ async function checkCashback(
   }
 }
 
-async function checkAbandonedCartRecovery(supabase: ServiceClient, order: Record<string, unknown>, tenantId: string) {
-  const clienteEmail = order.cliente?.email;
-  const clientePhone = order.cliente?.telefone_celular;
-  if (!clienteEmail && !clientePhone) return;
-
-  let query = supabase.from('abandoned_carts')
-    .select('id').eq('tenant_id', tenantId).eq('status', 'pending');
-
-  if (clienteEmail) {
-    query = query.eq('customer_email', clienteEmail);
-  } else {
-    query = query.eq('customer_phone', clientePhone);
-  }
-
-  const { data: carts } = await query.limit(5);
-  if (!carts?.length) return;
-
-  for (const cart of carts) {
-    await supabase.from('abandoned_carts').update({
-      status: 'recovered',
-      recovered_at: new Date().toISOString(),
-      recovered_order_id: String(order.numero),
-    }).eq('id', cart.id);
-  }
-  log.info(`[WEBHOOK] Recovered ${carts.length} abandoned carts`);
-}

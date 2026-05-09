@@ -7,7 +7,7 @@
 import { getStoreIntegration, getTrackingCode, type StoreIntegrationInfo } from "./ai-chat-store.ts";
 import { extractFromMessages } from "./ai-chat-smart-search.ts";
 import { createLogger } from "./correlation.ts";
-import { ABANDONED_CART_COLUMNS, COUPON_COLUMNS, getStoreColumns } from "./select-columns.ts";
+import { COUPON_COLUMNS, getStoreColumns } from "./select-columns.ts";
 
 const log = createLogger("ai-chat-context", "shared");
 
@@ -20,7 +20,6 @@ export interface DataAccess {
   products: boolean;
   products_featured: boolean;
   products_catalog: boolean;
-  abandoned_carts: boolean;
   coupons: boolean;
   cashback: boolean;
   smart_search: boolean;
@@ -93,13 +92,6 @@ interface CustomerRow {
   [key: string]: unknown;
 }
 
-/** Cart item from abandoned carts */
-interface CartItem {
-  name?: string;
-  produto_nome?: string;
-  quantity?: number;
-}
-
 // deno-lint-ignore no-explicit-any
 type ServiceClient = any;
 
@@ -118,7 +110,6 @@ export interface EnrichedContext {
   specificOrderInfo: string;
   customerInfo: string;
   ordersInfo: string;
-  abandonedCartInfo: string;
   couponsInfo: string;
   cashbackInfo: string;
   productsInfo: string;
@@ -165,11 +156,6 @@ export async function buildEnrichedContext(params: ContextBuildParams): Promise<
     }
   }
 
-  // ========== ABANDONED CARTS ==========
-  const abandonedCartInfo = dataAccess.abandoned_carts
-    ? await buildAbandonedCartInfo(supabase, tenantId, contactPhone)
-    : '';
-
   // ========== PRODUCTS ==========
   let productsInfo = '';
   if ((dataAccess.products_featured || dataAccess.products) && storeInfo) {
@@ -205,7 +191,6 @@ Combine todas as informações recebidas para entender o contexto completo da so
     specificOrderInfo,
     customerInfo,
     ordersInfo,
-    abandonedCartInfo,
     couponsInfo,
     cashbackInfo,
     productsInfo,
@@ -459,46 +444,6 @@ ${(orders as OrderRow[]).map(o => {
   Pagamento: ${o.forma_pagamento || 'Não informado'}
   Frete: R$ ${o.valor_frete?.toFixed(2) || '0,00'} (${o.forma_envio || 'Não informado'})${trackingInfo}${itemsSection}`;
   }).join('\n')}
-`;
-}
-
-async function buildAbandonedCartInfo(supabase: ServiceClient, tenantId: string, contactPhone: string): Promise<string> {
-  const normalizedPhone = contactPhone.replace(/\D/g, '');
-  const lastNineDigits = normalizedPhone.slice(-9);
-
-  const { data: abandonedCart } = await supabase
-    .from('abandoned_carts')
-    .select(ABANDONED_CART_COLUMNS)
-    .eq('tenant_id', tenantId)
-    .ilike('customer_phone', `%${lastNineDigits}%`)
-    .eq('status', 'pending')
-    .order('abandoned_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!abandonedCart) return '';
-
-  const abandonedDate = abandonedCart.abandoned_at
-    ? new Date(abandonedCart.abandoned_at).toLocaleDateString('pt-BR')
-    : 'Data não informada';
-
-  let cartItemsList = '';
-  if (abandonedCart.cart_items && Array.isArray(abandonedCart.cart_items)) {
-    cartItemsList = (abandonedCart.cart_items as CartItem[]).map(item =>
-      `  • ${item.quantity || 1}x ${item.name || item.produto_nome || 'Produto'}`
-    ).join('\n');
-  }
-
-  return `
-=== ⚠️ CARRINHO ABANDONADO ===
-ATENÇÃO: Este cliente tem um carrinho abandonado!
-- Valor: R$ ${abandonedCart.cart_total?.toFixed(2) || '0,00'}
-- Abandonado em: ${abandonedDate}
-- Cupom disponível: ${abandonedCart.coupon_code || 'Nenhum'}
-- Link para finalizar: ${abandonedCart.checkout_url || 'Não disponível'}
-${cartItemsList ? `- Itens:\n${cartItemsList}` : ''}
-
-💡 DICA: Tente ajudar o cliente a finalizar essa compra! Ofereça o cupom se disponível.
 `;
 }
 

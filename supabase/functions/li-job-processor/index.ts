@@ -4,7 +4,7 @@ import { requireInternalAuth } from "../_shared/auth-guard.ts";
 import { syncNewCustomers, updateExistingCustomers } from "../_shared/li-sync-customers.ts";
 import { updateProductInfo, syncNewProducts } from "../_shared/li-sync-products.ts";
 import { syncNewOrders, processOrder, updateOrderStatuses } from "../_shared/li-sync-orders.ts";
-import { syncAbandonedCarts, updateExistingCarts, syncCoupons, processOrderNotificationsInJob } from "../_shared/li-sync-carts.ts";
+import { syncCoupons, processOrderNotificationsInJob } from "../_shared/li-sync-carts.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
@@ -79,7 +79,6 @@ async function runJobProcessor(
         auto_sync_orders, auto_sync_orders_interval, last_sync_orders_at,
         auto_sync_customers, auto_sync_customers_interval, last_sync_customers_at,
         auto_sync_products, auto_sync_products_interval, last_sync_products_at,
-        auto_sync_carts, auto_sync_carts_interval, last_sync_carts_at,
         auto_sync_coupons, auto_sync_coupons_interval, last_sync_coupons_at
       `)
       .eq('type', 'loja_integrada')
@@ -89,7 +88,7 @@ async function runJobProcessor(
       integrationQuery = integrationQuery.eq('id', specifiedIntegrationId);
     } else {
       // For cron runs, get integrations that have at least one sync type enabled
-      integrationQuery = integrationQuery.or('auto_sync_orders.eq.true,auto_sync_customers.eq.true,auto_sync_products.eq.true,auto_sync_carts.eq.true,auto_sync_coupons.eq.true');
+      integrationQuery = integrationQuery.or('auto_sync_orders.eq.true,auto_sync_customers.eq.true,auto_sync_products.eq.true,auto_sync_coupons.eq.true');
     }
     
     const { data: integrations } = await integrationQuery.limit(specifiedIntegrationId ? 1 : 10);
@@ -194,23 +193,6 @@ async function runJobProcessor(
         results.push({ type: 'product_info_update', integrationId: intId, ...updateResult });
         
         updateData.last_sync_products_at = new Date().toISOString();
-      }
-
-      // Sync abandoned carts if filtered to carts
-      const shouldSyncCarts = (!specifiedSyncType || specifiedSyncType === 'carts') && 
-        shouldSyncType(integration, 'carts', isManualRequest);
-      
-      if (shouldSyncCarts) {
-        const cartsResult = await syncAbandonedCarts(supabase, authHeader, tenantId, intId);
-        results.push({ type: 'incremental_carts', integrationId: intId, ...cartsResult });
-        
-        // Update existing carts - check for recovery and update data
-        const updateCartsResult = await updateExistingCarts(supabase, authHeader, tenantId, intId);
-        if (updateCartsResult.updated > 0 || updateCartsResult.recovered > 0) {
-          results.push({ type: 'cart_update', integrationId: intId, ...updateCartsResult });
-        }
-        
-        updateData.last_sync_carts_at = new Date().toISOString();
       }
 
       // Sync coupons if filtered to coupons

@@ -52,7 +52,6 @@ export type TenantScopedTable =
   | "melhor_envio_tokens"
   | "me_shipments"
   | "me_sync_jobs"
-  | "abandoned_cart_configs"
   | "birthday_configs"
   | "bulk_campaigns"
   | "auto_messages"
