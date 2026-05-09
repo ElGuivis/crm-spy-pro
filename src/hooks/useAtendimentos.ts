@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { useEffect, useId } from "react";
+import { useEffect } from "react";
 import type { Json } from "@/integrations/supabase/types";
 
 export interface Contact {
@@ -166,7 +166,6 @@ export function useConversations(inboxId: string | null, filters?: ConversationF
 export function useMessages(conversationId: string | null) {
   const queryClient = useQueryClient();
   const queryKey = ['atendimentos-messages', conversationId];
-  const instanceId = useId();
 
   const { data: messages = [], isLoading, refetch } = useQuery({
     queryKey,
@@ -191,7 +190,7 @@ export function useMessages(conversationId: string | null) {
     if (!conversationId) return;
 
     const channel = supabase
-      .channel(`atendimentos-msg-${conversationId}-${instanceId}`)
+      .channel(`atendimentos-msg-${conversationId}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
@@ -216,7 +215,7 @@ export function useMessages(conversationId: string | null) {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [conversationId, instanceId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [conversationId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return { messages, isLoading, refetch };
 }
