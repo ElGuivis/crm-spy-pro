@@ -12,12 +12,10 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const MELHOR_ENVIO_ENVIRONMENT = Deno.env.get("MELHOR_ENVIO_ENVIRONMENT") || "sandbox";
 
-const ME_BASE_URL = MELHOR_ENVIO_ENVIRONMENT === "production" 
-  ? "https://www.melhorenvio.com.br" 
+const ME_BASE_URL = MELHOR_ENVIO_ENVIRONMENT === "production"
+  ? "https://www.melhorenvio.com.br"
   : "https://sandbox.melhorenvio.com.br";
 const ME_API_URL = `${ME_BASE_URL}/api/v2`;
-
-log.info(`[me-job-processor] Inicializado - Ambiente: ${MELHOR_ENVIO_ENVIRONMENT}`);
 
 // Map ME status to internal status
 function mapStatus(meStatus: string): string {

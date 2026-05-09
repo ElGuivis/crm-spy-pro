@@ -8,38 +8,19 @@ import { syncAbandonedCarts, updateExistingCarts, syncCoupons, processOrderNotif
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
+declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
+
 const LI_API_BASE = 'https://api.awsli.com.br/v1';
 
-// This function is called by a cron every 5 minutes to:
-// 1. Resume any stuck sync jobs
-// 2. Fetch recent updates from Loja Integrada (incremental sync for orders, customers, products)
-// 3. Update status of existing orders (check for changes in Loja Integrada)
-Deno.serve(async (req) => {
-  const cid = getCorrelationId(req);
-  const log = createLogger("li-job-processor", cid);
+type Logger = ReturnType<typeof createLogger>;
 
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  try {
-    requireInternalAuth(req);
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const appKey = Deno.env.get('LOJA_INTEGRADA_APP_KEY')!;
-    
-    let requestBody: Record<string, unknown> = {};
-    try {
-      const bodyText = await req.text();
-      if (bodyText) requestBody = JSON.parse(bodyText);
-    } catch { /* ignore */ }
-    
-    log.info('[JOB-PROCESSOR] ✅ Authenticated via requireInternalAuth');
-    
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    const results: Record<string, unknown>[] = [];
+async function runJobProcessor(
+  supabase: ServiceClient,
+  appKey: string,
+  requestBody: Record<string, unknown>,
+  log: Logger,
+): Promise<void> {
+  const results: Record<string, unknown>[] = [];
 
     // 1. Resume stuck jobs first
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
@@ -253,30 +234,59 @@ Deno.serve(async (req) => {
       }
     }
 
-    const totalSynced = results.reduce((sum, r) => sum + (r.synced || 0), 0);
+  const totalSynced = results.reduce((sum, r) => sum + (Number(r.synced) || 0), 0);
+  log.info(`[JOB-PROCESSOR] Done. Processed ${results.length} tasks, synced ${totalSynced} records`);
+}
 
-    return new Response(JSON.stringify({ 
-      success: true, 
-      message: `Processed ${results.length} tasks, synced ${totalSynced} records`,
-      results
+// Called by cron 4 every 5 minutes. Heavy work (LI API reconciliation across
+// orders/customers/products/carts/coupons) runs in EdgeRuntime.waitUntil so the
+// pg_net cron call gets an immediate 200 — keeping cron healthy regardless of
+// how long the underlying sync takes.
+Deno.serve(async (req) => {
+  const cid = getCorrelationId(req);
+  const log = createLogger("li-job-processor", cid);
+
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    requireInternalAuth(req);
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const appKey = Deno.env.get('LOJA_INTEGRADA_APP_KEY')!;
+
+    let requestBody: Record<string, unknown> = {};
+    try {
+      const bodyText = await req.text();
+      if (bodyText) requestBody = JSON.parse(bodyText);
+    } catch { /* ignore */ }
+
+    log.info('[JOB-PROCESSOR] ✅ Authenticated; dispatching to background');
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    EdgeRuntime.waitUntil(
+      runJobProcessor(supabase, appKey, requestBody, log).catch((err: unknown) => {
+        log.error('[JOB-PROCESSOR] Background error:', err instanceof Error ? err.message : err);
+      })
+    );
+
+    return new Response(JSON.stringify({
+      success: true,
+      message: 'Job processor dispatched',
     }), {
+      status: 202,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    log.error('Job processor error:', errorMessage);
-    return new Response(JSON.stringify({ 
-      success: false, 
-      error: errorMessage 
-    }), {
+  } catch (err: unknown) {
+    if (err instanceof Response) return err;
+    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+    log.error('Job processor dispatch error:', errorMessage);
+    return new Response(JSON.stringify({ success: false, error: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
-
-// All sync functions (syncNewCustomers, updateExistingCustomers, updateProductInfo,
-// syncNewProducts, syncNewOrders, processOrder, updateOrderStatuses,
-// syncAbandonedCarts, updateExistingCarts, syncCoupons, processOrderNotificationsInJob)
-// are now imported from _shared/li-sync-*.ts modules
