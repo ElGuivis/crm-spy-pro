@@ -11,7 +11,7 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-export type SyncType = 'orders' | 'customers' | 'products' | 'carts' | 'coupons' | 'shipments';
+export type SyncType = 'orders' | 'customers' | 'products' | 'coupons' | 'shipments';
 
 interface SyncStatusBadgeProps {
   integrationId: string;
@@ -22,7 +22,6 @@ const FIELD_MAP: Record<SyncType, string> = {
   orders: 'last_sync_orders_at',
   customers: 'last_sync_customers_at',
   products: 'last_sync_products_at',
-  carts: 'last_sync_carts_at',
   coupons: 'last_sync_coupons_at',
   shipments: 'last_sync_shipments_at',
 };
@@ -31,7 +30,6 @@ const LABEL_MAP: Record<SyncType, string> = {
   orders: 'pedidos',
   customers: 'clientes',
   products: 'produtos',
-  carts: 'carrinhos',
   coupons: 'cupons',
   shipments: 'envios',
 };

@@ -1,5 +1,5 @@
 import { ReactNode, useState } from 'react';
-import { Plus, Wifi, WifiOff, ArrowRight, Package, Users, ShoppingBag, ShoppingCart, Truck, Clock, Trash2, MoreVertical, Ticket } from 'lucide-react';
+import { Plus, Wifi, WifiOff, ArrowRight, Package, Users, ShoppingBag, Truck, Clock, Trash2, MoreVertical, Ticket } from 'lucide-react';
 import { getIntegrationBrand } from '@/lib/integration-logos';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -245,9 +245,6 @@ function IntegrationCard({ integration, category, onClick, onDeleted }: Integrat
       }
       if (stats.products !== undefined) {
         items.push({ label: 'produtos', value: stats.products, icon: <Package className="h-3 w-3" /> });
-      }
-      if (stats.carts !== undefined && stats.carts > 0) {
-        items.push({ label: 'carrinhos', value: stats.carts, icon: <ShoppingCart className="h-3 w-3" /> });
       }
       if (stats.coupons !== undefined && stats.coupons > 0) {
         items.push({ label: 'cupons', value: stats.coupons, icon: <Ticket className="h-3 w-3" /> });

@@ -24,7 +24,7 @@ import { ptBR } from 'date-fns/locale';
 import { createLogger } from '@/lib/logger';
 const log = createLogger('AutoSyncControl');
 
-export type SyncType = 'orders' | 'customers' | 'products' | 'carts' | 'coupons' | 'shipments';
+export type SyncType = 'orders' | 'customers' | 'products' | 'coupons' | 'shipments';
 
 interface AutoSyncControlProps {
   integrationId: string;
@@ -56,11 +56,6 @@ const FIELD_MAP: Record<SyncType, { enabled: string; interval: string; lastSync:
     enabled: 'auto_sync_products',
     interval: 'auto_sync_products_interval',
     lastSync: 'last_sync_products_at'
-  },
-  carts: {
-    enabled: 'auto_sync_carts',
-    interval: 'auto_sync_carts_interval',
-    lastSync: 'last_sync_carts_at'
   },
   coupons: {
     enabled: 'auto_sync_coupons',

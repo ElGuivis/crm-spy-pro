@@ -11,7 +11,6 @@ export interface LastSyncByType {
   orders?: string | null;
   customers?: string | null;
   products?: string | null;
-  carts?: string | null;
 }
 
 export interface IntegrationData {
@@ -29,7 +28,6 @@ export interface IntegrationData {
     orders?: number;
     customers?: number;
     products?: number;
-    carts?: number;
     coupons?: number;
     shipments?: number;
     conversations?: number;
@@ -140,8 +138,6 @@ export function useIntegrationData({ category }: UseIntegrationDataOptions) {
             statsByIntegration[integrationId].customers = (statsByIntegration[integrationId].customers || 0) + count;
           } else if (type === 'products') {
             statsByIntegration[integrationId].products = (statsByIntegration[integrationId].products || 0) + count;
-          } else if (type === 'carts') {
-            statsByIntegration[integrationId].carts = (statsByIntegration[integrationId].carts || 0) + count;
           } else if (type === 'coupons') {
             statsByIntegration[integrationId].coupons = (statsByIntegration[integrationId].coupons || 0) + count;
           }
@@ -196,7 +192,6 @@ export function useIntegrationData({ category }: UseIntegrationDataOptions) {
           orders: (integration as any).last_sync_orders_at || null,
           customers: (integration as any).last_sync_customers_at || null,
           products: (integration as any).last_sync_products_at || null,
-          carts: (integration as any).last_carts_sync_at || null,
         },
         initialSyncCompleted: (integration as any).initial_sync_completed || false,
         createdAt: integration.created_at,
