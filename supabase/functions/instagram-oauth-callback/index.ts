@@ -242,6 +242,7 @@ serve(async (req) => {
               token_expires_at: tokenExpiresAt,
               token_refresh_at: tokenRefreshAt,
               status: "connected",
+              webhook_verified: true,
               last_sync_at: new Date().toISOString(),
               metadata: { profile_pic_url: account.igProfilePic },
             },
