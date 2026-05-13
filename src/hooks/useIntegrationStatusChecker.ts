@@ -169,6 +169,27 @@ export function useIntegrationStatusChecker() {
     }
   }, []);
 
+  // Nuvemshop - checks nuvemshop_connections table directly
+  const checkNuvemshop = useCallback(async (integrationId: string, tenantId: string) => {
+    updateStatus(integrationId, { isChecking: true });
+    try {
+      const { data: connection, error } = await supabase
+        .from('nuvemshop_connections' as never)
+        .select('status')
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+      if (error) throw error;
+      const isConnected = (connection as { status: string } | null)?.status === 'connected';
+      await supabase.from('integrations').update({ status: isConnected ? 'connected' : 'disconnected' }).eq('id', integrationId);
+      updateStatus(integrationId, { isConnected, isChecking: false });
+      return isConnected;
+    } catch (error) {
+      log.error('[checkNuvemshop] Error:', error);
+      updateStatus(integrationId, { isConnected: false, isChecking: false, error: String(error) });
+      return false;
+    }
+  }, []);
+
   // Meta removed - stub for backward compat
   const checkMeta = useCallback(async (_integrationId: string, _tenantId: string) => {
     return false;
@@ -232,6 +253,8 @@ export function useIntegrationStatusChecker() {
         case 'melhor_envio':
           return checkMelhorEnvio(integration.id, tid);
 
+        case 'nuvemshop':
+          return checkNuvemshop(integration.id, tid);
 
         case 'ai_openai':
           return checkAIProvider(integration.id, tid, 'openai');
@@ -249,7 +272,7 @@ export function useIntegrationStatusChecker() {
     });
 
     await Promise.all(promises);
-  }, [checkEvolutionWhatsApp, checkLojaIntegrada, checkBling, checkMelhorEnvio, checkMeta, checkAIProvider]);
+  }, [checkEvolutionWhatsApp, checkLojaIntegrada, checkBling, checkMelhorEnvio, checkNuvemshop, checkMeta, checkAIProvider]);
 
   return {
     statuses,
@@ -257,6 +280,7 @@ export function useIntegrationStatusChecker() {
     checkLojaIntegrada,
     checkBling,
     checkMelhorEnvio,
+    checkNuvemshop,
     checkMeta,
     checkAIProvider,
     checkAllIntegrations,
