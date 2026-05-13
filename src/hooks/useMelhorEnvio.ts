@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('MelhorEnvio');
@@ -109,6 +110,7 @@ export function useMelhorEnvio() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState<string | null>(null);
   const { toast } = useToast();
+  const { loading: authLoading } = useAuth();
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -140,6 +142,8 @@ export function useMelhorEnvio() {
   }, []);
 
   useEffect(() => {
+    if (authLoading) return;
+
     const urlParams = new URLSearchParams(window.location.search);
     const callbackStatus = urlParams.get('status');
     const reason = urlParams.get('reason');
@@ -165,7 +169,7 @@ export function useMelhorEnvio() {
     } else {
       fetchStatus();
     }
-  }, [fetchStatus, toast]);
+  }, [authLoading, fetchStatus, toast]);
 
   const startOAuthFlow = useCallback(async () => {
     setIsConnecting(true);

@@ -166,7 +166,7 @@ const IntegrationsPage = () => {
   const { status: melhorEnvioStatus } = useMelhorEnvio();
 
   // Auth context for tenant
-  const { tenantId } = useAuth();
+  const { tenantId, loading: authLoading } = useAuth();
 
   // Integration status checker
   const { statuses: integrationStatuses, checkAllIntegrations } = useIntegrationStatusChecker();
@@ -299,10 +299,11 @@ const IntegrationsPage = () => {
   };
 
   useEffect(() => {
+    if (authLoading) return;
     fetchIntegrations();
     fetchEmailIntegrations();
     fetchDefaultAI();
-  }, []);
+  }, [authLoading]);
 
   const fetchDefaultAI = async () => {
     if (!tenantId) return;

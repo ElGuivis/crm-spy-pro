@@ -77,7 +77,7 @@ export function useCreateChatbot() {
   const { tenantId } = useAuth();
 
   return useMutation({
-    mutationFn: async (data: { name: string }) => {
+    mutationFn: async (data: { name: string; description?: string }) => {
       if (!tenantId) throw new Error("No tenant");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: agent, error } = await (supabase.from("ai_agents") as any)
@@ -102,6 +102,7 @@ export function useCreateChatbot() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["chatbots"] });
+      queryClient.invalidateQueries({ queryKey: ["chatbot-agents"] });
       toast.success("Chatbot criado com sucesso");
     },
   });
@@ -135,6 +136,7 @@ export function useDeleteChatbot() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["chatbots"] });
+      queryClient.invalidateQueries({ queryKey: ["chatbot-agents"] });
       toast.success("Chatbot excluído");
     },
   });
@@ -197,6 +199,7 @@ export function useCreateAIAgent() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ai-agents"] });
+      queryClient.invalidateQueries({ queryKey: ["chatbot-agents"] });
       toast.success("Agente de IA criado com sucesso");
     },
   });
@@ -230,6 +233,7 @@ export function useDeleteAIAgent() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ai-agents"] });
+      queryClient.invalidateQueries({ queryKey: ["chatbot-agents"] });
       toast.success("Agente de IA excluído");
     },
   });

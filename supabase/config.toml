@@ -57,19 +57,7 @@ verify_jwt = false
 # AUTHENTICATED — in-code auth via requireUserAuth
 verify_jwt = false
 
-[functions.instagram-cancel-run]
-# AUTHENTICATED — in-code auth via requireUserAuth
-verify_jwt = false
-
 [functions.instagram-publish-flow-version]
-# AUTHENTICATED — in-code auth via requireUserAuth
-verify_jwt = false
-
-[functions.instagram-pause-contact-automations]
-# AUTHENTICATED — in-code auth via requireUserAuth
-verify_jwt = false
-
-[functions.instagram-resume-contact-automations]
 # AUTHENTICATED — in-code auth via requireUserAuth
 verify_jwt = false
 
@@ -90,19 +78,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.instagram-create-cta-link]
-# AUTHENTICATED — in-code auth via requireUserAuth
-verify_jwt = false
-
-[functions.instagram-install-quick-automation]
-# AUTHENTICATED — in-code auth via requireUserAuth
-verify_jwt = false
-
-[functions.instagram-list-quick-automations]
-# AUTHENTICATED — in-code auth via requireUserAuth
-verify_jwt = false
-
-[functions.instagram-generate-flow-draft-ai]
-# AUTHENTICATED — in-code auth via requireUserAuth
+# INTERNAL — called by flow-runner only
 verify_jwt = false
 
 [functions.instagram-hide-comment]
@@ -122,10 +98,6 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.instagram-move-thread-to-spam]
-# AUTHENTICATED — in-code auth via requireUserAuth
-verify_jwt = false
-
-[functions.instagram-manual-token]
 # AUTHENTICATED — in-code auth via requireUserAuth
 verify_jwt = false
 
@@ -162,10 +134,6 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.li-coupon-sync]
-# AUTHENTICATED — in-code auth via requireUserAuth
-verify_jwt = false
-
-[functions.instagram-seed-test-flows]
 # AUTHENTICATED — in-code auth via requireUserAuth
 verify_jwt = false
 
@@ -299,13 +267,7 @@ verify_jwt = false
 [functions.instagram-outbox-dispatch]
 verify_jwt = false
 
-[functions.instagram-dead-letter-retry]
-verify_jwt = false
-
 [functions.instagram-trigger-dispatcher]
-verify_jwt = false
-
-[functions.instagram-flow-resume-worker]
 verify_jwt = false
 
 [functions.instagram-flow-runner]
@@ -317,20 +279,12 @@ verify_jwt = false
 [functions.instagram-refresh-token]
 verify_jwt = false
 
-[functions.instagram-sync-insights]
-# INTERNAL — cron: sync Instagram insights
-verify_jwt = false
-
 [functions.instagram-validate-collected-data]
 # INTERNAL — called by flow-runner
 verify_jwt = false
 
 [functions.instagram-experimental-trigger]
 # INTERNAL — internal testing
-verify_jwt = false
-
-[functions.instagram-backfill-contacts]
-# INTERNAL — backfills Instagram contacts from existing data
 verify_jwt = false
 
 [functions.instagram-save-contact-data]
@@ -359,10 +313,6 @@ verify_jwt = false
 
 [functions.bulk-campaign-scheduler]
 # INTERNAL — cron: schedule campaigns
-verify_jwt = false
-
-[functions.auto-close-conversations]
-# INTERNAL — cron: auto-close inactive conversations
 verify_jwt = false
 
 # =============================================================================
