@@ -179,6 +179,10 @@ async function syncChannel(
     if (debug) debugErrors.push(`media_list_failed: ${msg}`);
   }
 
+  await supabase.from("instagram_channels")
+    .update({ last_sync_at: new Date().toISOString() })
+    .eq("id", channel.id);
+
   return { channelDays, mediaSynced, ...(debug ? { debugErrors } : {}) };
 }
 
