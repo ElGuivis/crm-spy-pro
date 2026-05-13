@@ -347,6 +347,62 @@ async function processMessagingEvent(supabase: ReturnType<typeof createClient>, 
     }).catch((e: unknown) => log.warn("[ig-worker] Trigger dispatch error:", e));
   }
 
+  // Per-ad specific welcome flow — matches ad_id against instagram_ad_welcome_flows.
+  // The generic trigger_rules dispatch above handles channel-wide ad_welcome flows;
+  // this block handles per-ad flow overrides configured via the Welcome Ads UI.
+  if (isIncoming && entrypointType === "ad_welcome" && entrypointRef) {
+    try {
+      const refData = JSON.parse(entrypointRef) as { campaign_id?: string };
+      const adId = refData.campaign_id;
+      if (adId) {
+        const { data: adWelcome } = await supabase
+          .from("instagram_ad_welcome_flows")
+          .select("flow_id")
+          .eq("channel_id", channel.id)
+          .eq("ad_id", adId)
+          .eq("is_active", true)
+          .maybeSingle();
+
+        if (adWelcome?.flow_id) {
+          const { data: flow } = await supabase
+            .from("instagram_flows")
+            .select("live_version_id")
+            .eq("id", adWelcome.flow_id)
+            .eq("status", "active")
+            .maybeSingle();
+
+          if (flow?.live_version_id) {
+            const idempKey = `ad_welcome_specific:${adId}:${contactId}`;
+            const { data: run, error: runErr } = await supabase
+              .from("instagram_flow_runs")
+              .insert({
+                tenant_id: channel.tenant_id,
+                flow_id: adWelcome.flow_id,
+                version_id: flow.live_version_id,
+                thread_id: threadId,
+                contact_id: contactId,
+                status: "running",
+                idempotency_key: idempKey,
+                context: { event_type: "ad_welcome", channel_id: channel.id, ad_id: adId },
+              })
+              .select("id")
+              .single();
+
+            if (!runErr && run) {
+              await supabase.functions.invoke("instagram-flow-runner", {
+                body: { run_id: run.id },
+              }).catch((e: unknown) => log.warn("[ig-worker] Ad welcome specific flow runner error:", e));
+            } else if (runErr && runErr.code !== "23505") {
+              log.warn("[ig-worker] Ad welcome flow run insert error:", runErr);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      log.warn("[ig-worker] Ad welcome specific flow dispatch error:", e);
+    }
+  }
+
   // Dispatch trigger for story replies (message.reply_to.story)
   if (isIncoming && event.message?.reply_to?.story) {
     await supabase.functions.invoke("instagram-trigger-dispatcher", {
