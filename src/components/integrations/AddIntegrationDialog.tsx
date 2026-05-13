@@ -22,6 +22,7 @@ interface AddIntegrationDialogProps {
   onSelectMelhorEnvio?: () => void;
   onSelectBling?: () => void;
   onSelectInstagram?: () => void;
+  onSelectNuvemshop?: () => void;
 }
 
 const availableIntegrations = [
@@ -99,6 +100,14 @@ const availableIntegrations = [
     customFlow: true
   },
   {
+    id: "nuvemshop",
+    name: "Nuvemshop",
+    description: "Sincronize pedidos, produtos e clientes via OAuth oficial",
+    icon: Store,
+    fields: [],
+    customFlow: true
+  },
+  {
     id: "instagram",
     name: "Instagram",
     description: "DMs, comentários e automações via API oficial da Meta",
@@ -108,7 +117,7 @@ const availableIntegrations = [
   }
 ];
 
-export function AddIntegrationDialog({ open, onOpenChange, onSuccess, onSelectEvolution, onSelectEmail, onSelectAIProvider, onSelectMelhorEnvio, onSelectBling, onSelectInstagram }: AddIntegrationDialogProps) {
+export function AddIntegrationDialog({ open, onOpenChange, onSuccess, onSelectEvolution, onSelectEmail, onSelectAIProvider, onSelectMelhorEnvio, onSelectBling, onSelectInstagram, onSelectNuvemshop }: AddIntegrationDialogProps) {
   const { tenantId } = useAuth();
   const [step, setStep] = useState<"select" | "configure">("select");
   const [selectedIntegration, setSelectedIntegration] = useState<typeof availableIntegrations[0] | null>(null);
@@ -138,6 +147,8 @@ export function AddIntegrationDialog({ open, onOpenChange, onSuccess, onSelectEv
           onSelectBling?.();
         } else if (integration.id === 'instagram') {
           onSelectInstagram?.();
+        } else if (integration.id === 'nuvemshop') {
+          onSelectNuvemshop?.();
         }
       }, 100);
       return;

@@ -49,6 +49,10 @@ verify_jwt = false
 # AUTHENTICATED — in-code auth via requireUserAuth
 verify_jwt = false
 
+[functions.nuvemshop-oauth]
+# AUTHENTICATED — in-code auth via requireUserAuth (generate-oauth-url, disconnect)
+verify_jwt = false
+
 [functions.bling-stores]
 # AUTHENTICATED — in-code auth via requireUserAuth
 verify_jwt = false
@@ -191,6 +195,10 @@ verify_jwt = false
 # HYBRID — user triggers sync or cron processes
 verify_jwt = false
 
+[functions.nuvemshop-sync]
+# HYBRID — user triggers sync or cron processes
+verify_jwt = false
+
 [functions.me-job-processor]
 # HYBRID — accepts user JWT or internal service_role JWT
 verify_jwt = false
@@ -255,6 +263,10 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.li-job-processor]
+verify_jwt = false
+
+[functions.nuvemshop-job-processor]
+# INTERNAL — cron watchdog continuation
 verify_jwt = false
 
 [functions.bulk-status-update-li]
@@ -374,6 +386,18 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.bling-webhooks]
+verify_jwt = false
+
+[functions.nuvemshop-oauth-callback]
+# PUBLIC — state-based OAuth callback (GET with code+state)
+verify_jwt = false
+
+[functions.nuvemshop-webhook]
+# PUBLIC — HMAC-SHA256 signature verified in-code
+verify_jwt = false
+
+[functions.nuvemshop-webhook-lgpd]
+# PUBLIC — LGPD endpoints (HMAC-SHA256 signature verified in-code)
 verify_jwt = false
 
 [functions.email-unsubscribe]

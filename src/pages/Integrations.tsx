@@ -11,6 +11,7 @@ import { AIProviderIntegrationDialog } from "@/components/integrations/AIProvide
 import { MelhorEnvioDialog } from "@/components/integrations/MelhorEnvioDialog";
 import { BlingConnectionDialog } from "@/components/integrations/BlingConnectionDialog";
 import { BlingConfigDialog } from "@/components/integrations/BlingConfigDialog";
+import { NuvemshopConnectionDialog } from "@/components/integrations/NuvemshopConnectionDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { InstagramIntegrationPanel } from "@/components/instagram/InstagramIntegrationPanel";
 import { toast } from "sonner";
@@ -82,7 +83,8 @@ const getIntegrationDescription = (type: string): string => {
     ai_mistral: "Modelos Mistral europeus com tier gratuito",
     melhor_envio: "Gestão de fretes e rastreamento de envios",
     instagram: "DMs, comentários e publicações automáticas",
-    bling: "Sincronização de pedidos, produtos e estoque via ERP"
+    bling: "Sincronização de pedidos, produtos e estoque via ERP",
+    nuvemshop: "Sincronização de pedidos, produtos e clientes da loja Nuvemshop"
   };
   return descriptions[type] || "";
 };
@@ -145,6 +147,8 @@ const IntegrationsPage = () => {
   const [blingDialogMode, setBlingDialogMode] = useState<'manage' | 'connect'>('manage');
   const [blingConfigDialogOpen, setBlingConfigDialogOpen] = useState(false);
   const [selectedBlingIntegration, setSelectedBlingIntegration] = useState<Integration | null>(null);
+  const [nuvemshopDialogOpen, setNuvemshopDialogOpen] = useState(false);
+  const [nuvemshopDialogMode, setNuvemshopDialogMode] = useState<'manage' | 'connect'>('manage');
   const [evolutionReconnectIntegration, setEvolutionReconnectIntegration] = useState<Integration | null>(null);
   const [selectedAIProvider, setSelectedAIProvider] = useState<'openai' | 'google' | 'groq' | 'mistral'>('openai');
   const [editingEmailIntegration, setEditingEmailIntegration] = useState<EmailIntegration | null>(null);
@@ -173,9 +177,30 @@ const IntegrationsPage = () => {
     const blingSuccess = params.get("bling_success");
     const igSuccess = params.get("ig_success");
     const igError = params.get("ig_error");
-    
+    const nsSuccess = params.get("ns_success");
+    const nsError = params.get("ns_error");
+
     if (blingSuccess) {
       toast.success("Bling conectado com sucesso!");
+      window.history.replaceState({}, '', '/integrations');
+    }
+    if (nsSuccess) {
+      toast.success("Nuvemshop conectada com sucesso!");
+      window.history.replaceState({}, '', '/integrations');
+      fetchIntegrations();
+    }
+    if (nsError) {
+      const map: Record<string, string> = {
+        missing_params: "Parâmetros ausentes no retorno OAuth",
+        invalid_state: "Sessão de autorização inválida ou expirada",
+        state_expired: "Sessão de autorização expirou — tente novamente",
+        token_exchange_failed: "Falha ao trocar código por token (verifique credenciais do app)",
+        connection_save_failed: "Erro ao salvar a conexão",
+        integration_save_failed: "Erro ao registrar a integração",
+        server_misconfigured: "Servidor não configurado (NUVEMSHOP_APP_ID/SECRET ausentes)",
+        internal: "Erro interno no callback",
+      };
+      toast.error(map[nsError] || `Erro ao conectar Nuvemshop: ${nsError}`);
       window.history.replaceState({}, '', '/integrations');
     }
     if (igSuccess) {
@@ -220,6 +245,14 @@ const IntegrationsPage = () => {
         if (error) throw error;
         toast.success("Sincronização iniciada", {
           description: "Os envios serão sincronizados em segundo plano. Acompanhe o progresso na página Envios.",
+        });
+      } else if (integration.type === "nuvemshop") {
+        const { error } = await supabase.functions.invoke("nuvemshop-sync", {
+          body: { integrationId: integration.id, syncType: "all" },
+        });
+        if (error) throw error;
+        toast.success("Sincronização iniciada", {
+          description: "Clientes, produtos e pedidos da Nuvemshop serão sincronizados em segundo plano.",
         });
       } else {
         toast.error("Sincronização não suportada para este tipo de integração");
@@ -550,6 +583,28 @@ const IntegrationsPage = () => {
                           </DropdownMenuItem>
                         </>
                       )}
+                      {integration.type === "nuvemshop" && (
+                        <>
+                          <DropdownMenuItem onClick={() => handleSyncAll(integration)}>
+                            <Download className="h-4 w-4 mr-2" />
+                            Sincronizar tudo
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            setNuvemshopDialogMode('manage');
+                            setNuvemshopDialogOpen(true);
+                          }}>
+                            <Settings className="h-4 w-4 mr-2" />
+                            Gerenciar conexão
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => {
+                            setNuvemshopDialogMode('connect');
+                            setNuvemshopDialogOpen(true);
+                          }}>
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Reconectar
+                          </DropdownMenuItem>
+                        </>
+                      )}
                       {integration.type.startsWith("ai_") && (
                         <>
                           <DropdownMenuItem onClick={() => {
@@ -687,6 +742,10 @@ const IntegrationsPage = () => {
           const igSection = document.querySelector('[data-ig-panel]');
           igSection?.scrollIntoView({ behavior: 'smooth' });
         }}
+        onSelectNuvemshop={() => {
+          setNuvemshopDialogMode('connect');
+          setNuvemshopDialogOpen(true);
+        }}
       />
 
       <EvolutionWhatsAppDialog
@@ -723,6 +782,15 @@ const IntegrationsPage = () => {
         onOpenChange={setBlingDialogOpen}
         mode={blingDialogMode}
         onSuccess={fetchIntegrations}
+      />
+
+      <NuvemshopConnectionDialog
+        open={nuvemshopDialogOpen}
+        onOpenChange={(open) => {
+          setNuvemshopDialogOpen(open);
+          if (!open) fetchIntegrations();
+        }}
+        mode={nuvemshopDialogMode}
       />
 
       {selectedBlingIntegration && (

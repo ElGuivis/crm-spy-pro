@@ -50,6 +50,11 @@ const LOGOS: Record<string, IntegrationBrand> = {
     name: "Bling",
     color: "bg-green-600/10",
   },
+  nuvemshop: {
+    logo: "/logos/nuvemshop.svg",
+    name: "Nuvemshop",
+    color: "bg-sky-500/10",
+  },
   email_smtp: {
     logo: "",
     name: "E-mail SMTP",
