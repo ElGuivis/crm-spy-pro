@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { ClientsIntegrationSelector } from '@/components/clients/ClientsIntegrationSelector';
 import { ClientsContent } from '@/components/clients/ClientsContent';
 import { BlingClientsContent } from '@/components/clients/BlingClientsContent';
+import { NuvemshopClientsContent } from '@/components/clients/NuvemshopClientsContent';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const ClientsPage = () => {
@@ -43,12 +44,8 @@ const ClientsPage = () => {
     );
   }
 
-  // Route to appropriate component based on integration type
-  if (integration?.type === 'bling') {
-    return <BlingClientsContent integrationId={integrationId} />;
-  }
-
-  // Default to Loja Integrada clients
+  if (integration?.type === 'bling') return <BlingClientsContent integrationId={integrationId} />;
+  if (integration?.type === 'nuvemshop') return <NuvemshopClientsContent integrationId={integrationId} />;
   return <ClientsContent integrationId={integrationId} />;
 };
 

@@ -11,6 +11,8 @@ interface Props {
   entityType?: EntityType;
   /** When true, polls `me_sync_jobs` instead of `li_sync_state`. */
   melhorEnvio?: boolean;
+  /** When true, polls `nuvemshop_sync_state` instead of `li_sync_state`. */
+  nuvemshop?: boolean;
   tenantId?: string | null;
 }
 
@@ -27,7 +29,7 @@ type Status = "running" | "done" | "idle";
  * Polls every 5s. Shows progress while running and a completed
  * count after the sync finishes.
  */
-export function SyncProgressBanner({ integrationId, entityType, melhorEnvio, tenantId }: Props) {
+export function SyncProgressBanner({ integrationId, entityType, melhorEnvio, nuvemshop, tenantId }: Props) {
   const [synced, setSynced] = useState<number | null>(null);
   const [total, setTotal] = useState<number | null>(null);
   const [status, setStatus] = useState<Status>("idle");
@@ -61,6 +63,27 @@ export function SyncProgressBanner({ integrationId, entityType, melhorEnvio, ten
           setSynced(saved);
           setTotal(itemsTotal);
           setLabel("envios");
+        } else if (nuvemshop && entityType) {
+          const { data } = await supabase
+            .from("nuvemshop_sync_state")
+            .select("last_page, total_count, records_synced, updated_at")
+            .eq("integration_id", integrationId)
+            .eq("entity_type", entityType)
+            .maybeSingle();
+
+          const page = (data as any)?.last_page ?? 0;
+          const totalCount = (data as any)?.total_count ?? null;
+          const records = (data as any)?.records_synced ?? 0;
+          const updatedAt = data?.updated_at ? new Date(data.updated_at).getTime() : 0;
+          const recentlyActive = Date.now() - updatedAt < 5 * 60_000;
+          const isRunning = page > 0 && recentlyActive;
+          const isDone = page === 0 && totalCount !== null && totalCount > 0;
+          const doneCount = records > 0 ? records : totalCount;
+
+          setStatus(isRunning ? "running" : isDone ? "done" : "idle");
+          setSynced(isRunning ? records : doneCount);
+          setTotal(totalCount);
+          setLabel(labels[entityType]);
         } else if (entityType) {
           const { data } = await supabase
             .from("li_sync_state")
@@ -94,7 +117,7 @@ export function SyncProgressBanner({ integrationId, entityType, melhorEnvio, ten
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [integrationId, entityType, melhorEnvio, tenantId]);
+  }, [integrationId, entityType, melhorEnvio, nuvemshop, tenantId]);
 
   if (status === "idle" || synced === null) return null;
 

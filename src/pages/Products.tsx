@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { ProductsIntegrationSelector } from '@/components/products/ProductsIntegrationSelector';
 import { ProductsContent } from '@/components/products/ProductsContent';
 import { BlingProductsContent } from '@/components/products/BlingProductsContent';
+import { NuvemshopProductsContent } from '@/components/products/NuvemshopProductsContent';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const ProductsPage = () => {
@@ -51,11 +52,8 @@ const ProductsPage = () => {
     );
   }
 
-  // Render Bling or Loja Integrada component based on integration type
-  if (integration?.type === 'bling') {
-    return <BlingProductsContent integrationId={integrationId} />;
-  }
-
+  if (integration?.type === 'bling') return <BlingProductsContent integrationId={integrationId} />;
+  if (integration?.type === 'nuvemshop') return <NuvemshopProductsContent integrationId={integrationId} />;
   return <ProductsContent integrationId={integrationId} />;
 };
 

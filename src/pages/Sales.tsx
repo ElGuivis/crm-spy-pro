@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { SalesIntegrationSelector } from '@/components/sales/SalesIntegrationSelector';
 import { SalesContent } from '@/components/sales/SalesContent';
 import { BlingSalesContent } from '@/components/sales/BlingSalesContent';
+import { NuvemshopSalesContent } from '@/components/sales/NuvemshopSalesContent';
 import { supabase } from '@/integrations/supabase/client';
 import { RefreshCw } from 'lucide-react';
 
@@ -57,12 +58,8 @@ const SalesPage = () => {
     );
   }
 
-  // Render appropriate content based on integration type
-  if (integrationType === 'bling') {
-    return <BlingSalesContent integrationId={integrationId} />;
-  }
-
-  // Default to Loja Integrada content
+  if (integrationType === 'bling') return <BlingSalesContent integrationId={integrationId} />;
+  if (integrationType === 'nuvemshop') return <NuvemshopSalesContent integrationId={integrationId} />;
   return <SalesContent integrationId={integrationId} />;
 };
 

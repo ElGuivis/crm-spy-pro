@@ -38,7 +38,7 @@ export interface IntegrationData {
 const categoryMapping: Record<string, IntegrationCategory> = {
   loja_integrada: 'ecommerce',
   bling: 'ecommerce',
-  nuvem_shop: 'ecommerce',
+  nuvemshop: 'ecommerce',
   evolution_whatsapp: 'whatsapp',
   whatsapp_official: 'whatsapp',
   melhor_envio: 'shipping',
@@ -48,7 +48,7 @@ const categoryMapping: Record<string, IntegrationCategory> = {
 };
 
 const categoryTypes: Record<IntegrationCategory, string[]> = {
-  ecommerce: ['loja_integrada', 'bling', 'nuvem_shop'],
+  ecommerce: ['loja_integrada', 'bling', 'nuvemshop'],
   whatsapp: ['evolution_whatsapp', 'whatsapp_official', 'chatwoot'],
   shipping: ['melhor_envio'],
   ai: ['ai_openai', 'ai_google'],
@@ -125,6 +125,18 @@ export function useIntegrationData({ category }: UseIntegrationDataOptions) {
               supabase.from('bling_orders').select('id', { count: 'exact', head: true }).eq('integration_id', integrationId).then(r => ({ type: 'orders', integrationId, count: r.count || 0 })),
               supabase.from('bling_customers').select('id', { count: 'exact', head: true }).eq('integration_id', integrationId).then(r => ({ type: 'customers', integrationId, count: r.count || 0 })),
               supabase.from('bling_products').select('id', { count: 'exact', head: true }).eq('integration_id', integrationId).then(r => ({ type: 'products', integrationId, count: r.count || 0 }))
+            );
+          });
+        }
+
+        // Also check Nuvemshop tables for Nuvemshop integrations
+        const nuvemshopIntegrations = integrationsData.filter(i => i.type === 'nuvemshop').map(i => i.id);
+        if (nuvemshopIntegrations.length > 0) {
+          nuvemshopIntegrations.forEach(integrationId => {
+            countPromises.push(
+              supabase.from('nuvemshop_orders').select('id', { count: 'exact', head: true }).eq('integration_id', integrationId).then(r => ({ type: 'orders', integrationId, count: r.count || 0 })),
+              supabase.from('nuvemshop_customers').select('id', { count: 'exact', head: true }).eq('integration_id', integrationId).then(r => ({ type: 'customers', integrationId, count: r.count || 0 })),
+              supabase.from('nuvemshop_products').select('id', { count: 'exact', head: true }).eq('integration_id', integrationId).then(r => ({ type: 'products', integrationId, count: r.count || 0 }))
             );
           });
         }
