@@ -276,6 +276,10 @@ verify_jwt = false
 [functions.instagram-metrics-rollup]
 verify_jwt = false
 
+[functions.instagram-sync-insights]
+# INTERNAL — daily cron: sync account + media insights from Meta Graph API
+verify_jwt = false
+
 [functions.instagram-refresh-token]
 verify_jwt = false
 

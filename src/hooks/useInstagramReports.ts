@@ -40,7 +40,7 @@ interface ChannelInsight {
 interface MediaInsight {
   id: string;
   channel_id: string;
-  media_id: string;
+  ig_media_id: string;
   media_type: string | null;
   caption: string | null;
   timestamp: string | null;
@@ -50,10 +50,8 @@ interface MediaInsight {
   comments: number | null;
   saves: number | null;
   shares: number | null;
-  engagement: number | null;
-  permalink: string | null;
   plays: number | null;
-  dm_threads_generated: number | null;
+  permalink: string | null;
   [key: string]: unknown;
 }
 
@@ -86,7 +84,7 @@ export function useInstagramReports(channelId: string | null) {
         .order("insight_date", { ascending: true }),
       supabase
         .from("instagram_media_insights")
-        .select("id, channel_id, media_id, media_type, caption, timestamp, impressions, reach, likes, comments, saves, shares, engagement, permalink")
+        .select("id, channel_id, ig_media_id, media_type, caption, timestamp, impressions, reach, likes, comments, saves, shares, plays, permalink")
         .eq("channel_id", channelId)
         .order("timestamp", { ascending: false })
         .limit(50),
