@@ -78,30 +78,39 @@ export function NotificationSettings() {
             <p className="text-xs text-muted-foreground">Tocar som quando uma notificação chegar</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Select
-            value={prefs.soundType || 'default'}
-            onValueChange={(v) => setPrefs({ soundType: v as NotificationSound, sound: v !== 'none' })}
+        <div className="flex items-center gap-3">
+          <Switch
+            checked={prefs.sound}
+            onCheckedChange={(v) => setPrefs({ sound: v })}
             disabled={!prefs.enabled}
-          >
-            <SelectTrigger className="w-28 h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SOUND_OPTIONS.map(opt => (
-                <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => previewSound(prefs.soundType || 'default')}
-            disabled={!prefs.enabled || prefs.soundType === 'none'}
-          >
-            <Play className="h-3.5 w-3.5" />
-          </Button>
+          />
+          {prefs.sound && (
+            <>
+              <Select
+                value={prefs.soundType || 'default'}
+                onValueChange={(v) => setPrefs({ soundType: v as NotificationSound })}
+                disabled={!prefs.enabled}
+              >
+                <SelectTrigger className="w-28 h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SOUND_OPTIONS.filter(o => o.value !== 'none').map(opt => (
+                    <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => previewSound(prefs.soundType || 'default')}
+                disabled={!prefs.enabled}
+              >
+                <Play className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          )}
         </div>
       </div>
 

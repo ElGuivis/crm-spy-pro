@@ -28,8 +28,7 @@ function buildProviderConfig(provider: string, apiKey: string): AIProviderConfig
   };
 }
 
-// deno-lint-ignore no-explicit-any
-async function getAIConfig(supabase: any, tenantId: string): Promise<AIProviderConfig | null> {
+async function getAIConfig(supabase: ReturnType<typeof createClient>, tenantId: string): Promise<AIProviderConfig | null> {
   const { data: creds } = await supabase
     .from('tenant_ai_credentials')
     .select('id, provider, api_key_encrypted, is_active, is_default')

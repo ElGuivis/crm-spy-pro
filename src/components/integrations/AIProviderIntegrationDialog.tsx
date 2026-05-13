@@ -114,7 +114,8 @@ export function AIProviderIntegrationDialog({
   }, [existingIntegration, open, provider, config.name]);
 
   const handleTestConnection = async () => {
-    if (!formData.api_key) {
+    const cleanKey = formData.api_key.trim().replace(/[\s\n\r]/g, '');
+    if (!cleanKey) {
       toast.error("Insira uma API key para testar");
       return;
     }
@@ -124,22 +125,13 @@ export function AIProviderIntegrationDialog({
 
     try {
       let response: Response;
-      
-      if (provider === 'openai') {
-        response = await fetch(config.testEndpoint, {
-          headers: { 'Authorization': `Bearer ${formData.api_key}` },
-        });
-      } else if (provider === 'groq') {
-        response = await fetch(config.testEndpoint, {
-          headers: { 'Authorization': `Bearer ${formData.api_key}` },
-        });
-      } else if (provider === 'mistral') {
-        response = await fetch(config.testEndpoint, {
-          headers: { 'Authorization': `Bearer ${formData.api_key}` },
-        });
+
+      if (provider === 'google') {
+        response = await fetch(`${config.testEndpoint}?key=${cleanKey}`);
       } else {
-        // Google
-        response = await fetch(`${config.testEndpoint}?key=${formData.api_key}`);
+        response = await fetch(config.testEndpoint, {
+          headers: { 'Authorization': `Bearer ${cleanKey}` },
+        });
       }
 
       if (response.ok) {
@@ -147,12 +139,19 @@ export function AIProviderIntegrationDialog({
         toast.success("Conexão bem sucedida!");
       } else {
         setTestResult('error');
-        toast.error("API key inválida");
+        const status = response.status;
+        if (status === 401) {
+          toast.error("API key inválida ou expirada (401)");
+        } else if (status === 403) {
+          toast.error("API key sem permissão para este recurso (403)");
+        } else {
+          toast.error(`Erro ao testar: HTTP ${status}`);
+        }
       }
     } catch (error) {
       log.error("Test connection error:", error);
       setTestResult('error');
-      toast.error("Erro ao testar conexão");
+      toast.error("Erro de rede ao testar — verifique sua conexão");
     } finally {
       setIsTesting(false);
     }

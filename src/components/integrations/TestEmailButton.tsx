@@ -44,7 +44,19 @@ export function TestEmailButton({ emailIntegrationId, disabled }: TestEmailButto
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Extract real error message from edge function response body
+        let realMessage = error.message;
+        let dica: string | undefined;
+        try {
+          const body = await (error as any).context?.json?.();
+          if (body?.mensagem) realMessage = body.mensagem;
+          if (body?.dica) dica = body.dica;
+        } catch { /* ignore parse errors */ }
+        const err = new Error(realMessage) as Error & { dica?: string };
+        err.dica = dica;
+        throw err;
+      }
       if ((data as any)?.status === "erro") {
         throw new Error((data as any)?.mensagem || "Falha ao enviar e-mail");
       }

@@ -576,7 +576,7 @@ export default function Team() {
                       {new Date(member.created_at).toLocaleDateString('pt-BR')}
                     </TableCell>
                     <TableCell className="text-right">
-                      {member.role !== 'owner' && (
+                      {member.role !== 'owner' && member.user_id !== user?.id && (
                         <div className="flex items-center justify-end gap-2">
                           <Button
                             variant="ghost"

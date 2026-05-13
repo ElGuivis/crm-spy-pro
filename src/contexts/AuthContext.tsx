@@ -159,7 +159,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resolvePermissions = async (userId: string, tenantData: Tenant | null) => {
+    // Owner check: user owns the active tenant — no team_members record needed
     const ownerFlag = tenantData?.owner_id === userId;
+
+    if (ownerFlag) {
+      // Owners always have full access — no need to query team_members
+      setIsOwner(true);
+      setIsAdmin(true);
+      setPermissions([...ALL_PERMISSIONS]);
+      return;
+    }
 
     // Check team membership for the ACTIVE tenant specifically
     const { data: teamMemberData } = await supabase
@@ -169,12 +178,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .eq('tenant_id', tenantData?.id ?? '')
       .maybeSingle();
 
-    const adminFlag = ownerFlag || teamMemberData?.role === 'admin' || teamMemberData?.role === 'owner';
+    const adminFlag = teamMemberData?.role === 'admin' || teamMemberData?.role === 'owner';
 
     setIsAdmin(adminFlag);
-    setIsOwner(ownerFlag);
+    setIsOwner(false);
 
-    if (ownerFlag || adminFlag) {
+    if (adminFlag) {
       setPermissions([...ALL_PERMISSIONS]);
     } else if (teamMemberData) {
       const { data: memberPerms } = await supabase
@@ -189,7 +198,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setPermissions([]);
       }
     } else {
-      // No team membership and not owner — still give all if no tenantData
+      // No team membership and not owner — grant all only if no tenantData context
       setPermissions(tenantData ? [] : [...ALL_PERMISSIONS]);
     }
   };

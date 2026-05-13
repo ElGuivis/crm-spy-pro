@@ -22,6 +22,9 @@ const handler = async (req: Request): Promise<Response> => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const cid = getCorrelationId(req);
+  const log = createLogger("send-email", cid);
+
   try {
     // Auth via shared guard
     const { tenantId } = await requireUserAuth(req);
