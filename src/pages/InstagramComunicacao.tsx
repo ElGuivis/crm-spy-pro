@@ -134,6 +134,8 @@ export default function InstagramComunicacao() {
             mediaType="dm_auto_reply"
             rule={getActiveRuleForType('dm_auto_reply') || getRulesForType('dm_auto_reply')[0] || null}
             onSave={upsertRule}
+            showFirstOnly
+            defaultFirstOnly
             messagePlaceholder="Ex: Olá! Obrigado por entrar em contato 🎉 Como posso ajudar?"
           />
         </TabsContent>
@@ -146,6 +148,7 @@ export default function InstagramComunicacao() {
             mediaType="story_reply"
             rule={storyReplyRule}
             onSave={upsertRule}
+            defaultFirstOnly={false}
             messagePlaceholder="Ex: Obrigado por responder ao meu story! 💜"
           />
         </TabsContent>
@@ -158,8 +161,8 @@ export default function InstagramComunicacao() {
             mediaType="story_mention"
             rule={storyMentionRule}
             onSave={upsertRule}
+            defaultFirstOnly={false}
             messagePlaceholder="Ex: Vi que você me mencionou! Obrigado pelo carinho 🙏"
-            showDelay={false}
           />
         </TabsContent>
       </Tabs>

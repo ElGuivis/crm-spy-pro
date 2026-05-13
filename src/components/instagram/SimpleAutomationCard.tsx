@@ -18,17 +18,22 @@ interface SimpleAutomationCardProps {
   rule: WatchlistRule | null;
   onSave: (data: Partial<WatchlistRule> & { media_type: string }) => Promise<void>;
   showDelay?: boolean;
+  showFirstOnly?: boolean;
+  defaultFirstOnly?: boolean;
   messagePlaceholder?: string;
 }
 
 export function SimpleAutomationCard({
   title, description, icon: Icon, mediaType, rule, onSave,
   showDelay = true,
+  showFirstOnly = false,
+  defaultFirstOnly = false,
   messagePlaceholder = 'Ex: Obrigado! Vou te enviar mais detalhes...',
 }: SimpleAutomationCardProps) {
   const [isActive, setIsActive] = useState(rule?.is_active ?? false);
   const [replyText, setReplyText] = useState(rule?.reply_public_variants?.[0] ?? '');
   const [delaySeconds, setDelaySeconds] = useState(rule?.delay_seconds ?? 3);
+  const [firstOnly, setFirstOnly] = useState(rule?.first_comment_only ?? defaultFirstOnly);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -36,8 +41,9 @@ export function SimpleAutomationCard({
       setIsActive(rule.is_active);
       setReplyText(rule.reply_public_variants?.[0] ?? '');
       setDelaySeconds(rule.delay_seconds ?? 3);
+      setFirstOnly(rule.first_comment_only ?? defaultFirstOnly);
     }
-  }, [rule]);
+  }, [rule, defaultFirstOnly]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -51,7 +57,7 @@ export function SimpleAutomationCard({
         reply_public_enabled: false,
         reply_public_variants: replyText.trim() ? [replyText.trim()] : null,
         delay_seconds: delaySeconds,
-        first_comment_only: true,
+        first_comment_only: showFirstOnly ? firstOnly : defaultFirstOnly,
       });
     } finally {
       setIsSaving(false);
@@ -109,6 +115,16 @@ export function SimpleAutomationCard({
               onValueChange={([val]) => setDelaySeconds(val)}
               min={0} max={30} step={1}
             />
+          </div>
+        )}
+
+        {showFirstOnly && (
+          <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+            <div className="space-y-0.5">
+              <Label className="text-sm font-medium">Apenas primeira mensagem</Label>
+              <p className="text-xs text-muted-foreground">Responde somente ao primeiro contato de cada usuário</p>
+            </div>
+            <Switch checked={firstOnly} onCheckedChange={setFirstOnly} />
           </div>
         )}
 
