@@ -7,11 +7,18 @@ import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
 const BLING_API_BASE = 'https://www.bling.com.br/Api/v3';
 const PAGE_SIZE = 100;
+const UPSERT_CHUNK_SIZE = 25; // stay well under PostgREST 8s statement_timeout at scale
 const RATE_LIMIT_DELAY = 400;
 const MAX_PAGES_PER_RUN = 3;
 const LOCK_TIMEOUT_MS = 5 * 60 * 1000;
 const ENRICHMENT_BATCH_SIZE = 20;
 const ENRICHMENT_DELAY = 400;
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+  return chunks;
+}
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -336,17 +343,20 @@ async function processProductJob(
           synced_at: new Date().toISOString(),
         }));
         
-        const { error: upsertError } = await supabase
-          .from('bling_products')
-          .upsert(productsToUpsert, {
-            onConflict: 'bling_id,integration_id',
-            ignoreDuplicates: false,
-          });
-        
+        let upsertError = null;
+        let pageSynced = 0;
+        for (const chunk of chunkArray(productsToUpsert, UPSERT_CHUNK_SIZE)) {
+          const { error } = await supabase
+            .from('bling_products')
+            .upsert(chunk, { onConflict: 'bling_id,integration_id', ignoreDuplicates: false });
+          if (error) { upsertError = error; break; }
+          pageSynced += chunk.length;
+        }
+
         if (upsertError) {
           log.error(`[PRODUCTS-JOB] Upsert error on page ${currentPage}:`, upsertError);
         } else {
-          synced += products.length;
+          synced += pageSynced;
         }
         
         // Update progress

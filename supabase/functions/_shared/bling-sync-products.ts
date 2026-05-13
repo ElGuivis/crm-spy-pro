@@ -8,6 +8,14 @@ import { fetchBlingData } from "./bling-sync-helpers.ts";
 import { createLogger } from "./correlation.ts";
 const log = createLogger("bling-sync-products", "shared");
 
+const UPSERT_CHUNK_SIZE = 25; // stay well under PostgREST 8s statement_timeout at scale
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+  return chunks;
+}
+
 
 /** Sync products from Bling - first page processed inline, rest delegated to job processor */
 export async function syncProducts(
@@ -53,13 +61,15 @@ export async function syncProducts(
     };
   });
 
-  const { error: upsertError } = await supabase
-    .from('bling_products')
-    .upsert(productsToUpsert, { onConflict: 'bling_id,integration_id', ignoreDuplicates: false });
-
-  if (!upsertError) {
-    synced = firstPageProducts.length;
+  let upsertError = null;
+  for (const chunk of chunkArray(productsToUpsert, UPSERT_CHUNK_SIZE)) {
+    const { error } = await supabase
+      .from('bling_products')
+      .upsert(chunk, { onConflict: 'bling_id,integration_id', ignoreDuplicates: false });
+    if (error) { upsertError = error; break; }
+    synced += chunk.length;
   }
+  if (upsertError) synced = 0;
 
   await supabase
     .from('bling_sync_jobs')
