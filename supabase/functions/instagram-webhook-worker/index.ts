@@ -930,7 +930,7 @@ async function handleWatchlistAutoDm(
     await new Promise(r => setTimeout(r, rule.delay_seconds * 1000));
   }
 
-  // Send DM via instagram-send-message (contact already has open messaging window)
+  // Send DM via instagram-send-message
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -942,11 +942,10 @@ async function handleWatchlistAutoDm(
     },
     body: JSON.stringify({
       channel_id: channel.id,
+      contact_id: contactId,
       thread_id: threadId,
       text: replyText,
       idempotency_key: `watchlist_${mediaType}_${contactId}_${rule.id}`,
     }),
-  }).catch((e: unknown) => {
-    // Fallback logging only
-  });
+  }).catch(() => {});
 }
