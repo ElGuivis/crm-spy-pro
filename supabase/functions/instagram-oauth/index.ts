@@ -153,6 +153,60 @@ serve(async (req) => {
       });
     }
 
+    // =========================================================================
+    // ACTION: resubscribe-webhook
+    // =========================================================================
+    if (action === "resubscribe-webhook") {
+      const { channel_id } = body;
+      if (!channel_id) {
+        return new Response(JSON.stringify({ error: "channel_id required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: channel } = await serviceClient
+        .from("instagram_channels")
+        .select("id, ig_user_id, access_token_encrypted")
+        .eq("id", channel_id)
+        .eq("tenant_id", tenantId)
+        .eq("status", "connected")
+        .maybeSingle();
+
+      if (!channel) {
+        return new Response(JSON.stringify({ error: "Channel not found or not connected" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { resolveInstagramAccessToken } = await import("../_shared/ig-token-resolver.ts");
+      const { accessToken } = await resolveInstagramAccessToken(channel.access_token_encrypted);
+
+      const subFields = [
+        "messages", "messaging_postbacks", "messaging_referral",
+        "messaging_optins", "messaging_seen",
+        "comments", "mentions", "story_insights", "follow",
+      ].join(",");
+
+      const subRes = await fetch(
+        `https://graph.facebook.com/v21.0/${channel.ig_user_id}/subscribed_apps?subscribed_fields=${subFields}&access_token=${accessToken}`,
+        { method: "POST" }
+      );
+      const subData = await subRes.json() as { success?: boolean; error?: { message: string } };
+
+      if (subData.success) {
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ error: subData.error?.message || "Subscription failed", raw: subData }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     return new Response(JSON.stringify({ error: "Invalid action" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

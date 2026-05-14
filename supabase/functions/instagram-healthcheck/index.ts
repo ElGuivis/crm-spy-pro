@@ -84,10 +84,35 @@ serve(async (req) => {
           })
           .eq("id", channel.id);
 
+        // Re-subscribe to Meta webhook events on every healthcheck (idempotent)
+        let webhookSubscribed: boolean | null = null;
+        let webhookSubError: unknown = null;
+        if (healthy) {
+          try {
+            const subFields = [
+              "messages", "messaging_postbacks", "messaging_referral",
+              "messaging_optins", "messaging_seen",
+              "comments", "mentions", "story_insights", "follow",
+            ].join(",");
+            const subRes = await fetch(
+              `https://graph.facebook.com/v21.0/${channel.ig_user_id}/subscribed_apps?subscribed_fields=${subFields}&access_token=${accessToken}`,
+              { method: "POST" }
+            );
+            const subData = await subRes.json() as { success?: boolean; error?: unknown };
+            webhookSubscribed = subData.success === true;
+            if (!webhookSubscribed) webhookSubError = subData;
+          } catch (e) {
+            webhookSubscribed = false;
+            webhookSubError = e instanceof Error ? e.message : String(e);
+          }
+        }
+
         results.push({
           channel_id: channel.id,
           ig_user_id: channel.ig_user_id,
           healthy,
+          webhookSubscribed,
+          webhookSubError,
           error: data.error?.message || null,
         });
       } catch (err) {

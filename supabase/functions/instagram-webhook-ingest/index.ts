@@ -47,14 +47,18 @@ serve(async (req) => {
 
   const rawBody = await req.text();
 
-  // Validate HMAC signature
+  // Validate HMAC signature — try META_APP_SECRET first, fallback to INSTAGRAM_APP_SECRET
   const signature = req.headers.get("x-hub-signature-256");
-  const appSecret = Deno.env.get("INSTAGRAM_APP_SECRET")!;
+  const metaSecret = Deno.env.get("META_APP_SECRET");
+  const igSecret = Deno.env.get("INSTAGRAM_APP_SECRET");
 
   let signatureValid = false;
-  if (signature && appSecret) {
-    const expectedSig = "sha256=" + await computeHmacSha256(appSecret, rawBody);
-    signatureValid = signature === expectedSig;
+  if (signature) {
+    for (const secret of [metaSecret, igSecret]) {
+      if (!secret) continue;
+      const expectedSig = "sha256=" + await computeHmacSha256(secret, rawBody);
+      if (signature === expectedSig) { signatureValid = true; break; }
+    }
   }
 
   if (!signatureValid) {

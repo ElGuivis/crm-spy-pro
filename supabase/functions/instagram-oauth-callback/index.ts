@@ -282,6 +282,27 @@ serve(async (req) => {
             { onConflict: "channel_id" }
           );
 
+        // Subscribe the IG account to receive webhook events from Meta
+        try {
+          const subFields = [
+            "messages", "messaging_postbacks", "messaging_referral",
+            "messaging_optins", "messaging_seen",
+            "comments", "mentions", "story_insights", "follow",
+          ].join(",");
+          const subRes = await fetch(
+            `https://graph.facebook.com/v21.0/${account.igUserId}/subscribed_apps?subscribed_fields=${subFields}&access_token=${account.pageAccessToken}`,
+            { method: "POST" }
+          );
+          const subData = await subRes.json() as { success?: boolean; error?: { message: string } };
+          if (subData.success) {
+            log.info(`[instagram-oauth-callback] ✅ Webhook subscribed for @${account.igUsername}`);
+          } else {
+            log.warn(`[instagram-oauth-callback] ⚠️ Webhook subscription failed:`, subData);
+          }
+        } catch (e) {
+          log.warn(`[instagram-oauth-callback] ⚠️ Webhook subscription error:`, e);
+        }
+
         log.info(`[instagram-oauth-callback] ✅ Instagram connected: @${account.igUsername}`);
       }
 
