@@ -89,14 +89,14 @@ serve(async (req) => {
           // Process messaging events
           const messagingEvents = entry.messaging || [];
           for (const event of messagingEvents) {
-            await processMessagingEvent(supabase, channel, event, encryptionKey);
+            await processMessagingEvent(supabase, channel, event, encryptionKey, log);
           }
 
           // Process changes (comments, story mentions, etc)
           const changes = entry.changes || [];
           for (const change of changes) {
             if (change.field === "comments") {
-              await processCommentEvent(supabase, channel, change.value, entry.time);
+              await processCommentEvent(supabase, channel, change.value, entry.time, log);
             } else if (change.field === "story_insights" || change.field === "mentions") {
               await processStoryMentionEvent(supabase, channel, change.value, entry.time);
           } else if (change.field === "follow") {
@@ -149,7 +149,7 @@ serve(async (req) => {
 interface IgChannel { id: string; tenant_id: string; ig_user_id: string; access_token_encrypted: string }
 interface IgMessagingEvent { sender?: { id: string }; recipient?: { id: string }; timestamp?: number; referral?: Record<string, string>; postback?: { payload?: string; title?: string }; message?: { mid?: string; text?: string; attachments?: { type: string; payload?: { url?: string } }[]; quick_reply?: Record<string, unknown>; reply_to?: { story?: unknown } }; delivery?: { mids?: string[] }; read?: unknown }
 
-async function processMessagingEvent(supabase: ReturnType<typeof createClient>, channel: IgChannel, event: IgMessagingEvent, encryptionKey: string) {
+async function processMessagingEvent(supabase: ReturnType<typeof createClient>, channel: IgChannel, event: IgMessagingEvent, encryptionKey: string, log: ReturnType<typeof createLogger>) {
   const senderId = event.sender?.id;
   const recipientId = event.recipient?.id;
   const timestamp = event.timestamp ? new Date(event.timestamp).toISOString() : new Date().toISOString();
@@ -529,7 +529,7 @@ async function logEvent(supabase: ReturnType<typeof createClient>, channel: { id
   });
 }
 
-async function processCommentEvent(supabase: ReturnType<typeof createClient>, channel: { id: string; tenant_id: string }, value: Record<string, unknown>, entryTime: number) {
+async function processCommentEvent(supabase: ReturnType<typeof createClient>, channel: { id: string; tenant_id: string }, value: Record<string, unknown>, entryTime: number, log: ReturnType<typeof createLogger>) {
   const commentId = value.id;
   const mediaId = value.media?.id;
   const commentText = value.text || "";
