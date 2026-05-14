@@ -6,7 +6,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
-import { Save } from 'lucide-react';
+import { Save, Trash2 } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import type { WatchlistRule } from '@/hooks/useInstagramAutomations';
 import type { LucideIcon } from 'lucide-react';
 
@@ -17,6 +21,7 @@ interface SimpleAutomationCardProps {
   mediaType: string;
   rule: WatchlistRule | null;
   onSave: (data: Partial<WatchlistRule> & { media_type: string }) => Promise<void>;
+  onDelete?: (ruleId: string) => Promise<void>;
   showDelay?: boolean;
   showFirstOnly?: boolean;
   defaultFirstOnly?: boolean;
@@ -24,7 +29,7 @@ interface SimpleAutomationCardProps {
 }
 
 export function SimpleAutomationCard({
-  title, description, icon: Icon, mediaType, rule, onSave,
+  title, description, icon: Icon, mediaType, rule, onSave, onDelete,
   showDelay = true,
   showFirstOnly = false,
   defaultFirstOnly = false,
@@ -35,6 +40,7 @@ export function SimpleAutomationCard({
   const [delaySeconds, setDelaySeconds] = useState(rule?.delay_seconds ?? 3);
   const [firstOnly, setFirstOnly] = useState(rule?.first_comment_only ?? defaultFirstOnly);
   const [isSaving, setIsSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (rule) {
@@ -75,9 +81,21 @@ export function SimpleAutomationCard({
             </CardTitle>
             <CardDescription>{description}</CardDescription>
           </div>
-          <Badge variant={isActive ? 'default' : 'secondary'}>
-            {isActive ? 'Ativo' : 'Inativo'}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant={isActive ? 'default' : 'secondary'}>
+              {isActive ? 'Ativo' : 'Inativo'}
+            </Badge>
+            {rule && onDelete && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                onClick={() => setConfirmDelete(true)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -133,6 +151,26 @@ export function SimpleAutomationCard({
           {isSaving ? 'Salvando...' : 'Salvar'}
         </Button>
       </CardContent>
+
+      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover automação</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir esta automação? Essa ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => rule && onDelete?.(rule.id)}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
