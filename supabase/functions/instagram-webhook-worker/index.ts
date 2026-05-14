@@ -553,7 +553,7 @@ async function processCommentEvent(supabase: ReturnType<typeof createClient>, ch
   // Check watchlist rules
   const { data: rules } = await supabase
     .from("instagram_media_watchlist")
-    .select("id, channel_id, watch_mode, media_id, media_type, keywords_include, keywords_exclude, first_comment_only, delay_seconds, reply_public_enabled, reply_public_variants, round_robin_index, private_reply_enabled, private_reply_flow_id, is_active")
+    .select("id, channel_id, watch_mode, media_id, media_type, keywords_include, keywords_exclude, first_comment_only, delay_seconds, reply_public_enabled, reply_public_variants, round_robin_index, private_reply_enabled, private_reply_flow_id, dm_message, keyword_responses, is_active")
     .eq("channel_id", channel.id)
     .eq("is_active", true)
     .in("media_type", [isReel ? "reel" : "post"]);
@@ -615,7 +615,6 @@ async function processCommentEvent(supabase: ReturnType<typeof createClient>, ch
     if (rule.private_reply_enabled) {
       if (rule.private_reply_flow_id) {
         // Trigger flow for this contact
-        // First we need to find/create contact and thread
         await supabase.functions.invoke("instagram-trigger-dispatcher", {
           body: {
             event_type: eventType,
@@ -628,9 +627,26 @@ async function processCommentEvent(supabase: ReturnType<typeof createClient>, ch
           },
         }).catch((e: unknown) => log.error("[ig-worker] Trigger dispatch error:", e));
       } else {
-        await supabase.functions.invoke("instagram-send-private-reply", {
-          body: { channel_id: channel.id, comment_id: commentId, text: "Obrigado pelo comentário!" },
-        }).catch((e: unknown) => log.error("[ig-worker] Private reply error:", e));
+        // Resolve DM text: multi-mode matches per keyword, single-mode uses dm_message
+        let dmText: string | null = null;
+        const kr = rule.keyword_responses as Array<{ keyword: string; dm_message: string }> | null;
+        if (kr && kr.length > 0) {
+          const lowerText = (commentText as string).toLowerCase();
+          const matched = kr.find((r) => lowerText.includes(r.keyword.toLowerCase()));
+          dmText = matched?.dm_message ?? null;
+        } else {
+          dmText = rule.dm_message ?? null;
+        }
+        if (dmText) {
+          await supabase.functions.invoke("instagram-send-private-reply", {
+            body: {
+              channel_id: channel.id,
+              comment_id: commentId,
+              text: dmText,
+              idempotency_key: `comment_dm:${commentId}:${rule.id}`,
+            },
+          }).catch((e: unknown) => log.error("[ig-worker] Private reply error:", e));
+        }
       }
     }
   }
