@@ -285,8 +285,8 @@ serve(async (req) => {
         // Subscribe the IG account to receive webhook events from Meta
         try {
           const subFields = [
-            "messages", "messaging_postbacks", "messaging_referral",
-            "messaging_optins", "messaging_seen",
+            "messages", "messaging_postbacks", "messaging_referrals",
+            "messaging_optins", "message_reads",
             "comments", "mentions", "story_insights", "follow",
           ].join(",");
           const subRes = await fetch(

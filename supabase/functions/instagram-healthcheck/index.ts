@@ -85,25 +85,51 @@ serve(async (req) => {
           .eq("id", channel.id);
 
         // Re-subscribe to Meta webhook events on every healthcheck (idempotent)
+        // Try both: /{ig_user_id}/subscribed_apps (messaging) and /me/subscribed_apps (page-level, for comments)
         let webhookSubscribed: boolean | null = null;
         let webhookSubError: unknown = null;
         if (healthy) {
+          const subFields = [
+            "messages", "messaging_postbacks", "messaging_referral",
+            "messaging_optins", "messaging_seen",
+            "comments", "mentions", "story_insights", "follow",
+          ].join(",");
+
+          // Attempt 1: IG user subscription (requires approved permissions, may fail in dev)
           try {
-            const subFields = [
-              "messages", "messaging_postbacks", "messaging_referral",
-              "messaging_optins", "messaging_seen",
-              "comments", "mentions", "story_insights", "follow",
-            ].join(",");
             const subRes = await fetch(
               `https://graph.facebook.com/v21.0/${channel.ig_user_id}/subscribed_apps?subscribed_fields=${subFields}&access_token=${accessToken}`,
               { method: "POST" }
             );
             const subData = await subRes.json() as { success?: boolean; error?: unknown };
-            webhookSubscribed = subData.success === true;
-            if (!webhookSubscribed) webhookSubError = subData;
+            if (subData.success) webhookSubscribed = true;
+            else webhookSubError = subData;
           } catch (e) {
-            webhookSubscribed = false;
             webhookSubError = e instanceof Error ? e.message : String(e);
+          }
+
+          // Attempt 2: Page-level subscription via /me (works with page access token)
+          // Only include fields valid for page-level subscriptions
+          if (!webhookSubscribed) {
+            try {
+              const pageFields = [
+                "messages", "messaging_postbacks", "messaging_referrals",
+                "messaging_optins", "message_reads",
+              ].join(",");
+              const pageRes = await fetch(
+                `https://graph.facebook.com/v21.0/me/subscribed_apps?subscribed_fields=${pageFields}&access_token=${accessToken}`,
+                { method: "POST" }
+              );
+              const pageData = await pageRes.json() as { success?: boolean; error?: unknown };
+              if (pageData.success) {
+                webhookSubscribed = true;
+                webhookSubError = null;
+              } else {
+                webhookSubError = { ig_attempt: webhookSubError, page_attempt: pageData };
+              }
+            } catch (e) {
+              webhookSubError = { ig_attempt: webhookSubError, page_attempt: e instanceof Error ? e.message : String(e) };
+            }
           }
         }
 
