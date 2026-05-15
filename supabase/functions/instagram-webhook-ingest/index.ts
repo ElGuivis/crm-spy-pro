@@ -3,6 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
+declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void };
+
 async function computeHmacSha256(key: string, data: string): Promise<string> {
   const enc = new TextEncoder();
   const cryptoKey = await crypto.subtle.importKey(
@@ -144,8 +146,16 @@ serve(async (req) => {
     log.error("[instagram-webhook] ❌ Insert error:", insertError);
   } else {
     log.info("[instagram-webhook] ✅ Persisted delivery:", providerDeliveryKey);
+    // Trigger worker immediately in background — cron is fallback only
+    EdgeRuntime.waitUntil(
+      fetch(`${supabaseUrl}/functions/v1/instagram-webhook-worker`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-cron-secret": Deno.env.get("CRON_SECRET") || "" },
+        body: "{}",
+      }).catch(() => {})
+    );
   }
 
-  // Respond 200 immediately - worker will process later
+  // Respond 200 immediately - worker runs in background
   return new Response("OK", { status: 200 });
 });

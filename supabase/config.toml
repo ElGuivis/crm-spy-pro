@@ -264,6 +264,9 @@ verify_jwt = false
 [functions.instagram-webhook-worker]
 verify_jwt = false
 
+[functions.instagram-message-requests-poller]
+verify_jwt = false
+
 [functions.instagram-outbox-dispatch]
 verify_jwt = false
 

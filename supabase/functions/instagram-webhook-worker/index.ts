@@ -893,7 +893,7 @@ async function handleWatchlistAutoDm(
   threadId: string,
   contactId: string,
 ) {
-  const { data: rules } = await supabase
+  const { data: rules, error: rulesErr } = await supabase
     .from("instagram_media_watchlist")
     .select("id, reply_public_variants, delay_seconds, first_comment_only, is_active")
     .eq("channel_id", channel.id)
@@ -901,28 +901,25 @@ async function handleWatchlistAutoDm(
     .eq("is_active", true)
     .limit(1);
 
-  if (!rules || rules.length === 0) return;
+  if (rulesErr) { console.error("[watchlist-auto-dm] rules query error:", rulesErr.message); return; }
+  if (!rules || rules.length === 0) { console.log("[watchlist-auto-dm] no rules for", mediaType); return; }
   const rule = rules[0];
 
   const replyText = rule.reply_public_variants?.[0];
-  if (!replyText) return;
+  if (!replyText) { console.log("[watchlist-auto-dm] no replyText"); return; }
 
-  // Dedup: once per user per automation
+  // Dedup check — 1x per contact per day (key includes date, resets at UTC midnight)
+  const today = new Date().toISOString().substring(0, 10);
+  const dedupKey = `${mediaType}:${contactId}:${today}`;
   if (rule.first_comment_only) {
-    const { data: existing } = await supabase
+    const { data: existing, error: dedupErr } = await supabase
       .from("instagram_comment_replies_log")
       .select("id")
-      .eq("comment_id", `${mediaType}:${contactId}`)
+      .eq("comment_id", dedupKey)
       .eq("reply_type", mediaType)
       .maybeSingle();
-    if (existing) return;
-
-    await supabase.from("instagram_comment_replies_log").insert({
-      tenant_id: channel.tenant_id,
-      channel_id: channel.id,
-      comment_id: `${mediaType}:${contactId}`,
-      reply_type: mediaType,
-    }).catch(() => {});
+    if (dedupErr) { console.error("[watchlist-auto-dm] dedup query error:", dedupErr.message); return; }
+    if (existing) { console.log("[watchlist-auto-dm] dedup blocked for", contactId); return; }
   }
 
   // Delay
@@ -934,7 +931,7 @@ async function handleWatchlistAutoDm(
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-  await fetch(`${supabaseUrl}/functions/v1/instagram-send-message`, {
+  const sendRes = await fetch(`${supabaseUrl}/functions/v1/instagram-send-message`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -945,7 +942,24 @@ async function handleWatchlistAutoDm(
       contact_id: contactId,
       thread_id: threadId,
       text: replyText,
-      idempotency_key: `watchlist_${mediaType}_${contactId}_${rule.id}`,
+      idempotency_key: `watchlist_${mediaType}_${contactId}_${rule.id}_${new Date().toISOString().substring(0, 10)}`,
     }),
-  }).catch(() => {});
+  }).catch((e: unknown) => { console.error("[watchlist-auto-dm] fetch error:", e); return null; });
+
+  if (sendRes && !sendRes.ok) {
+    const body = await sendRes.text().catch(() => "");
+    console.error(`[watchlist-auto-dm] send-message ${sendRes.status}:`, body);
+    return;
+  }
+
+  // Insert dedup only after successful send
+  if (rule.first_comment_only && sendRes?.ok) {
+    const { error: insertErr } = await supabase.from("instagram_comment_replies_log").insert({
+      tenant_id: channel.tenant_id,
+      channel_id: channel.id,
+      comment_id: dedupKey,
+      reply_type: mediaType,
+    });
+    if (insertErr) { console.error("[watchlist-auto-dm] dedup insert error:", insertErr.message); }
+  }
 }
