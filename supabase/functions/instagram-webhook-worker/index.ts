@@ -655,13 +655,15 @@ async function processCommentEvent(supabase: ReturnType<typeof createClient>, ch
 
     // Record first_comment_only dedup only after at least one send succeeded
     if (rule.first_comment_only && sentAny) {
-      await supabase.from("instagram_comment_replies_log").insert({
-        tenant_id: channel.tenant_id,
-        channel_id: channel.id,
-        comment_id: `${fromId}:${mediaId}:first`,
-        reply_type: "first_check",
-        watchlist_id: rule.id,
-      }).catch(() => {});
+      try {
+        await supabase.from("instagram_comment_replies_log").insert({
+          tenant_id: channel.tenant_id,
+          channel_id: channel.id,
+          comment_id: `${fromId}:${mediaId}:first`,
+          reply_type: "first_check",
+          watchlist_id: rule.id,
+        });
+      } catch { /* ignore duplicate */ }
     }
   }
 }

@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
-import { decryptTokenAES as decryptToken } from "../_shared/ig-crypto.ts";
+import { resolveInstagramAccessToken } from "../_shared/ig-token-resolver.ts";
 import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
@@ -59,12 +59,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    const encryptionKey = Deno.env.get("IG_TOKEN_ENCRYPTION_KEY") || Deno.env.get("INSTAGRAM_APP_SECRET")!;
-    const accessToken = await decryptToken(channelData.access_token_encrypted, encryptionKey);
+    const { accessToken, host } = await resolveInstagramAccessToken(channelData.access_token_encrypted);
 
     // Send private reply via Instagram API
     const resp = await fetch(
-      `https://graph.instagram.com/v21.0/me/messages`,
+      `https://${host}/v21.0/me/messages`,
       {
         method: "POST",
         headers: {

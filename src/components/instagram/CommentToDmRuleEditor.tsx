@@ -128,6 +128,11 @@ export function CommentToDmRuleEditor({
     setIsSaving(true);
     try {
       const isMulti = responseMode === 'multi';
+      // Flush pending variant input (user may not have pressed + before saving)
+      const pendingVariant = newVariant.trim();
+      const finalVariants = pendingVariant && !replyVariants.includes(pendingVariant)
+        ? [...replyVariants, pendingVariant]
+        : replyVariants;
       await onSave({
         id: rule?.id,
         media_type: mediaType,
@@ -141,7 +146,7 @@ export function CommentToDmRuleEditor({
         dm_message: isMulti ? null : (dmMessage || null),
         keyword_responses: isMulti ? keywordResponses : [],
         reply_public_enabled: publicReplyEnabled,
-        reply_public_variants: replyVariants.length > 0 ? replyVariants : null,
+        reply_public_variants: finalVariants.length > 0 ? finalVariants : null,
         private_reply_enabled: privateReplyEnabled,
         first_comment_only: firstCommentOnly,
         delay_seconds: delaySeconds,
