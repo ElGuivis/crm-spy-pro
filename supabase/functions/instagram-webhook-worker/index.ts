@@ -575,7 +575,7 @@ async function processCommentEvent(supabase: ReturnType<typeof createClient>, ch
       if (hasExclude) continue;
     }
 
-    // First comment only check
+    // First comment only check — only read here, write AFTER successful send
     if (rule.first_comment_only) {
       const { data: existing } = await supabase
         .from("instagram_comment_replies_log")
@@ -583,13 +583,6 @@ async function processCommentEvent(supabase: ReturnType<typeof createClient>, ch
         .eq("comment_id", `${fromId}:${mediaId}:first`)
         .maybeSingle();
       if (existing) continue;
-      // Mark as processed
-      await supabase.from("instagram_comment_replies_log").insert({
-        tenant_id: channel.tenant_id,
-        channel_id: channel.id,
-        comment_id: `${fromId}:${mediaId}:first`,
-        reply_type: "first_check",
-      }).catch(() => {});
     }
 
     // Delay
@@ -597,24 +590,28 @@ async function processCommentEvent(supabase: ReturnType<typeof createClient>, ch
       await new Promise(r => setTimeout(r, rule.delay_seconds * 1000));
     }
 
+    let sentAny = false;
+
     // Public reply
     if (rule.reply_public_enabled && rule.reply_public_variants?.length > 0) {
       const idx = rule.round_robin_index % rule.reply_public_variants.length;
       const replyText = rule.reply_public_variants[idx];
-      await supabase.functions.invoke("instagram-send-comment-reply", {
+      const { error: pubErr } = await supabase.functions.invoke("instagram-send-comment-reply", {
         body: { channel_id: channel.id, comment_id: commentId, text: replyText },
-      }).catch((e: unknown) => log.error("[ig-worker] Comment reply error:", e));
-
-      // Update round robin index
-      await supabase.from("instagram_media_watchlist")
-        .update({ round_robin_index: idx + 1 })
-        .eq("id", rule.id);
+      });
+      if (pubErr) {
+        log.error("[ig-worker] Comment reply error:", pubErr);
+      } else {
+        sentAny = true;
+        await supabase.from("instagram_media_watchlist")
+          .update({ round_robin_index: idx + 1 })
+          .eq("id", rule.id);
+      }
     }
 
     // Private reply
     if (rule.private_reply_enabled) {
       if (rule.private_reply_flow_id) {
-        // Trigger flow for this contact
         await supabase.functions.invoke("instagram-trigger-dispatcher", {
           body: {
             event_type: eventType,
@@ -626,6 +623,7 @@ async function processCommentEvent(supabase: ReturnType<typeof createClient>, ch
             message_id: commentId,
           },
         }).catch((e: unknown) => log.error("[ig-worker] Trigger dispatch error:", e));
+        sentAny = true;
       } else {
         // Resolve DM text: multi-mode matches per keyword, single-mode uses dm_message
         let dmText: string | null = null;
@@ -638,16 +636,32 @@ async function processCommentEvent(supabase: ReturnType<typeof createClient>, ch
           dmText = rule.dm_message ?? null;
         }
         if (dmText) {
-          await supabase.functions.invoke("instagram-send-private-reply", {
+          const { error: privErr } = await supabase.functions.invoke("instagram-send-private-reply", {
             body: {
               channel_id: channel.id,
               comment_id: commentId,
               text: dmText,
               idempotency_key: `comment_dm:${commentId}:${rule.id}`,
             },
-          }).catch((e: unknown) => log.error("[ig-worker] Private reply error:", e));
+          });
+          if (privErr) {
+            log.error("[ig-worker] Private reply error:", privErr);
+          } else {
+            sentAny = true;
+          }
         }
       }
+    }
+
+    // Record first_comment_only dedup only after at least one send succeeded
+    if (rule.first_comment_only && sentAny) {
+      await supabase.from("instagram_comment_replies_log").insert({
+        tenant_id: channel.tenant_id,
+        channel_id: channel.id,
+        comment_id: `${fromId}:${mediaId}:first`,
+        reply_type: "first_check",
+        watchlist_id: rule.id,
+      }).catch(() => {});
     }
   }
 }

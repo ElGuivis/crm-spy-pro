@@ -46,19 +46,17 @@ Deno.serve(async (req) => {
       tenantId = channel.tenant_id;
     }
 
-    // Dedup check
-    if (idempotency_key) {
-      const { data: existing } = await supabase
-        .from("instagram_comment_replies_log")
-        .select("id")
-        .eq("comment_id", comment_id)
-        .eq("reply_type", "private")
-        .maybeSingle();
-      if (existing) {
-        return new Response(JSON.stringify({ ok: true, skipped: "duplicate" }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+    // Dedup check — always, regardless of idempotency_key presence
+    const { data: existing } = await supabase
+      .from("instagram_comment_replies_log")
+      .select("id")
+      .eq("comment_id", comment_id)
+      .eq("reply_type", "private")
+      .maybeSingle();
+    if (existing) {
+      return new Response(JSON.stringify({ ok: true, skipped: "duplicate" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const encryptionKey = Deno.env.get("IG_TOKEN_ENCRYPTION_KEY") || Deno.env.get("INSTAGRAM_APP_SECRET")!;
@@ -83,13 +81,13 @@ Deno.serve(async (req) => {
     const result = await resp.json();
     if (!resp.ok) throw new Error(result.error?.message || "Failed to send private reply");
 
-    // Log for dedup
-    await supabase.from("instagram_comment_replies_log").insert({
+    // Log for dedup — ignore conflict (race condition between concurrent calls)
+    await supabase.from("instagram_comment_replies_log").upsert({
       tenant_id: tenantId,
       channel_id,
       comment_id,
       reply_type: "private",
-    });
+    }, { onConflict: "comment_id,reply_type", ignoreDuplicates: true });
 
     return new Response(JSON.stringify({ ok: true, result }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
