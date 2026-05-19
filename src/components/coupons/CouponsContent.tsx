@@ -254,9 +254,10 @@ export const CouponsContent = ({ integrationId }: CouponsContentProps) => {
 
       if (error) throw error;
 
+      const newCount = data.new ?? data.synced ?? 0;
       toast({
         title: "Sincronização concluída",
-        description: `${data.synced} cupons importados, ${data.updated} atualizados`,
+        description: `${newCount} cupons importados, ${data.updated ?? 0} atualizados`,
       });
 
       loadCoupons();
@@ -264,7 +265,7 @@ export const CouponsContent = ({ integrationId }: CouponsContentProps) => {
       log.error('Error syncing coupons:', error);
       toast({
         title: "Erro na sincronização",
-        description: "Não foi possível sincronizar os cupons da Loja Integrada.",
+        description: `Não foi possível sincronizar os cupons${integrationName ? ` de ${integrationName}` : ''}.`,
         variant: "destructive",
       });
     } finally {
@@ -431,7 +432,7 @@ export const CouponsContent = ({ integrationId }: CouponsContentProps) => {
             <div className="flex items-center gap-3">
               <Loader2 className="h-5 w-5 animate-spin text-primary" />
               <div className="flex-1">
-                <p className="text-sm font-medium">Sincronizando cupons da Loja Integrada...</p>
+                <p className="text-sm font-medium">Sincronizando cupons{integrationName ? ` de ${integrationName}` : ''}...</p>
                 {syncProgress && (
                   <>
                     <Progress value={(syncProgress.synced / syncProgress.total) * 100} className="mt-2 h-2" />
