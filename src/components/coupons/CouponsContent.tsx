@@ -106,6 +106,7 @@ export const CouponsContent = ({ integrationId }: CouponsContentProps) => {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [integrationName, setIntegrationName] = useState<string>("");
+  const [integrationType, setIntegrationType] = useState<string>("");
   const [stats, setStats] = useState<CouponStats>({ 
     total: 0, 
     used: 0, 
@@ -182,12 +183,13 @@ export const CouponsContent = ({ integrationId }: CouponsContentProps) => {
   const loadIntegrationName = async () => {
     const { data } = await supabase
       .from('integrations')
-      .select('name')
+      .select('name, type')
       .eq('id', integrationId)
       .single();
-    
+
     if (data) {
       setIntegrationName(data.name);
+      setIntegrationType(data.type || '');
     }
   };
 
@@ -245,7 +247,8 @@ export const CouponsContent = ({ integrationId }: CouponsContentProps) => {
     setSyncProgress(null);
     
     try {
-      const { data, error } = await supabase.functions.invoke('li-coupon-sync', {
+      const syncFunction = integrationType === 'bling' ? 'bling-coupon-sync' : integrationType === 'nuvem_shop' ? 'nuvemshop-coupon-sync' : 'li-coupon-sync';
+      const { data, error } = await supabase.functions.invoke(syncFunction, {
         body: { integrationId, action }
       });
 
@@ -740,6 +743,7 @@ export const CouponsContent = ({ integrationId }: CouponsContentProps) => {
       {/* Create Coupon Dialog */}
       <CreateCouponDialog
         integrationId={integrationId}
+        integrationType={integrationType}
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
         onSuccess={loadCoupons}

@@ -137,6 +137,22 @@ verify_jwt = false
 # AUTHENTICATED — in-code auth via requireUserAuth
 verify_jwt = false
 
+[functions.bling-coupon-create]
+# AUTHENTICATED — in-code auth via requireUserAuth
+verify_jwt = false
+
+[functions.bling-coupon-sync]
+# AUTHENTICATED — in-code auth via requireUserAuth
+verify_jwt = false
+
+[functions.nuvemshop-coupon-create]
+# AUTHENTICATED — in-code auth via requireUserAuth
+verify_jwt = false
+
+[functions.nuvemshop-coupon-sync]
+# AUTHENTICATED — in-code auth via requireUserAuth
+verify_jwt = false
+
 # =============================================================================
 # HYBRID — user OR internal (verify_jwt = false)
 # Auth validated in-code via requireUserOrInternalAuth.

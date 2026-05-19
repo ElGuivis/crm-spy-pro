@@ -62,16 +62,18 @@ type CouponFormData = z.infer<typeof couponSchema>;
 
 interface CreateCouponDialogProps {
   integrationId: string;
+  integrationType?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
 }
 
-export const CreateCouponDialog = ({ 
-  integrationId, 
-  open, 
-  onOpenChange, 
-  onSuccess 
+export const CreateCouponDialog = ({
+  integrationId,
+  integrationType,
+  open,
+  onOpenChange,
+  onSuccess
 }: CreateCouponDialogProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
@@ -91,10 +93,13 @@ export const CreateCouponDialog = ({
 
   const selectedType = form.watch("tipo");
 
+  const platformName = integrationType === 'bling' ? 'Bling' : integrationType === 'nuvem_shop' ? 'Nuvemshop' : 'Loja Integrada';
+  const functionName = integrationType === 'bling' ? 'bling-coupon-create' : integrationType === 'nuvem_shop' ? 'nuvemshop-coupon-create' : 'li-coupon-create';
+
   const onSubmit = async (data: CouponFormData) => {
     setIsSubmitting(true);
     try {
-      const { data: result, error } = await supabase.functions.invoke('li-coupon-create', {
+      const { data: result, error } = await supabase.functions.invoke(functionName, {
         body: {
           integrationId,
           codigo: data.codigo,
@@ -108,14 +113,14 @@ export const CreateCouponDialog = ({
       });
 
       if (error) throw error;
-      
+
       if (!result.success) {
         throw new Error(result.error || 'Erro ao criar cupom');
       }
 
       toast({
         title: "Cupom criado com sucesso!",
-        description: `O cupom ${data.codigo.toUpperCase()} foi criado na Loja Integrada.`,
+        description: `O cupom ${data.codigo.toUpperCase()} foi criado no ${platformName}.`,
       });
 
       form.reset();
