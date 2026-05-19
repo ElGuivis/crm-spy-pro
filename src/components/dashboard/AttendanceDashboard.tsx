@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Clock, MessageSquare, Timer, CheckCircle, Users, AlertTriangle, Download, TrendingUp } from "lucide-react";
+import { Clock, MessageSquare, Timer, CheckCircle, Users, AlertTriangle, Download, TrendingUp, Star } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from "recharts";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -78,7 +78,7 @@ export function AttendanceDashboard() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground mb-1">
@@ -145,6 +145,21 @@ export function AttendanceDashboard() {
             </div>
             <p className="text-2xl font-bold text-foreground">{stats.closedThisMonth}</p>
             <p className="text-xs text-muted-foreground mt-0.5">Resolvidas</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-muted-foreground mb-1">
+              <Star className="h-4 w-4" />
+              <span className="text-xs font-medium">CSAT</span>
+            </div>
+            <p className="text-2xl font-bold text-foreground">
+              {stats.csatCount > 0 ? `${stats.csatAvg}/5` : "—"}
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {stats.csatCount > 0 ? `${stats.csatCount} respostas` : "Sem avaliações"}
+            </p>
           </CardContent>
         </Card>
       </div>

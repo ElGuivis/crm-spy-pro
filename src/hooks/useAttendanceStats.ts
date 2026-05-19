@@ -38,7 +38,8 @@ async function fetchAttendanceStats(tenantId: string): Promise<AttendanceStatsDa
     { count: closedMonth },
     { count: closedLast30 },
   ] = await Promise.all([
-    supabase.from("conversations").select("id, status, created_at, closed_at, assigned_to, handoff_mode, inbox_id").eq("tenant_id", tenantId).gte("created_at", thirtyDaysAgo).limit(1000),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase.from("conversations") as any).select("id, status, created_at, closed_at, assigned_to, handoff_mode, inbox_id, csat_score").eq("tenant_id", tenantId).gte("created_at", thirtyDaysAgo).limit(1000) as unknown as Promise<{ data: Array<{ id: string; status: string; created_at: string; closed_at: string | null; assigned_to: string | null; handoff_mode: boolean; inbox_id: string | null; csat_score: number | null }> | null }>,
     supabase.from("messages").select("conversation_id, direction, created_at, sender_type").eq("tenant_id", tenantId).gte("created_at", thirtyDaysAgo).order("created_at", { ascending: true }).limit(2000),
     supabase.from("conversations").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).neq("status", "closed"),
     supabase.from("conversations").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).eq("status", "closed").gte("closed_at", startOfMonth),
@@ -140,8 +141,8 @@ async function fetchAttendanceStats(tenantId: string): Promise<AttendanceStatsDa
     closedThisMonth: closedMonth || 0,
     closedLast30d: closedLast30 || 0,
     slaBreaches,
-    csatAvg: 0, // Placeholder for CSAT integration
-    csatCount: 0,
+    csatAvg: (() => { const s = (conversations || []).filter(c => c.csat_score !== null); return s.length > 0 ? Math.round(s.reduce((a, c) => a + (c.csat_score ?? 0), 0) / s.length * 10) / 10 : 0; })(),
+    csatCount: (conversations || []).filter(c => c.csat_score !== null).length,
     byStatus: Object.entries(statusMap).map(([name, value]) => ({ name, value })),
     byDay: Object.entries(dayMap).map(([date, v]) => ({ date, ...v })),
     byHour: Object.entries(hourMap).map(([hour, count]) => ({ hour: Number(hour), count })),
