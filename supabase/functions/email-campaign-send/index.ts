@@ -382,7 +382,7 @@ serve(async (req) => {
       .eq("id", campaignId)
       .eq("tenant_id", tenantId)
       .in("status", ["draft", "scheduled", "paused", "error"])
-      .select("id, tenant_id, name, status, subject, body_html, body_text, sender_name, sender_email, reply_to, email_integration_id, audience_type, audience_reference, total_recipients, total_sent, total_failed, total_opened, total_clicked, total_unsubscribed, total_bounced, total_complained, utm_source, utm_medium, utm_campaign, utm_content, tracking_enabled, unsubscribe_enabled, test_recipients, scheduled_at, started_at, completed_at, error_message")
+      .select("id, tenant_id, name, status, subject, body_html, body_text, content_html, content_json, preheader, sender_name, sender_email, reply_to, email_integration_id, audience_type, audience_reference, total_recipients, total_sent, total_failed, total_opened, total_clicked, total_unsubscribed, total_bounced, total_complained, utm_source, utm_medium, utm_campaign, utm_content, tracking_enabled, unsubscribe_enabled, test_recipients, scheduled_at, started_at, completed_at, error_message")
       .maybeSingle();
 
     if (claimError) throw claimError;
