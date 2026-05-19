@@ -549,7 +549,7 @@ export const CouponsContent = ({ integrationId }: CouponsContentProps) => {
             <SelectItem value="all">Todos status</SelectItem>
             <SelectItem value="active">Ativos</SelectItem>
             <SelectItem value="used">Utilizados</SelectItem>
-            <SelectItem value="expired">Expirados</SelectItem>
+            <SelectItem value="expired">Expirados / Limite</SelectItem>
           </SelectContent>
         </Select>
       </div>

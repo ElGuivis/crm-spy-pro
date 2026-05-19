@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
       const code = String(c.code || "").toUpperCase();
       if (!code) continue;
 
-      const tipo = c.type === "percentage" ? "porcentagem" : "valor_absoluto";
+      const tipo = String(c.type || "").toLowerCase() === "percentage" ? "porcentagem" : "valor_absoluto";
       const valorNum = parseFloat(String(c.value || "0"));
       const nsId = c.id as number | null;
       const dataInicial = c.start_date ? new Date(String(c.start_date)).toISOString() : null;
