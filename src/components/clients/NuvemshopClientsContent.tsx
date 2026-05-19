@@ -13,6 +13,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { createLogger } from "@/lib/logger";
+import { NuvemshopClientDetailsDialog } from "./NuvemshopClientDetailsDialog";
 
 const log = createLogger("NuvemshopClientsContent");
 
@@ -33,6 +34,7 @@ export function NuvemshopClientsContent({ integrationId }: Props) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(30);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<any>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: integration } = useQuery({
@@ -173,7 +175,7 @@ export function NuvemshopClientsContent({ integrationId }: Props) {
                 </TableCell>
               </TableRow>
             ) : customers?.map(c => (
-              <TableRow key={c.id}>
+              <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedClient(c)}>
                 <TableCell className="font-medium">{c.name ?? "—"}</TableCell>
                 <TableCell>
                   <div className="flex flex-col gap-0.5">
@@ -190,6 +192,12 @@ export function NuvemshopClientsContent({ integrationId }: Props) {
           </TableBody>
         </Table>
       </div>
+
+      <NuvemshopClientDetailsDialog
+        client={selectedClient}
+        open={!!selectedClient}
+        onOpenChange={(o) => { if (!o) setSelectedClient(null); }}
+      />
 
       {/* Pagination */}
       {totalPages > 1 && (
