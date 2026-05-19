@@ -2,7 +2,7 @@ import {
   LayoutDashboard, Plug, Settings, Headset, Zap, ChevronLeft, ChevronRight, ChevronDown,
   ShoppingCart, UserCircle, Package, Ticket, UsersRound, LogOut, Coins, Lock,
   Truck, Megaphone, Grid3X3, X, BookImage,
-  Mail, Activity, Instagram
+  Mail, Activity, Instagram, Star
 } from "lucide-react";
 import { TenantSwitcher } from "@/components/layout/TenantSwitcher";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -50,6 +50,7 @@ const navGroups: NavGroup[] = [
       { icon: Grid3X3, label: "Matriz RFM", href: "/rfm", permissionKey: "dashboard" },
       { icon: Package, label: "Produtos", href: "/products", permissionKey: "products" },
       { icon: Ticket, label: "Cupons", href: "/coupons", permissionKey: "coupons" },
+      { icon: Star, label: "Fidelidade", href: "/fidelidade", permissionKey: "coupons" },
       { icon: Truck, label: "Envios", href: "/envios", permissionKey: "sales" },
       { icon: BookImage, label: "Catálogo WhatsApp", href: "/catalogo-whatsapp", permissionKey: "products" },
     ]

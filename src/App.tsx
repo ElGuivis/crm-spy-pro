@@ -40,6 +40,7 @@ const CatalogoWhatsApp = lazy(() => import("./pages/CatalogoWhatsApp"));
 const EmailMarketing = lazy(() => import("./pages/EmailMarketing"));
 const InstagramComunicacao = lazy(() => import("./pages/InstagramComunicacao"));
 const Operations = lazy(() => import("./pages/Operations"));
+const Fidelidade = lazy(() => import("./pages/Fidelidade"));
 
 function PageLoader() {
   return (
@@ -99,6 +100,8 @@ const App = () => (
                             <Route path="/products/:integrationId" element={<Products />} />
                             <Route path="/rfm" element={<RFM />} />
                             <Route path="/rfm/:integrationId" element={<RFM />} />
+                            <Route path="/fidelidade" element={<Fidelidade />} />
+                            <Route path="/fidelidade/:integrationId" element={<Fidelidade />} />
                             <Route path="/team" element={<Team />} />
                             <Route path="/tokens" element={<Tokens />} />
                             <Route path="/envios" element={<Envios />} />
