@@ -380,6 +380,10 @@ verify_jwt = false
 # PUBLIC — no auth, returns 1x1 pixel GIF for open tracking
 verify_jwt = false
 
+[functions.csat-submit]
+# PUBLIC — no auth, customer-facing rating page and submission endpoint
+verify_jwt = false
+
 [functions.email-track-click]
 # PUBLIC — no auth, records click event and redirects to destination URL
 verify_jwt = false

@@ -108,6 +108,7 @@ export function useAssignConversation() {
 export function useCloseConversation() {
   const queryClient = useQueryClient();
   const { tenantId, user } = useAuth();
+  const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string) ?? 'https://fsrgtnasverkkqkbnmzf.supabase.co';
 
   return useMutation({
     mutationFn: async ({ conversationId }: { conversationId: string }) => {
@@ -123,12 +124,30 @@ export function useCloseConversation() {
         .eq('id', conversationId);
       if (error) throw error;
 
+      // Fetch csat_token to build share link
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: conv } = await (supabase.from('conversations') as any)
+        .select('csat_token')
+        .eq('id', conversationId)
+        .single();
+
       await logEvent(tenantId, conversationId, 'closed', user.id);
       await insertSystemMessage(tenantId, conversationId, '✅ Conversa encerrada');
+
+      return { csatToken: conv?.csat_token as string | null };
     },
-    onSuccess: () => {
+    onSuccess: ({ csatToken }) => {
       queryClient.invalidateQueries({ queryKey: ['atendimentos-conversations'] });
-      toast.success('Conversa encerrada');
+      const link = csatToken
+        ? `${supabaseUrl}/functions/v1/csat-submit?token=${csatToken}`
+        : null;
+      toast.success('Conversa encerrada', {
+        description: link ? 'Link de avaliação pronto para enviar ao cliente.' : undefined,
+        action: link ? {
+          label: 'Copiar link',
+          onClick: () => navigator.clipboard.writeText(link),
+        } : undefined,
+      });
     },
     onError: (err: unknown) => toast.error(getErrorMessage(err)),
   });

@@ -154,24 +154,130 @@ export function useOutboundQueueErrors() {
   return { errors, isLoading };
 }
 
-export function useAtendimentoStats() {
+export type StatsPeriod = '7d' | '30d' | '90d';
+
+export interface AgentStats {
+  agentId: string;
+  name: string;
+  openCount: number;
+  resolvedCount: number;
+  avgHandleMinutes: number | null;
+}
+
+export interface AtendimentoStatsResult {
+  statusCounts: Record<string, number>;
+  messagesToday: number;
+  dailyData: Record<string, { opened: number; closed: number }>;
+  agentStats: AgentStats[];
+  queuePending: number;
+  queueFailed: number;
+  avgFirstResponseMinutes: number | null;
+  avgResolutionMinutes: number | null;
+  csatAvg: number | null;
+  csatCount: number;
+}
+
+export function useAtendimentoStats(period: StatsPeriod = '7d') {
   const { tenantId } = useAuth();
 
   const { data: stats, isLoading } = useQuery({
-    queryKey: ['atendimento-stats', tenantId],
-    queryFn: async () => {
+    queryKey: ['atendimento-stats', tenantId, period],
+    queryFn: async (): Promise<AtendimentoStatsResult | null> => {
       if (!tenantId) return null;
 
-      // Total conversations by status
-      const { data: convByStatus } = await supabase
+      const days = period === '7d' ? 7 : period === '30d' ? 30 : 90;
+      const periodStart = new Date();
+      periodStart.setDate(periodStart.getDate() - days);
+      const periodStartISO = periodStart.toISOString();
+
+      // All conversations in period (status + timing + agent + csat)
+      const { data: periodConvs } = await supabase
         .from('conversations')
-        .select('status')
-        .eq('tenant_id', tenantId);
+        .select('status, assigned_to, created_at, closed_at, first_response_at, csat_score')
+        .eq('tenant_id', tenantId)
+        .gte('created_at', periodStartISO);
 
       const statusCounts: Record<string, number> = {};
-      (convByStatus || []).forEach((c) => {
+      (periodConvs || []).forEach((c) => {
         statusCounts[c.status] = (statusCounts[c.status] || 0) + 1;
       });
+
+      // Daily opened/closed
+      const dailyData: Record<string, { opened: number; closed: number }> = {};
+      (periodConvs || []).forEach((c) => {
+        const day = new Date(c.created_at).toISOString().split('T')[0];
+        if (!dailyData[day]) dailyData[day] = { opened: 0, closed: 0 };
+        dailyData[day].opened++;
+        if (c.status === 'closed') dailyData[day].closed++;
+      });
+
+      // SLA metrics from closed conversations that have timing data
+      const closedWithTiming = (periodConvs || []).filter(
+        (c) => c.status === 'closed' && c.closed_at,
+      );
+      const resolutionTimes = closedWithTiming.map(
+        (c) => (new Date(c.closed_at!).getTime() - new Date(c.created_at).getTime()) / 60000,
+      );
+      const avgResolutionMinutes = resolutionTimes.length > 0
+        ? Math.round(resolutionTimes.reduce((a, b) => a + b, 0) / resolutionTimes.length)
+        : null;
+
+      const withFirstResponse = (periodConvs || []).filter((c) => c.first_response_at);
+      const firstResponseTimes = withFirstResponse.map(
+        (c) => (new Date(c.first_response_at!).getTime() - new Date(c.created_at).getTime()) / 60000,
+      );
+      const avgFirstResponseMinutes = firstResponseTimes.length > 0
+        ? Math.round(firstResponseTimes.reduce((a, b) => a + b, 0) / firstResponseTimes.length)
+        : null;
+
+      // CSAT
+      const withCsat = (periodConvs || []).filter((c) => c.csat_score !== null);
+      const csatAvg = withCsat.length > 0
+        ? Math.round((withCsat.reduce((a, c) => a + (c.csat_score ?? 0), 0) / withCsat.length) * 10) / 10
+        : null;
+
+      // Agent stats — combine open/pending + resolved in period
+      const agentMap: Record<string, { open: number; resolved: number; handleTimes: number[] }> = {};
+      (periodConvs || []).forEach((c) => {
+        if (!c.assigned_to) return;
+        if (!agentMap[c.assigned_to]) agentMap[c.assigned_to] = { open: 0, resolved: 0, handleTimes: [] };
+        if (c.status === 'closed') {
+          agentMap[c.assigned_to].resolved++;
+          if (c.closed_at) {
+            agentMap[c.assigned_to].handleTimes.push(
+              (new Date(c.closed_at).getTime() - new Date(c.created_at).getTime()) / 60000,
+            );
+          }
+        } else {
+          agentMap[c.assigned_to].open++;
+        }
+      });
+
+      // Resolve agent names from profiles
+      const agentIds = Object.keys(agentMap);
+      let nameMap: Record<string, string> = {};
+      if (agentIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('user_id, owner_name')
+          .in('user_id', agentIds);
+        (profiles || []).forEach((p) => {
+          nameMap[p.user_id] = p.owner_name || p.user_id.slice(0, 8);
+        });
+      }
+
+      const agentStats: AgentStats[] = agentIds.map((id) => {
+        const a = agentMap[id];
+        return {
+          agentId: id,
+          name: nameMap[id] || id.slice(0, 8),
+          openCount: a.open,
+          resolvedCount: a.resolved,
+          avgHandleMinutes: a.handleTimes.length > 0
+            ? Math.round(a.handleTimes.reduce((x, y) => x + y, 0) / a.handleTimes.length)
+            : null,
+        };
+      }).sort((a, b) => (b.openCount + b.resolvedCount) - (a.openCount + a.resolvedCount));
 
       // Messages today
       const todayStart = new Date();
@@ -181,38 +287,6 @@ export function useAtendimentoStats() {
         .select('id', { count: 'exact', head: true })
         .eq('tenant_id', tenantId)
         .gte('created_at', todayStart.toISOString());
-
-      // Conversations created in last 7 days
-      const weekAgo = new Date();
-      weekAgo.setDate(weekAgo.getDate() - 7);
-      const { data: recentConversations } = await supabase
-        .from('conversations')
-        .select('created_at, status')
-        .eq('tenant_id', tenantId)
-        .gte('created_at', weekAgo.toISOString())
-        .order('created_at');
-
-      // Group by day
-      const dailyData: Record<string, { opened: number; closed: number }> = {};
-      (recentConversations || []).forEach((c) => {
-        const day = new Date(c.created_at).toISOString().split('T')[0];
-        if (!dailyData[day]) dailyData[day] = { opened: 0, closed: 0 };
-        dailyData[day].opened++;
-        if (c.status === 'closed') dailyData[day].closed++;
-      });
-
-      // Conversations by assigned_to
-      const { data: convByAgent } = await supabase
-        .from('conversations')
-        .select('assigned_to')
-        .eq('tenant_id', tenantId)
-        .not('assigned_to', 'is', null)
-        .in('status', ['open', 'pending']);
-
-      const agentCounts: Record<string, number> = {};
-      (convByAgent || []).forEach((c) => {
-        agentCounts[c.assigned_to!] = (agentCounts[c.assigned_to!] || 0) + 1;
-      });
 
       // Queue health
       const { count: queuePending } = await supabase
@@ -231,9 +305,13 @@ export function useAtendimentoStats() {
         statusCounts,
         messagesToday: messagesToday || 0,
         dailyData,
-        agentCounts,
+        agentStats,
         queuePending: queuePending || 0,
         queueFailed: queueFailed || 0,
+        avgFirstResponseMinutes,
+        avgResolutionMinutes,
+        csatAvg,
+        csatCount: withCsat.length,
       };
     },
     enabled: !!tenantId,
