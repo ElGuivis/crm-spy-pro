@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Instagram, Plug, MessageSquare, Reply, AtSign, Inbox, ChevronDown, Circle } from 'lucide-react';
+import { Instagram, Plug, MessageSquare, Reply, AtSign, Inbox, ChevronDown, Circle, CalendarDays } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,7 @@ import { useInstagramChannel } from '@/hooks/useInstagramChannel';
 import { useInstagramAutomations } from '@/hooks/useInstagramAutomations';
 import { CommentToDmRulesList } from '@/components/instagram/CommentToDmRulesList';
 import { SimpleAutomationCard } from '@/components/instagram/SimpleAutomationCard';
+import { ContentCalendar } from '@/components/instagram/ContentCalendar';
 import { Link } from 'react-router-dom';
 
 export default function InstagramComunicacao() {
@@ -130,7 +131,7 @@ export default function InstagramComunicacao() {
       </div>
 
       <Tabs defaultValue="comments" className="space-y-5">
-        <TabsList className="grid w-full grid-cols-4 h-11">
+        <TabsList className="grid w-full grid-cols-5 h-11">
           <TabsTrigger value="comments" className="gap-1.5 text-xs sm:text-sm">
             <MessageSquare className="h-4 w-4" />
             <span className="hidden sm:inline">Comments</span>
@@ -151,6 +152,10 @@ export default function InstagramComunicacao() {
           <TabsTrigger value="story-mention" className="gap-1.5 text-xs sm:text-sm">
             <AtSign className="h-4 w-4" />
             <span className="hidden sm:inline">Mention</span>
+          </TabsTrigger>
+          <TabsTrigger value="calendar" className="gap-1.5 text-xs sm:text-sm">
+            <CalendarDays className="h-4 w-4" />
+            <span className="hidden sm:inline">Calendário</span>
           </TabsTrigger>
         </TabsList>
 
@@ -214,6 +219,16 @@ export default function InstagramComunicacao() {
             defaultFirstOnly={false}
             messagePlaceholder="Ex: Vi que você me mencionou! Obrigado pelo carinho 🙏"
           />
+        </TabsContent>
+
+        <TabsContent value="calendar">
+          {selectedChannelId ? (
+            <ContentCalendar channelId={selectedChannelId} />
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              Selecione um canal para ver o calendário.
+            </p>
+          )}
         </TabsContent>
       </Tabs>
     </div>
