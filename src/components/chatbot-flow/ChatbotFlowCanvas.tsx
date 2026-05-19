@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import {
   ReactFlow, Background, Controls, MiniMap,
   useNodesState, useEdgesState, addEdge,
@@ -74,6 +74,8 @@ export function ChatbotFlowCanvas({ flowId, flowName, onBack }: Props) {
       return true;
     },
     enabled: !!flowId,
+    staleTime: Infinity,      // never refetch automatically — user edits are in-memory
+    refetchOnWindowFocus: false,
   });
 
   const onConnect = useCallback(

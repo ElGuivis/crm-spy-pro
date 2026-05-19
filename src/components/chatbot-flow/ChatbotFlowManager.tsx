@@ -88,6 +88,7 @@ export function ChatbotFlowManager() {
   };
 
   return (
+    <div className="flex-1 overflow-y-auto p-4 md:p-6">
     <div className="space-y-4 max-w-3xl">
       {/* Explanation */}
       <Card className="border-dashed bg-muted/20">
@@ -167,6 +168,7 @@ export function ChatbotFlowManager() {
           ))}
         </div>
       )}
+    </div>
     </div>
   );
 }

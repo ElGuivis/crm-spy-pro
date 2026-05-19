@@ -92,7 +92,7 @@ function processNode(
     }
     case "question": {
       const buttons = (cfg.buttons as { id: string; label: string }[] | undefined) ?? [];
-      if (!userInput) {
+      if (!userInput && buttons.length > 0) {
         const txt = cfg.text as string | undefined;
         if (txt?.trim()) messages.push(interpolate(txt, vars));
         return {
@@ -102,6 +102,13 @@ function processNode(
           done: false,
           transferToHuman: false,
         };
+      }
+      // No buttons configured or already have input — fall through like a message node
+      if (!userInput) {
+        const txt = cfg.text as string | undefined;
+        if (txt?.trim()) messages.push(interpolate(txt, vars));
+        nextNodeId = out[0]?.target_node_id ?? null;
+        break;
       }
       const matched = buttons.find(
         (b) =>

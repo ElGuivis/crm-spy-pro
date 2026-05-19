@@ -21,16 +21,16 @@ function getPreview(type: string, cfg: Record<string, unknown>): string {
   return "";
 }
 
-type NodeData = { config?: Record<string, unknown>; label?: string; is_entry?: boolean; selected?: boolean };
+type NodeData = { config?: Record<string, unknown>; label?: string; is_entry?: boolean };
 
-function Shell({ type, data, children }: { type: string; data: NodeData; children?: React.ReactNode }) {
+function Shell({ type, data, selected, children }: { type: string; data: NodeData; selected?: boolean; children?: React.ReactNode }) {
   const meta = HEADER[type];
   if (!meta) return null;
   const { Icon, color, label } = meta;
   return (
     <div className={cn(
       "rounded-lg border-2 bg-card shadow-sm min-w-[160px] max-w-[220px] text-left",
-      data.selected ? "border-primary ring-1 ring-primary" : "border-border/60",
+      selected ? "border-primary ring-1 ring-primary" : "border-border/60",
     )}>
       <div className={cn("px-2.5 py-1.5 rounded-t-md flex items-center gap-1.5 text-xs font-semibold text-white", color)}>
         <Icon className="h-3 w-3 shrink-0" />
@@ -44,28 +44,28 @@ function Shell({ type, data, children }: { type: string; data: NodeData; childre
   );
 }
 
-export function StartNode({ data }: NodeProps) {
+export function StartNode({ data, selected }: NodeProps) {
   return (
-    <Shell type="start" data={data as NodeData}>
+    <Shell type="start" data={data as NodeData} selected={selected}>
       <Handle type="source" position={Position.Bottom} className="!bg-green-500 !border-green-700" />
     </Shell>
   );
 }
 
-export function MessageNode({ data }: NodeProps) {
+export function MessageNode({ data, selected }: NodeProps) {
   return (
-    <Shell type="message" data={data as NodeData}>
+    <Shell type="message" data={data as NodeData} selected={selected}>
       <Handle type="target" position={Position.Top}    className="!bg-blue-400" />
       <Handle type="source" position={Position.Bottom} className="!bg-blue-500" />
     </Shell>
   );
 }
 
-export function QuestionNode({ data }: NodeProps) {
+export function QuestionNode({ data, selected }: NodeProps) {
   const cfg = (data as NodeData).config ?? {};
   const buttons = (cfg.buttons as { id: string; label: string }[] | undefined) ?? [];
   return (
-    <Shell type="question" data={data as NodeData}>
+    <Shell type="question" data={data as NodeData} selected={selected}>
       <Handle type="target" position={Position.Top} className="!bg-violet-400" />
       {buttons.length > 0 && (
         <div className="px-2.5 pb-2 flex flex-wrap gap-1">
@@ -92,9 +92,9 @@ export function QuestionNode({ data }: NodeProps) {
   );
 }
 
-export function ConditionNode({ data }: NodeProps) {
+export function ConditionNode({ data, selected }: NodeProps) {
   return (
-    <Shell type="condition" data={data as NodeData}>
+    <Shell type="condition" data={data as NodeData} selected={selected}>
       <Handle type="target" position={Position.Top} className="!bg-orange-400" />
       <div className="px-2.5 pb-2 flex justify-between text-[10px] text-muted-foreground">
         <span className="text-green-600 font-medium">Sim</span>
@@ -106,18 +106,18 @@ export function ConditionNode({ data }: NodeProps) {
   );
 }
 
-export function ActionNode({ data }: NodeProps) {
+export function ActionNode({ data, selected }: NodeProps) {
   return (
-    <Shell type="action" data={data as NodeData}>
+    <Shell type="action" data={data as NodeData} selected={selected}>
       <Handle type="target" position={Position.Top}    className="!bg-teal-400" />
       <Handle type="source" position={Position.Bottom} className="!bg-teal-600" />
     </Shell>
   );
 }
 
-export function EndNode({ data }: NodeProps) {
+export function EndNode({ data, selected }: NodeProps) {
   return (
-    <Shell type="end" data={data as NodeData}>
+    <Shell type="end" data={data as NodeData} selected={selected}>
       <Handle type="target" position={Position.Top} className="!bg-red-400" />
     </Shell>
   );
