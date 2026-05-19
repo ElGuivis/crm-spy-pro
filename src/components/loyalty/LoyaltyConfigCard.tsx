@@ -61,14 +61,22 @@ export function LoyaltyConfigCard({ integrationId }: LoyaltyConfigCardProps) {
 
   const { mutate: save, isPending } = useMutation({
     mutationFn: async () => {
+      const ppb = parseFloat(pointsPerBrl);
+      const mr = parseInt(minRedeem, 10);
+      const ptb = parseFloat(pointsToBrl);
+      const cm = parseFloat(championMultiplier);
+      if (isNaN(ppb) || ppb <= 0) throw new Error("Pontos por R$1 inválido");
+      if (isNaN(mr) || mr < 1) throw new Error("Mínimo de resgate inválido");
+      if (isNaN(ptb) || ptb <= 0) throw new Error("Valor do ponto inválido");
+      if (isNaN(cm) || cm < 1) throw new Error("Multiplicador inválido");
       const payload = {
         tenant_id: tenantId!,
         integration_id: integrationId,
         name,
-        points_per_brl: parseFloat(pointsPerBrl),
-        min_points_redeem: parseInt(minRedeem, 10),
-        points_to_brl: parseFloat(pointsToBrl),
-        champion_multiplier: parseFloat(championMultiplier),
+        points_per_brl: ppb,
+        min_points_redeem: mr,
+        points_to_brl: ptb,
+        champion_multiplier: cm,
         is_active: isActive,
         updated_at: new Date().toISOString(),
       };

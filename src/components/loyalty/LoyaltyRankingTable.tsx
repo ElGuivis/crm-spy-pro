@@ -37,7 +37,8 @@ export function LoyaltyRankingTable({ integrationId, minRedeem, pointsToBrl }: L
       const { data } = await supabase
         .from("loyalty_points")
         .select("customer_external_id, customer_name, customer_phone, points")
-        .eq("integration_id", integrationId);
+        .eq("integration_id", integrationId)
+        .limit(5000);
 
       const map = new Map<string, CustomerBalance>();
       for (const row of data || []) {
@@ -66,7 +67,7 @@ export function LoyaltyRankingTable({ integrationId, minRedeem, pointsToBrl }: L
       const { data, error } = await supabase.functions.invoke("loyalty-calculator", {
         body: { integrationId },
       });
-      if (error) throw error;
+      if (error || !data?.success) throw new Error(data?.error || error?.message || "Erro desconhecido");
       toast({ title: `${data.credited} pedidos creditados (${data.scanned} escaneados)` });
       refetch();
     } catch (err) {
@@ -200,7 +201,7 @@ export function LoyaltyRankingTable({ integrationId, minRedeem, pointsToBrl }: L
             <Button variant="outline" size="sm" onClick={() => { setRedeemCustomer(null); setPointsInput(""); }}>
               Cancelar
             </Button>
-            <Button size="sm" onClick={handleRedeem} disabled={redeeming || parseInt(pointsInput) < minRedeem}>
+            <Button size="sm" onClick={handleRedeem} disabled={redeeming || parseInt(pointsInput, 10) < minRedeem}>
               {redeeming ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Gerando...</> : "Gerar Cupom"}
             </Button>
           </DialogFooter>

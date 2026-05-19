@@ -69,6 +69,7 @@ Deno.serve(async (req) => {
     type OrderRow = {
       orderId: string;
       customerKey: string;
+      customerId: string | null;
       customerName: string | null;
       customerPhone: string | null;
       total: number;
@@ -83,10 +84,11 @@ Deno.serve(async (req) => {
         .eq("integration_id", integrationId)
         .in("situation", ["Em aberto", "Atendido", "Faturado"])
         .gte("created_at", sinceDate)
-        .limit(500);
+        .limit(1000);
       orders = (rows || []).map((o) => ({
         orderId: String(o.bling_order_id),
         customerKey: o.customer_phone || o.customer_name || "",
+        customerId: null,
         customerName: o.customer_name,
         customerPhone: o.customer_phone,
         total: Number(o.total_value || 0),
@@ -97,10 +99,11 @@ Deno.serve(async (req) => {
         .select("loja_integrada_order_id, customer_name, customer_phone, valor_total, customer_id")
         .eq("integration_id", integrationId)
         .gte("created_at", sinceDate)
-        .limit(500);
+        .limit(1000);
       orders = (rows || []).map((o) => ({
         orderId: String(o.loja_integrada_order_id),
         customerKey: o.customer_phone || o.customer_name || String(o.customer_id || ""),
+        customerId: o.customer_id ? String(o.customer_id) : null,
         customerName: o.customer_name,
         customerPhone: o.customer_phone,
         total: Number(o.valor_total || 0),
@@ -112,7 +115,8 @@ Deno.serve(async (req) => {
       if (!order.customerKey || order.total <= 0) continue;
       if (creditedSet.has(order.orderId)) continue;
 
-      const isChampion = championIds.has(order.customerKey);
+      // Match champion by UUID (LI) or by phone/name key (Bling fallback)
+      const isChampion = championIds.has(order.customerKey) || (order.customerId ? championIds.has(order.customerId) : false);
       const multiplier = isChampion ? Number(program.champion_multiplier) : 1;
       const points = Math.floor(order.total * Number(program.points_per_brl) * multiplier);
       if (points <= 0) continue;

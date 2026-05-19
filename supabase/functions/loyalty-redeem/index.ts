@@ -39,6 +39,7 @@ Deno.serve(async (req) => {
       .from("loyalty_programs")
       .select("*")
       .eq("integration_id", integrationId)
+      .eq("tenant_id", tenantId)
       .eq("is_active", true)
       .maybeSingle();
 
@@ -59,6 +60,7 @@ Deno.serve(async (req) => {
       .from("loyalty_points")
       .select("points")
       .eq("integration_id", integrationId)
+      .eq("tenant_id", tenantId)
       .eq("customer_external_id", customerExternalId);
     const balance = (rows || []).reduce((s, r) => s + r.points, 0);
 
