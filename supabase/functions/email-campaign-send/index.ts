@@ -11,6 +11,23 @@ import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
 const SUPPRESSION_REASONS = ["unsubscribed", "bounced", "complained", "invalid", "blocked"] as const;
 
+function injectTracking(html: string, supabaseUrl: string, tokenId: string): string {
+  const pixel = `<img src="${supabaseUrl}/functions/v1/email-track-open?t=${tokenId}" width="1" height="1" style="display:none;" alt="">`;
+  let result = html.includes("</body>") ? html.replace("</body>", `${pixel}</body>`) : html + pixel;
+
+  // Wrap all absolute http/https links with click tracking, skipping tracking/unsubscribe links
+  result = result.replace(
+    /<a(\s[^>]*?)?href="(https?:\/\/[^"]+)"([^>]*)>/gi,
+    (match, before, url, after) => {
+      if (url.includes("/email-track-") || url.includes("/email-unsubscribe")) return match;
+      const trackUrl = `${supabaseUrl}/functions/v1/email-track-click?t=${tokenId}&url=${encodeURIComponent(url)}`;
+      return `<a${before ?? ""}href="${trackUrl}"${after}>`;
+    },
+  );
+
+  return result;
+}
+
 type Recipient = {
   email: string;
   name: string | null;
@@ -582,6 +599,7 @@ serve(async (req) => {
         if (tokenError || !tokenRow) throw tokenError || new Error("Failed to create unsubscribe token");
 
         const unsubscribeUrl = `${supabaseUrl}/functions/v1/email-unsubscribe?token=${tokenRow.id}`;
+        const htmlWithTracking = injectTracking(baseHtml, supabaseUrl, tokenRow.id);
 
         const recipientData = {
           first_name: recipient.name?.split(" ")[0] || "",
@@ -593,7 +611,7 @@ serve(async (req) => {
           unsubscribe_url: unsubscribeUrl,
         };
 
-        const personalizedHtml = replaceVariables(baseHtml, recipientData);
+        const personalizedHtml = replaceVariables(htmlWithTracking, recipientData);
         const personalizedSubject = replaceVariables(campaign.subject, recipientData);
 
         const result = await sendEmail(senderConfig, {

@@ -360,6 +360,14 @@ verify_jwt = false
 [functions.email-unsubscribe]
 verify_jwt = false
 
+[functions.email-track-open]
+# PUBLIC — no auth, returns 1x1 pixel GIF for open tracking
+verify_jwt = false
+
+[functions.email-track-click]
+# PUBLIC — no auth, records click event and redirects to destination URL
+verify_jwt = false
+
 [functions.validate-team-invite]
 verify_jwt = false
 

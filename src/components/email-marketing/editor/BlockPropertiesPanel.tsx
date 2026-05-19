@@ -11,9 +11,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { X, Package } from 'lucide-react';
+import { X, Package, Upload, Loader2 } from 'lucide-react';
 import { VariablesPicker } from '../VariablesPicker';
 import { ProductPickerDialog } from './ProductPickerDialog';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface BlockPropertiesPanelProps {
   block: EmailBlock | null;
@@ -23,6 +25,43 @@ interface BlockPropertiesPanelProps {
 
 export function BlockPropertiesPanel({ block, onUpdate, onClose }: BlockPropertiesPanelProps) {
   const [productPickerOpen, setProductPickerOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const { toast } = useToast();
+
+  const handleImageUpload = async (file: File, field: string) => {
+    if (!file.type.startsWith('image/')) {
+      toast({ title: 'Arquivo inválido', description: 'Selecione uma imagem (JPEG, PNG, GIF, WebP).', variant: 'destructive' });
+      return;
+    }
+    setUploading(true);
+    try {
+      const ext = file.name.split('.').pop() ?? 'jpg';
+      const path = `${crypto.randomUUID()}.${ext}`;
+      const { error } = await supabase.storage.from('email-images').upload(path, file, { upsert: false });
+      if (error) throw error;
+      const { data: { publicUrl } } = supabase.storage.from('email-images').getPublicUrl(path);
+      onUpdate({ [field]: publicUrl } as Partial<EmailBlock>);
+      toast({ title: 'Imagem enviada', description: 'URL preenchida automaticamente.' });
+    } catch (err: unknown) {
+      toast({ title: 'Erro no upload', description: err instanceof Error ? err.message : 'Tente novamente.', variant: 'destructive' });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // Use label-as-button pattern so each upload button manages its own hidden input
+  const UploadButton = ({ field }: { field: string }) => (
+    <label className={`flex items-center justify-center gap-2 w-full border border-input rounded-md px-3 py-1.5 text-sm cursor-pointer hover:bg-accent transition-colors ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+      {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+      {uploading ? 'Enviando...' : 'Fazer upload'}
+      <input
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageUpload(f, field); e.target.value = ''; }}
+      />
+    </label>
+  );
 
   if (!block) return null;
 
@@ -79,6 +118,7 @@ export function BlockPropertiesPanel({ block, onUpdate, onClose }: BlockProperti
                 onChange={(e) => handleChange('logoUrl', e.target.value)}
                 placeholder="https://..."
               />
+              <UploadButton field="logoUrl" />
             </div>
             <div className="space-y-2">
               <Label>Largura do Logo</Label>
@@ -189,6 +229,7 @@ export function BlockPropertiesPanel({ block, onUpdate, onClose }: BlockProperti
                 onChange={(e) => handleChange('url', e.target.value)}
                 placeholder="https://..."
               />
+              <UploadButton field="url" />
             </div>
             <div className="space-y-2">
               <Label>Texto Alternativo</Label>
@@ -381,6 +422,7 @@ export function BlockPropertiesPanel({ block, onUpdate, onClose }: BlockProperti
                 value={block.imageUrl || ''}
                 onChange={(e) => handleChange('imageUrl', e.target.value)}
               />
+              <UploadButton field="imageUrl" />
             </div>
             <div className="space-y-2">
               <Label>Texto Alternativo</Label>
