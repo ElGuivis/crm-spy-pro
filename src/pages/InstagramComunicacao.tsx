@@ -1,8 +1,10 @@
-import { Instagram, Plug, MessageSquare, Reply, AtSign, Inbox } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Instagram, Plug, MessageSquare, Reply, AtSign, Inbox, ChevronDown, Circle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useInstagramChannel } from '@/hooks/useInstagramChannel';
 import { useInstagramAutomations } from '@/hooks/useInstagramAutomations';
 import { CommentToDmRulesList } from '@/components/instagram/CommentToDmRulesList';
@@ -10,12 +12,24 @@ import { SimpleAutomationCard } from '@/components/instagram/SimpleAutomationCar
 import { Link } from 'react-router-dom';
 
 export default function InstagramComunicacao() {
-  const { channel, capabilities, isLoading } = useInstagramChannel();
+  const { channels, isLoading } = useInstagramChannel();
+  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
+
+  const connectedChannels = channels.filter(c => c.status === 'connected');
+
+  useEffect(() => {
+    if (!selectedChannelId && connectedChannels.length > 0) {
+      setSelectedChannelId(connectedChannels[0].id);
+    }
+  }, [connectedChannels, selectedChannelId]);
+
+  const selectedChannel = connectedChannels.find(c => c.id === selectedChannelId) ?? null;
+
   const {
-    rules, isLoading: rulesLoading,
+    rules,
     getActiveRuleForType, getRulesForType,
     upsertRule, toggleRule, deleteRule,
-  } = useInstagramAutomations(channel?.id ?? null);
+  } = useInstagramAutomations(selectedChannelId);
 
   if (isLoading) {
     return (
@@ -26,7 +40,7 @@ export default function InstagramComunicacao() {
     );
   }
 
-  if (!channel || channel.status === 'disconnected') {
+  if (connectedChannels.length === 0) {
     return (
       <div className="p-6 space-y-6">
         <div className="flex items-center gap-3">
@@ -70,12 +84,45 @@ export default function InstagramComunicacao() {
           </div>
           <div>
             <h1 className="text-2xl font-bold">Automações</h1>
-            <p className="text-sm text-muted-foreground">
-              @{channel.instagram_username || channel.name}
-            </p>
+            {connectedChannels.length === 1 ? (
+              <p className="text-sm text-muted-foreground">
+                @{selectedChannel?.instagram_username || selectedChannel?.name}
+              </p>
+            ) : (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                    @{selectedChannel?.instagram_username || selectedChannel?.name}
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  {connectedChannels.map(ch => (
+                    <DropdownMenuItem
+                      key={ch.id}
+                      onSelect={() => setSelectedChannelId(ch.id)}
+                      className="flex items-center gap-2"
+                    >
+                      <Circle
+                        className={`h-2 w-2 fill-current ${ch.id === selectedChannelId ? 'text-green-500' : 'text-muted-foreground/30'}`}
+                      />
+                      <span className="font-medium">@{ch.instagram_username || ch.name}</span>
+                      {ch.id === selectedChannelId && (
+                        <Badge variant="secondary" className="ml-auto text-[10px] h-4 px-1">ativo</Badge>
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {connectedChannels.length > 1 && (
+            <Badge variant="outline" className="h-7 text-xs">
+              {connectedChannels.length} contas
+            </Badge>
+          )}
           <Badge variant={activeCount > 0 ? 'default' : 'secondary'} className="h-7">
             {activeCount} ativa{activeCount !== 1 ? 's' : ''}
           </Badge>
