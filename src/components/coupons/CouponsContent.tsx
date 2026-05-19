@@ -77,7 +77,8 @@ interface GeneratedCoupon {
   source?: string;
   li_coupon_id?: number;
   coupon_type?: string;
-  li_quantidade_usada?: number;
+  li_quantidade_usada?: number | null;
+  li_quantidade_uso_maximo?: number | null;
 }
 
 interface CouponStats {
@@ -226,8 +227,8 @@ export const CouponsContent = ({ integrationId }: CouponsContentProps) => {
     const stats: CouponStats = {
       total: data.length,
       used: usedCouponsList.length,
-      expired: data.filter(c => !c.used_at && new Date(c.expires_at) < now).length,
-      active: data.filter(c => !c.used_at && new Date(c.expires_at) >= now).length,
+      expired: data.filter(c => !c.used_at && (new Date(c.expires_at) < now || (c.li_quantidade_uso_maximo != null && (c.li_quantidade_usada ?? 0) >= c.li_quantidade_uso_maximo))).length,
+      active: data.filter(c => !c.used_at && new Date(c.expires_at) >= now && (c.li_quantidade_uso_maximo == null || (c.li_quantidade_usada ?? 0) < c.li_quantidade_uso_maximo)).length,
       totalGeneratedValue,
       conversionRate: data.length > 0 ? (usedCouponsList.length / data.length) * 100 : 0,
       imported: data.filter(c => c.source === 'imported').length,
@@ -287,29 +288,24 @@ export const CouponsContent = ({ integrationId }: CouponsContentProps) => {
 
   const getCouponStatus = (coupon: GeneratedCoupon): { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: React.ReactNode } => {
     if (coupon.used_at) {
-      return { 
-        label: "Utilizado", 
-        variant: "default",
-        icon: <CheckCircle2 className="h-3 w-3" />
-      };
+      return { label: "Utilizado", variant: "default", icon: <CheckCircle2 className="h-3 w-3" /> };
     }
-    
+
     const now = new Date();
     const expiresAt = new Date(coupon.expires_at);
-    
+
     if (expiresAt < now) {
-      return { 
-        label: "Expirado", 
-        variant: "destructive",
-        icon: <XCircle className="h-3 w-3" />
-      };
+      return { label: "Expirado", variant: "destructive", icon: <XCircle className="h-3 w-3" /> };
     }
-    
-    return { 
-      label: "Ativo", 
-      variant: "secondary",
-      icon: <Clock className="h-3 w-3" />
-    };
+
+    if (
+      coupon.li_quantidade_uso_maximo != null &&
+      (coupon.li_quantidade_usada ?? 0) >= coupon.li_quantidade_uso_maximo
+    ) {
+      return { label: "Limite atingido", variant: "destructive", icon: <XCircle className="h-3 w-3" /> };
+    }
+
+    return { label: "Ativo", variant: "secondary", icon: <Clock className="h-3 w-3" /> };
   };
 
   const filteredCoupons = coupons.filter(coupon => {
@@ -330,7 +326,7 @@ export const CouponsContent = ({ integrationId }: CouponsContentProps) => {
     if (statusFilter !== "all") {
       const status = getCouponStatus(coupon);
       if (statusFilter === "used" && status.label !== "Utilizado") return false;
-      if (statusFilter === "expired" && status.label !== "Expirado") return false;
+      if (statusFilter === "expired" && !["Expirado", "Limite atingido"].includes(status.label)) return false;
       if (statusFilter === "active" && status.label !== "Ativo") return false;
     }
     
