@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Package, Search, Filter, Eye, Tag, Box, X, AlertTriangle, ChevronLeft, ChevronRight, ArrowUpDown, ArrowLeft, RefreshCw, Zap, Clock, CheckCircle, XCircle, Layers, Star, Ban } from "lucide-react";
+import { Package, Search, Filter, Eye, Tag, Box, X, AlertTriangle, ChevronLeft, ChevronRight, ArrowUpDown, ArrowLeft, RefreshCw, Zap, Clock, CheckCircle, XCircle, Layers, Star, Ban, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -15,11 +15,12 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import ProductDetailsDialog from "@/components/products/ProductDetailsDialog";
+import { ProductInlineEdit } from "@/components/products/ProductInlineEdit";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useProductsData } from "./useProductsData";
-import { Product, SORT_OPTIONS, ITEMS_PER_PAGE_OPTIONS, calculateMargin, getRaw, formatCurrency } from "./products-helpers";
+import { Product, SORT_OPTIONS, ITEMS_PER_PAGE_OPTIONS, calculateMargin, getRaw, formatCurrency, getProductStock } from "./products-helpers";
 
 interface ProductsContentProps {
   integrationId: string;
@@ -29,6 +30,26 @@ export function ProductsContent({ integrationId }: ProductsContentProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const data = useProductsData(integrationId);
+
+  const handleExportCSV = () => {
+    const rows = data.filteredProducts.map((p) => [
+      p.name ?? "",
+      p.sku ?? "",
+      p.price ?? "",
+      p.promotional_price ?? "",
+      p.cost_price ?? "",
+      getProductStock(p),
+    ]);
+    const header = ["Nome", "SKU", "Preço", "Preço Promo", "Custo", "Estoque"];
+    const csv = [header, ...rows].map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `produtos-${data.integration?.name ?? "catalogo"}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const getStockBadge = (quantity: number | null) => {
     const qty = quantity || 0;
@@ -52,6 +73,9 @@ export function ProductsContent({ integrationId }: ProductsContentProps) {
           </div>
         </div>
         <div className="flex gap-2 items-center flex-wrap">
+          <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={!data.filteredProducts?.length}>
+            <Download className="h-4 w-4 mr-2" />CSV
+          </Button>
           <SyncStatusBadge integrationId={integrationId} syncType="products" />
           <DeleteIntegrationDataButton
             integrationId={integrationId}
@@ -252,7 +276,10 @@ export function ProductsContent({ integrationId }: ProductsContentProps) {
                         <p className="font-bold text-card-foreground">{formatCurrency(product.price)}</p>
                       )}
                     </div>
-                    {margin !== null && <Badge variant="outline" className={margin >= 30 ? 'text-green-600 border-green-600' : margin >= 15 ? 'text-yellow-600 border-yellow-600' : 'text-red-600 border-red-600'}>{margin.toFixed(0)}%</Badge>}
+                    <div className="flex items-center gap-1">
+                      {margin !== null && <Badge variant="outline" className={margin >= 30 ? 'text-green-600 border-green-600' : margin >= 15 ? 'text-yellow-600 border-yellow-600' : 'text-red-600 border-red-600'}>{margin.toFixed(0)}%</Badge>}
+                      <ProductInlineEdit product={product} integrationId={integrationId} />
+                    </div>
                   </div>
                 </div>
               </div>
