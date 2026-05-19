@@ -137,10 +137,6 @@ verify_jwt = false
 # AUTHENTICATED — in-code auth via requireUserAuth
 verify_jwt = false
 
-[functions.loyalty-redeem]
-# AUTHENTICATED — in-code auth via requireUserAuth
-verify_jwt = false
-
 [functions.bling-coupon-create]
 # AUTHENTICATED — in-code auth via requireUserAuth
 verify_jwt = false
@@ -162,10 +158,6 @@ verify_jwt = false
 # Auth validated in-code via requireUserOrInternalAuth.
 # Internal callers use service_role JWT or CRON_SECRET.
 # =============================================================================
-
-[functions.loyalty-calculator]
-# HYBRID — user triggers or future webhooks
-verify_jwt = false
 
 [functions.li-sync]
 # HYBRID — user triggers or cron syncs
