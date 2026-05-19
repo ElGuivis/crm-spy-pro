@@ -11,7 +11,8 @@ import { ChannelSettings } from "@/components/atendimentos/settings/ChannelSetti
 import { AtendimentoReports } from "@/components/atendimentos/settings/AtendimentoReports";
 import { ChatbotBuilder } from "@/components/atendimentos/settings/ChatbotBuilder";
 import { AIAgentBuilder } from "@/components/atendimentos/settings/AIAgentBuilder";
-import { Headset, MessageSquare, Inbox, Bot, Smartphone, BarChart3, Brain, Menu } from "lucide-react";
+import { ChatbotFlowManager } from "@/components/chatbot-flow/ChatbotFlowManager";
+import { Headset, MessageSquare, Inbox, Bot, Smartphone, BarChart3, Brain, Workflow, Menu } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -87,6 +88,10 @@ export default function Atendimentos() {
               <TabsTrigger value="canais" className="gap-1 text-xs h-7 px-2 md:px-2.5">
                 <Smartphone className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Canais</span>
+              </TabsTrigger>
+              <TabsTrigger value="flows" className="gap-1 text-xs h-7 px-2 md:px-2.5">
+                <Workflow className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Flows</span>
               </TabsTrigger>
               <TabsTrigger value="relatorios" className="gap-1 text-xs h-7 px-2 md:px-2.5">
                 <BarChart3 className="h-3.5 w-3.5" />
@@ -188,6 +193,12 @@ export default function Atendimentos() {
       {activeTab === "canais" && (
         <div className="flex-1 overflow-y-auto p-4 md:p-6">
           <ChannelSettings />
+        </div>
+      )}
+
+      {activeTab === "flows" && (
+        <div className="flex-1 overflow-hidden flex flex-col">
+          <ChatbotFlowManager />
         </div>
       )}
 

@@ -393,3 +393,7 @@ verify_jwt = false
 
 [functions.accept-team-invite]
 verify_jwt = false
+
+[functions.flow-runner]
+# AUTHENTICATED — user or internal (requireUserOrInternalAuth)
+verify_jwt = false
