@@ -191,11 +191,18 @@ export function useAtendimentoStats(period: StatsPeriod = '7d') {
       const periodStartISO = periodStart.toISOString();
 
       // All conversations in period (status + timing + agent + csat)
-      const { data: periodConvs } = await supabase
-        .from('conversations')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: periodConvs } = await (supabase.from('conversations') as any)
         .select('status, assigned_to, created_at, closed_at, first_response_at, csat_score')
         .eq('tenant_id', tenantId)
-        .gte('created_at', periodStartISO);
+        .gte('created_at', periodStartISO) as { data: Array<{
+          status: string;
+          assigned_to: string | null;
+          created_at: string;
+          closed_at: string | null;
+          first_response_at: string | null;
+          csat_score: number | null;
+        }> | null };
 
       const statusCounts: Record<string, number> = {};
       (periodConvs || []).forEach((c) => {

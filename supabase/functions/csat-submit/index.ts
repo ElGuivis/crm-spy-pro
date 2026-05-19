@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 
-const RATING_PAGE = (token: string) => `<!DOCTYPE html>
+const RATING_PAGE = () => `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
 
     // No score → serve the rating page
     if (!scoreStr) {
-      return new Response(RATING_PAGE(token), {
+      return new Response(RATING_PAGE(), {
         headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" },
       });
     }
