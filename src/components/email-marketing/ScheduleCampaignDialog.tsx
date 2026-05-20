@@ -23,7 +23,9 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Calendar, Info, Loader2 } from 'lucide-react';
 import { useUpdateEmailCampaign } from '@/hooks/useEmailCampaigns';
+import { useBestSendTime } from '@/hooks/useBestSendTime';
 import { format, addHours } from 'date-fns';
+import { Sparkles } from 'lucide-react';
 
 const formSchema = z.object({
   scheduled_at: z.string().min(1, 'Selecione data e hora').refine(
@@ -51,6 +53,7 @@ export function ScheduleCampaignDialog({
   onOpenChange,
 }: ScheduleCampaignDialogProps) {
   const updateCampaign = useUpdateEmailCampaign();
+  const { topHours, topDays, totalOpens, bestHour } = useBestSendTime();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -105,6 +108,40 @@ export function ScheduleCampaignDialog({
                 </FormItem>
               )}
             />
+
+            {totalOpens > 0 && (
+              <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950/30 p-3 space-y-2">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-yellow-700 dark:text-yellow-400">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Melhor horário — baseado em {totalOpens} aberturas (90 dias)
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {topHours.map(h => (
+                    <button
+                      key={h.hour_of_day}
+                      type="button"
+                      onClick={() => {
+                        const now = new Date();
+                        const target = new Date(now);
+                        target.setHours(h.hour_of_day, 0, 0, 0);
+                        if (target <= now) target.setDate(target.getDate() + 1);
+                        const pad = (n: number) => String(n).padStart(2, '0');
+                        form.setValue('scheduled_at', `${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(target.getDate())}T${pad(h.hour_of_day)}:00`);
+                      }}
+                      className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300 hover:bg-yellow-200 transition-colors"
+                    >
+                      {String(h.hour_of_day).padStart(2, '0')}h · {h.open_count} abert.
+                    </button>
+                  ))}
+                  {topDays.map(d => (
+                    <span key={d.day_of_week} className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300">
+                      {d.day_label}
+                    </span>
+                  ))}
+                </div>
+                <p className="text-[10px] text-yellow-600 dark:text-yellow-500">Clique em uma hora para preencher automaticamente</p>
+              </div>
+            )}
 
             {scheduledDate && scheduledDate > new Date() && (
               <Alert>

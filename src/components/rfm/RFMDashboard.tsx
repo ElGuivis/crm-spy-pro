@@ -14,7 +14,8 @@ import { RFMCategoryDashboard } from './RFMCategoryDashboard';
 import { RFMCohortAnalysis } from './RFMCohortAnalysis';
 import { RFMPredictions } from './RFMPredictions';
 import { RFMLtvChurn } from './RFMLtvChurn';
-import { Calculator, Users, DollarSign, Repeat, CalendarClock, Loader2, Layers, CalendarRange, TrendingUp, Activity } from 'lucide-react';
+import { ChurnCampaignCard } from './ChurnCampaignCard';
+import { Calculator, Users, DollarSign, Repeat, CalendarClock, Loader2, Layers, CalendarRange, TrendingUp, Activity, Zap } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -136,6 +137,10 @@ export function RFMDashboard({ integrationId, sourceType, integrationName }: RFM
               <Activity className="h-4 w-4" />
               LTV & Churn
             </TabsTrigger>
+            <TabsTrigger value="automacao" className="gap-2">
+              <Zap className="h-4 w-4" />
+              Automação
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="global" className="space-y-6 mt-4">
@@ -205,6 +210,12 @@ export function RFMDashboard({ integrationId, sourceType, integrationName }: RFM
 
           <TabsContent value="ltv" className="mt-4">
             <RFMLtvChurn snapshots={snapshots ?? []} />
+          </TabsContent>
+
+          <TabsContent value="automacao" className="mt-4">
+            <div className="max-w-xl">
+              <ChurnCampaignCard />
+            </div>
           </TabsContent>
         </Tabs>
       )}

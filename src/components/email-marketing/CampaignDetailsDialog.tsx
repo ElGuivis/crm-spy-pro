@@ -29,9 +29,13 @@ import {
   Clock,
   Info,
   ExternalLink,
+  FlaskConical,
+  Trophy,
 } from "lucide-react";
 import { useCampaignMetrics } from "@/hooks/useCampaignMetrics";
 import { useEmailCampaign } from "@/hooks/useEmailSingle";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -106,6 +110,23 @@ export function CampaignDetailsDialog({ campaignId, open, onOpenChange }: Campai
 
   const isLoading = loadingCampaign || loadingMetrics;
 
+  // Busca variante sibling para comparação A/B
+  const { data: siblingCampaign } = useQuery({
+    queryKey: ["ab-sibling", campaign?.ab_test_id, campaignId],
+    queryFn: async () => {
+      if (!campaign?.ab_test_id) return null;
+      const { data } = await supabase
+        .from("email_campaigns")
+        .select("id, internal_name, subject, ab_variant, total_sent, total_delivered, total_opened, total_clicked, status")
+        .eq("ab_test_id", campaign.ab_test_id)
+        .neq("id", campaignId)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!campaign?.ab_test_id,
+  });
+  const { data: siblingMetrics } = useCampaignMetrics(siblingCampaign?.id);
+
   // Filter problems (bounces, complaints, errors)
   const problems = metrics?.events.filter((e) =>
     ["bounce", "complaint"].includes(e.event_type)
@@ -137,6 +158,12 @@ export function CampaignDetailsDialog({ campaignId, open, onOpenChange }: Campai
             <TabsTrigger value="timeline">Timeline</TabsTrigger>
             <TabsTrigger value="logs">Logs</TabsTrigger>
             <TabsTrigger value="preview">Preview</TabsTrigger>
+            {campaign?.ab_test_id && (
+              <TabsTrigger value="ab" className="gap-1.5">
+                <FlaskConical className="h-3.5 w-3.5" />
+                Comparar A/B
+              </TabsTrigger>
+            )}
             {problems.length > 0 && (
               <TabsTrigger value="problemas" className="gap-1.5">
                 Problemas
@@ -394,6 +421,51 @@ export function CampaignDetailsDialog({ campaignId, open, onOpenChange }: Campai
               </div>
             )}
           </TabsContent>
+
+          {/* A/B Comparison Tab */}
+          {campaign?.ab_test_id && (
+            <TabsContent value="ab" className="flex-1 overflow-y-auto mt-4">
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  {([
+                    { label: "Variante A", camp: campaign, met: metrics, isCurrent: true },
+                    { label: "Variante B", camp: siblingCampaign, met: siblingMetrics, isCurrent: false },
+                  ] as const).map(({ label, camp, met }) => {
+                    const openRate  = met && met.total_delivered > 0 ? (met.total_opened  / met.total_delivered * 100).toFixed(1) : "—";
+                    const clickRate = met && met.total_delivered > 0 ? (met.total_clicked / met.total_delivered * 100).toFixed(1) : "—";
+                    const isWinner  = metrics && siblingMetrics &&
+                      (label === "Variante A"
+                        ? metrics.open_rate > siblingMetrics.open_rate
+                        : siblingMetrics.open_rate > metrics.open_rate);
+                    return (
+                      <Card key={label} className={isWinner ? "border-primary/50 bg-primary/5" : ""}>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm flex items-center gap-2">
+                            <FlaskConical className="h-4 w-4 text-purple-600" />
+                            {label}
+                            {isWinner && <Badge className="text-[10px] px-1.5 py-0 bg-primary text-primary-foreground gap-1"><Trophy className="h-3 w-3" />Vencedor</Badge>}
+                          </CardTitle>
+                          <p className="text-xs text-muted-foreground truncate">{camp?.subject ?? "—"}</p>
+                        </CardHeader>
+                        <CardContent className="space-y-2 text-sm">
+                          <div className="flex justify-between"><span className="text-muted-foreground">Enviados</span><strong>{met?.total_sent ?? "—"}</strong></div>
+                          <div className="flex justify-between"><span className="text-muted-foreground">Taxa abertura</span><strong className={isWinner ? "text-primary" : ""}>{openRate}{openRate !== "—" ? "%" : ""}</strong></div>
+                          <div className="flex justify-between"><span className="text-muted-foreground">CTR</span><strong>{clickRate}{clickRate !== "—" ? "%" : ""}</strong></div>
+                          <div className="flex justify-between"><span className="text-muted-foreground">Cliques</span><strong>{met?.total_clicked ?? "—"}</strong></div>
+                          <div className="flex justify-between"><span className="text-muted-foreground">Status</span>
+                            <Badge variant="outline" className="text-[10px]">{camp?.status ?? "—"}</Badge>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+                {(!metrics?.total_sent && !siblingMetrics?.total_sent) && (
+                  <p className="text-center text-sm text-muted-foreground py-4">Envie as duas variantes para ver a comparação de resultados.</p>
+                )}
+              </div>
+            </TabsContent>
+          )}
 
           {/* Problems Tab */}
           <TabsContent value="problemas" className="flex-1 overflow-hidden mt-4">

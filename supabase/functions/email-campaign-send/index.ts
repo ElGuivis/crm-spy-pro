@@ -382,7 +382,7 @@ serve(async (req) => {
       .eq("id", campaignId)
       .eq("tenant_id", tenantId)
       .in("status", ["draft", "scheduled", "paused", "error"])
-      .select("id, tenant_id, name, status, subject, body_html, body_text, content_html, content_json, preheader, sender_name, sender_email, reply_to, email_integration_id, audience_type, audience_reference, total_recipients, total_sent, total_failed, total_opened, total_clicked, total_unsubscribed, total_bounced, total_complained, utm_source, utm_medium, utm_campaign, utm_content, tracking_enabled, unsubscribe_enabled, test_recipients, scheduled_at, started_at, completed_at, error_message")
+      .select("id, tenant_id, name, status, subject, body_html, body_text, content_html, content_json, preheader, sender_name, sender_email, reply_to, email_integration_id, audience_type, audience_reference, total_recipients, total_sent, total_failed, total_opened, total_clicked, total_unsubscribed, total_bounced, total_complained, utm_source, utm_medium, utm_campaign, utm_content, tracking_enabled, unsubscribe_enabled, test_recipients, scheduled_at, started_at, completed_at, error_message, ab_test_id, ab_variant, ab_split_pct, ab_offset_pct")
       .maybeSingle();
 
     if (claimError) throw claimError;
@@ -505,6 +505,21 @@ serve(async (req) => {
     );
 
     let eligibleRecipients = recipients.filter((r) => !suppressedSet.has(r.email));
+
+    // A/B split: cada variante recebe sua fatia do array ordenado por email (determinístico)
+    const abVariant   = (campaign as Record<string, unknown>).ab_variant as string | null;
+    const abTestId    = (campaign as Record<string, unknown>).ab_test_id as string | null;
+    const abSplitPct  = ((campaign as Record<string, unknown>).ab_split_pct as number | null) ?? 50;
+    const abOffsetPct = ((campaign as Record<string, unknown>).ab_offset_pct as number | null) ?? 0;
+
+    if (abTestId && abVariant) {
+      eligibleRecipients.sort((a, b) => a.email.localeCompare(b.email));
+      const total   = eligibleRecipients.length;
+      const start   = Math.floor(total * abOffsetPct / 100);
+      const end     = Math.min(total, start + Math.ceil(total * abSplitPct / 100));
+      eligibleRecipients = eligibleRecipients.slice(start, end);
+      log.info(`[A/B] variant=${abVariant} slice=[${start},${end}) of ${total} eligible`);
+    }
 
     // Daily quota check
     if (dailySendLimit && dailySendLimit > 0) {

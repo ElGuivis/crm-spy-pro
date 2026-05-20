@@ -42,7 +42,9 @@ import {
   Send,
   Mail,
   Loader2,
+  FlaskConical,
 } from "lucide-react";
+import { ABTestEmailDialog } from "./ABTestEmailDialog";
 import {
   useEmailCampaigns,
   useDeleteEmailCampaign,
@@ -92,6 +94,7 @@ export function EmailCampaignList({ onEdit, statusFilter }: EmailCampaignListPro
   const [deleteTarget, setDeleteTarget] = useState<EmailCampaign | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<EmailCampaign | null>(null);
   const [detailsCampaignId, setDetailsCampaignId] = useState<string | null>(null);
+  const [abTestCampaign, setAbTestCampaign] = useState<EmailCampaign | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   const { data: campaigns, isLoading, refetch } = useEmailCampaigns({
@@ -194,8 +197,15 @@ export function EmailCampaignList({ onEdit, statusFilter }: EmailCampaignListPro
                     const isActing = pendingAction?.endsWith(campaign.id);
                     return (
                       <TableRow key={campaign.id} className={isActing ? 'opacity-60' : ''}>
-                        <TableCell className="font-medium max-w-[180px] truncate">
-                          {campaign.internal_name}
+                        <TableCell className="font-medium max-w-[200px]">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <span className="truncate">{campaign.internal_name}</span>
+                            {campaign.ab_test_id && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-purple-300 text-purple-700 bg-purple-50 dark:border-purple-700 dark:text-purple-400 dark:bg-purple-950/30 shrink-0">
+                                {campaign.ab_variant ?? "A/B"}
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="max-w-[200px] truncate">{campaign.subject}</TableCell>
                         <TableCell>
@@ -291,6 +301,12 @@ export function EmailCampaignList({ onEdit, statusFilter }: EmailCampaignListPro
                                 <Copy className="h-4 w-4 mr-2" />
                                 Duplicar
                               </DropdownMenuItem>
+                              {campaign.status === 'draft' && !campaign.ab_test_id && (
+                                <DropdownMenuItem onClick={() => setAbTestCampaign(campaign)}>
+                                  <FlaskConical className="h-4 w-4 mr-2 text-purple-600" />
+                                  <span className="text-purple-700 dark:text-purple-400">Criar Teste A/B</span>
+                                </DropdownMenuItem>
+                              )}
                               {!['sending'].includes(campaign.status) && (
                                 <DropdownMenuItem
                                   onClick={() => setArchiveTarget(campaign)}
@@ -412,6 +428,15 @@ export function EmailCampaignList({ onEdit, statusFilter }: EmailCampaignListPro
           campaignId={detailsCampaignId}
           open={!!detailsCampaignId}
           onOpenChange={(open) => !open && setDetailsCampaignId(null)}
+        />
+      )}
+
+      {abTestCampaign && (
+        <ABTestEmailDialog
+          campaignId={abTestCampaign.id}
+          subjectA={abTestCampaign.subject}
+          open={!!abTestCampaign}
+          onOpenChange={(open) => !open && setAbTestCampaign(null)}
         />
       )}
     </>

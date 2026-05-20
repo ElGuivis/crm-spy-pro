@@ -37,6 +37,11 @@ export interface EmailCampaign {
   is_archived: boolean;
   created_at: string;
   updated_at: string;
+  // A/B test
+  ab_test_id: string | null;
+  ab_variant: string | null;
+  ab_split_pct: number;
+  ab_offset_pct: number;
 }
 
 export interface CreateEmailCampaignInput {
@@ -70,7 +75,7 @@ export function useEmailCampaigns(filters?: {
 
       let query = supabase
         .from('email_campaigns')
-        .select('id, tenant_id, internal_name, subject, preheader, sender_name, sender_email, reply_to, campaign_type, template_id, content_html, content_json, audience_type, audience_reference, email_integration_id, status, scheduled_at, started_at, completed_at, sent_at, total_recipients, total_sent, total_delivered, total_opened, total_clicked, total_bounced, total_complained, error_message, is_archived, created_at, updated_at')
+        .select('id, tenant_id, internal_name, subject, preheader, sender_name, sender_email, reply_to, campaign_type, template_id, content_html, content_json, audience_type, audience_reference, email_integration_id, status, scheduled_at, started_at, completed_at, sent_at, total_recipients, total_sent, total_delivered, total_opened, total_clicked, total_bounced, total_complained, error_message, is_archived, created_at, updated_at, ab_test_id, ab_variant, ab_split_pct, ab_offset_pct')
         .eq('tenant_id', tenantId)
         .order('created_at', { ascending: false });
 
@@ -244,5 +249,67 @@ export function useDuplicateEmailCampaign() {
     onError: (error: Error) => {
       toast.error(`Erro ao duplicar campanha: ${error.message}`);
     },
+  });
+}
+
+export function useCreateABTest() {
+  const queryClient = useQueryClient();
+  const { tenantId } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({ campaignId, subjectB, splitPct = 50 }: { campaignId: string; subjectB: string; splitPct?: number }) => {
+      if (!tenantId) throw new Error('Tenant não encontrado');
+
+      const { data: original, error: fetchErr } = await supabase
+        .from('email_campaigns')
+        .select('internal_name, subject, preheader, sender_name, sender_email, reply_to, campaign_type, template_id, content_html, content_json, audience_type, audience_reference, email_integration_id')
+        .eq('id', campaignId)
+        .single();
+      if (fetchErr) throw fetchErr;
+
+      const abTestId = crypto.randomUUID();
+      const offsetB = splitPct; // B começa onde A termina
+
+      // Marcar variante A
+      const { error: updateA } = await supabase
+        .from('email_campaigns')
+        .update({ ab_test_id: abTestId, ab_variant: 'A', ab_split_pct: splitPct, ab_offset_pct: 0 })
+        .eq('id', campaignId);
+      if (updateA) throw updateA;
+
+      // Criar variante B
+      const { data: variantB, error: insertErr } = await supabase
+        .from('email_campaigns')
+        .insert({
+          tenant_id:          tenantId,
+          internal_name:      `${original.internal_name} — Variante B`,
+          subject:            subjectB,
+          preheader:          original.preheader,
+          sender_name:        original.sender_name,
+          sender_email:       original.sender_email,
+          reply_to:           original.reply_to,
+          campaign_type:      original.campaign_type,
+          template_id:        original.template_id,
+          content_html:       original.content_html,
+          content_json:       original.content_json,
+          audience_type:      original.audience_type,
+          audience_reference: original.audience_reference,
+          email_integration_id: original.email_integration_id,
+          status:             'draft',
+          ab_test_id:         abTestId,
+          ab_variant:         'B',
+          ab_split_pct:       100 - splitPct,
+          ab_offset_pct:      offsetB,
+        })
+        .select()
+        .single();
+      if (insertErr) throw insertErr;
+      return variantB;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['email-campaigns'] });
+      toast.success('Teste A/B criado! Variante B pronta para edição.');
+    },
+    onError: (e: Error) => toast.error(`Erro ao criar A/B: ${e.message}`),
   });
 }

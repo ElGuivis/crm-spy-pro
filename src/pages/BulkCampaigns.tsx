@@ -11,6 +11,7 @@ import { CampaignCard } from "@/components/bulk-campaigns/CampaignCard";
 import { CampaignDetailsDialog } from "@/components/bulk-campaigns/CampaignDetailsDialog";
 import { CreateCampaignDialog } from "@/components/bulk-campaigns/CreateCampaignDialog";
 import { EditCampaignMessageDialog } from "@/components/bulk-campaigns/EditCampaignMessageDialog";
+import { ABTestBulkDialog } from "@/components/bulk-campaigns/ABTestBulkDialog";
 import { useBulkCampaigns } from "@/hooks/useBulkCampaigns";
 import type { Campaign } from "@/components/bulk-campaigns/types";
 
@@ -18,6 +19,7 @@ const BulkCampaignsPage = () => {
   const { balance } = useTokens();
   const [createOpen, setCreateOpen] = useState(false);
   const [editCampaign, setEditCampaign] = useState<Campaign | null>(null);
+  const [abTestCampaign, setAbTestCampaign] = useState<Campaign | null>(null);
   const {
     campaigns, integrations, loading,
     loadCampaigns, loadIntegrations,
@@ -84,6 +86,7 @@ const BulkCampaignsPage = () => {
               onDelete={setDeleteId}
               onEdit={setEditCampaign}
               onRetryFailed={retryFailed}
+              onCreateABTest={setAbTestCampaign}
             />
           ))}
         </div>
@@ -108,6 +111,15 @@ const BulkCampaignsPage = () => {
         onClose={() => setEditCampaign(null)}
         onSaved={loadCampaigns}
       />
+
+      {abTestCampaign && (
+        <ABTestBulkDialog
+          campaign={abTestCampaign}
+          open={!!abTestCampaign}
+          onOpenChange={(o) => { if (!o) setAbTestCampaign(null); }}
+          onCreated={loadCampaigns}
+        />
+      )}
 
       {/* Delete Dialog */}
       <AlertDialog open={!!deleteId} onOpenChange={(open) => { if (!open) setDeleteId(null); }}>
