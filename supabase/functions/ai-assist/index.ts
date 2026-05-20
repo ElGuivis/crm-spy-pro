@@ -139,6 +139,9 @@ serve(async (req) => {
     } else if (action === 'sentiment') {
       systemPrompt = `Analise o sentimento da última mensagem do cliente nesta conversa. Responda APENAS com um JSON no formato: {"sentiment": "positive"|"neutral"|"negative", "confidence": 0.0-1.0}. Nenhum texto adicional.`;
       maxTokens = 50;
+    } else if (action === 'classify') {
+      systemPrompt = `Classifique a intenção principal desta conversa de atendimento ao cliente. Opções: "compra" (consulta de produto, preço, disponibilidade, pedido novo), "suporte" (problema técnico, dúvida de uso, ajuda geral), "reclamacao" (insatisfação, produto errado, entrega atrasada, reembolso), "outro". Responda APENAS com um JSON no formato: {"intent":"compra"|"suporte"|"reclamacao"|"outro","confidence":0.0-1.0}. Nenhum texto adicional.`;
+      maxTokens = 60;
     } else if (action === 'translate') {
       systemPrompt = `Traduza a última mensagem do cliente para português brasileiro. Se já estiver em português, traduza para inglês. Responda apenas com a tradução.`;
       maxTokens = 300;
@@ -177,7 +180,22 @@ serve(async (req) => {
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || '';
 
-    // For sentiment, try to parse JSON
+    // For JSON-response actions, parse the response
+    if (action === 'classify') {
+      try {
+        const jsonMatch = content.match(/\{[^}]+\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          return new Response(JSON.stringify({ result: parsed }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      } catch { /* ignore */ }
+      return new Response(JSON.stringify({ result: { intent: 'outro', confidence: 0.5 } }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     if (action === 'sentiment') {
       try {
         const jsonMatch = content.match(/\{[^}]+\}/);

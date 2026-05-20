@@ -6,8 +6,9 @@ import { HandoffControls } from "./HandoffControls";
 import { TemplatePicker } from "./TemplatePicker";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ConversationSummary } from "./ConversationSummary";
+import { useConversationAI } from "@/hooks/useConversationAI";
 import { Input } from "@/components/ui/input";
-import { MessageSquare, User, WifiOff, PanelRightOpen, PanelRightClose, AlertTriangle, Phone, ArrowLeft, Search, X, ChevronUp, ChevronDown } from "lucide-react";
+import { MessageSquare, User, WifiOff, PanelRightOpen, PanelRightClose, AlertTriangle, Phone, ArrowLeft, Search, X, ChevronUp, ChevronDown, Brain, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
@@ -38,6 +39,8 @@ export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(function C
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
+
+  useEffect(() => { setTriageDismissed(false); }, [conversationId]);
 
   // Ctrl+F to search in conversation
   useEffect(() => {
@@ -77,6 +80,17 @@ export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(function C
       return next;
     });
   }, [searchMatches]);
+
+  const { intent, sentiment } = useConversationAI(conversationId);
+  const [triageDismissed, setTriageDismissed] = useState(false);
+
+  const INTENT_LABEL: Record<string, string> = { compra: 'Compra', suporte: 'Suporte', reclamacao: 'Reclamação', outro: 'Outro' };
+  const INTENT_CLASS: Record<string, string> = {
+    compra: 'bg-green-100 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400',
+    suporte: 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-900/20 dark:text-blue-400',
+    reclamacao: 'bg-orange-100 text-orange-700 border-orange-300 dark:bg-orange-900/20 dark:text-orange-400',
+    outro: 'bg-gray-100 text-gray-600 border-gray-300 dark:bg-gray-800/40 dark:text-gray-400',
+  };
 
   const isMetaOutsideWindow = useMemo(() => {
     if (channelProvider !== 'meta' || !conversation) return false;
@@ -132,6 +146,13 @@ export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(function C
               <span>{contact?.phone || '—'}</span>
             </div>
           </div>
+
+          {intent && (
+            <Badge variant="outline" className={cn("gap-1 text-xs", INTENT_CLASS[intent])}>
+              <Brain className="h-3 w-3" />
+              {INTENT_LABEL[intent]}
+            </Badge>
+          )}
 
           {isOffline && (
             <Badge variant="destructive" className="gap-1 text-xs">
@@ -234,6 +255,17 @@ export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(function C
       {isOffline && (
         <div className="bg-destructive/10 border-b border-destructive/20 px-4 py-1.5 text-xs text-destructive text-center">
           Canal desconectado. Mensagens serão enfileiradas.
+        </div>
+      )}
+
+      {/* Triage warning: negative sentiment */}
+      {sentiment === 'negative' && !triageDismissed && (
+        <div className="flex items-center gap-2 bg-orange-50 dark:bg-orange-950/30 border-b border-orange-200 dark:border-orange-800 px-4 py-1.5 text-xs text-orange-700 dark:text-orange-400">
+          <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
+          <span className="flex-1">Sentimento negativo detectado — este cliente pode precisar de atenção especial.</span>
+          <Button variant="ghost" size="icon" className="h-5 w-5 text-orange-500 hover:text-orange-700" onClick={() => setTriageDismissed(true)}>
+            <X className="h-3 w-3" />
+          </Button>
         </div>
       )}
 
