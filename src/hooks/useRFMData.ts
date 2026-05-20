@@ -26,6 +26,9 @@ export interface RFMSnapshot {
   segment_name: string | null;
   segment_action: string | null;
   churn_risk: string | null;
+  first_purchase_date: string | null;
+  ltv_predicted_12m: number | null;
+  churn_probability: number | null;
   reference_date: string;
   created_at: string;
   updated_at: string;
@@ -58,7 +61,7 @@ export function useRFMData(integrationId: string) {
       while (hasMore) {
         const { data, error } = await (supabase as any)
           .from('customer_rfm_snapshots')
-          .select('id, integration_id, source_type, customer_id, customer_name, customer_email, customer_phone, customer_doc, last_order_date, recency_days, orders_count, revenue_total, aov, avg_order_interval_days, r_score, f_score, m_score, rfm_score, segment_name, segment_action, churn_risk, reference_date, created_at')
+          .select('id, integration_id, source_type, customer_id, customer_name, customer_email, customer_phone, customer_doc, last_order_date, recency_days, orders_count, revenue_total, aov, avg_order_interval_days, r_score, f_score, m_score, rfm_score, segment_name, segment_action, churn_risk, first_purchase_date, ltv_predicted_12m, churn_probability, reference_date, created_at')
           .eq('integration_id', integrationId)
           .eq('reference_date', latestDate.reference_date)
           .order('revenue_total', { ascending: false })

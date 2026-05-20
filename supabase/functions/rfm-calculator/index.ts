@@ -359,6 +359,17 @@ Deno.serve(async (req) => {
       const segment = determineSegment(r, f, m)
       const churnRisk = determineChurnRisk(recencyDays, avgInterval)
 
+      // === LTV & Churn probability ===
+      const firstPurchaseDate = c.order_dates[0]?.slice(0, 10) ?? null
+      let ltv_predicted_12m = 0
+      if (firstPurchaseDate) {
+        const tenureMonths = Math.max(1, (now.getTime() - new Date(firstPurchaseDate).getTime()) / (1000 * 60 * 60 * 24 * 30))
+        ltv_predicted_12m = Math.round((c.revenue_total / tenureMonths) * 12 * 100) / 100
+      }
+      const churn_probability = Math.round(
+        Math.min(1, avgInterval && avgInterval > 0 ? recencyDays / (avgInterval * 2.5) : recencyDays / 180) * 100
+      ) / 100
+
       // === PHASE 9: Predictive repurchase ===
       let predicted_next_purchase_date: string | null = null
       let purchase_probability_7d: number | null = null
@@ -420,6 +431,9 @@ Deno.serve(async (req) => {
         segment_name: segment.name,
         segment_action: segment.action,
         churn_risk: churnRisk,
+        first_purchase_date: firstPurchaseDate,
+        ltv_predicted_12m,
+        churn_probability,
         predicted_next_purchase_date,
         purchase_probability_7d,
         purchase_probability_15d,

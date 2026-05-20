@@ -13,7 +13,8 @@ import { RFMAudienceBuilder } from './RFMAudienceBuilder';
 import { RFMCategoryDashboard } from './RFMCategoryDashboard';
 import { RFMCohortAnalysis } from './RFMCohortAnalysis';
 import { RFMPredictions } from './RFMPredictions';
-import { Calculator, Users, DollarSign, Repeat, CalendarClock, Loader2, Layers, CalendarRange, TrendingUp } from 'lucide-react';
+import { RFMLtvChurn } from './RFMLtvChurn';
+import { Calculator, Users, DollarSign, Repeat, CalendarClock, Loader2, Layers, CalendarRange, TrendingUp, Activity } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -131,6 +132,10 @@ export function RFMDashboard({ integrationId, sourceType, integrationName }: RFM
               <TrendingUp className="h-4 w-4" />
               Previsões
             </TabsTrigger>
+            <TabsTrigger value="ltv" className="gap-2">
+              <Activity className="h-4 w-4" />
+              LTV & Churn
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="global" className="space-y-6 mt-4">
@@ -196,6 +201,10 @@ export function RFMDashboard({ integrationId, sourceType, integrationName }: RFM
 
           <TabsContent value="predictions" className="mt-4">
             <RFMPredictions snapshots={snapshots} />
+          </TabsContent>
+
+          <TabsContent value="ltv" className="mt-4">
+            <RFMLtvChurn snapshots={snapshots ?? []} />
           </TabsContent>
         </Tabs>
       )}
