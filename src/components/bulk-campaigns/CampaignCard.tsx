@@ -44,9 +44,9 @@ export function CampaignCard({ campaign, onStart, onPause, onView, onDelete, onE
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5 flex-wrap">
             <h3 className="font-semibold text-card-foreground truncate">{campaign.name}</h3>
-            {(campaign as { ab_test_id?: string | null }).ab_test_id && (
+            {campaign.ab_test_id && (
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-purple-300 text-purple-700 bg-purple-50 dark:border-purple-700 dark:text-purple-400 dark:bg-purple-950/30 shrink-0">
-                {(campaign as { ab_variant?: string | null }).ab_variant ?? "A/B"}
+                {campaign.ab_variant ?? "A/B"}
               </Badge>
             )}
             <Badge variant="outline" className={cn("text-xs", st.color)}>
@@ -114,7 +114,7 @@ export function CampaignCard({ campaign, onStart, onPause, onView, onDelete, onE
               <Pencil className="h-4 w-4" />
             </Button>
           )}
-          {campaign.status === "draft" && !(campaign as { ab_test_id?: string | null }).ab_test_id && onCreateABTest && (
+          {campaign.status === "draft" && !campaign.ab_test_id && onCreateABTest && (
             <Button size="sm" variant="ghost" title="Criar Teste A/B" onClick={() => onCreateABTest(campaign)}>
               <FlaskConical className="h-4 w-4 text-purple-600" />
             </Button>

@@ -19,6 +19,9 @@ export interface Campaign {
   media_url: string | null;
   media_type: string | null;
   timezone: string | null;
+  delay_max_seconds: number | null;
+  ab_test_id: string | null;
+  ab_variant: string | null;
 }
 
 export interface WhatsAppIntegration {

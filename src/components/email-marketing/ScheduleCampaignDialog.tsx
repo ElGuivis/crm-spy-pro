@@ -21,11 +21,10 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Calendar, Info, Loader2 } from 'lucide-react';
+import { Calendar, Info, Loader2, Sparkles } from 'lucide-react';
 import { useUpdateEmailCampaign } from '@/hooks/useEmailCampaigns';
 import { useBestSendTime } from '@/hooks/useBestSendTime';
 import { format, addHours } from 'date-fns';
-import { Sparkles } from 'lucide-react';
 
 const formSchema = z.object({
   scheduled_at: z.string().min(1, 'Selecione data e hora').refine(
