@@ -313,6 +313,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
+    if (error instanceof Response) return error;
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     log.error('Fatal error in inactivity processor', { error: errorMessage });
     await recordMetrics({ functionName: "conversation-inactivity-processor", correlationId: cid, status: "error", durationMs: elapsed(), errorMessage });

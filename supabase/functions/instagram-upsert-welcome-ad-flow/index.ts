@@ -54,6 +54,7 @@ Deno.serve(async (req) => {
       });
     }
   } catch (err: unknown) {
+    if (err instanceof Response) return err;
     const errMsg = err instanceof Error ? err.message : String(err);
     log.error("[upsert-welcome-ad-flow] Error:", err);
     return new Response(JSON.stringify({ error: errMsg }), {

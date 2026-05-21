@@ -121,6 +121,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error: unknown) {
+    if (error instanceof Response) return error;
     const msg = error instanceof Error ? error.message : 'Unknown error';
     log.error('[RECONCILIATION] Fatal error:', msg);
     return new Response(JSON.stringify({ success: false, error: msg }), {

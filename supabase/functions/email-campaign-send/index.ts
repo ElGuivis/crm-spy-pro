@@ -735,6 +735,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: unknown) {
+    if (error instanceof Response) return error;
     log.error("[EMAIL-CAMPAIGN-SEND]", error);
 
     if (campaignId) {

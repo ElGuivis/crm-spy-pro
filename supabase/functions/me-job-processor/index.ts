@@ -693,9 +693,10 @@ serve(async (req) => {
       }
     }
   } catch (error: unknown) {
+    if (error instanceof Response) return error;
     log.error("[me-job-processor] Error:", error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: error instanceof Error ? error.message : String(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

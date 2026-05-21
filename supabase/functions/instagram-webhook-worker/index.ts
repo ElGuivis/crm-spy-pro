@@ -137,6 +137,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: unknown) {
+    if (error instanceof Response) return error;
     const errMsg = error instanceof Error ? error.message : String(error);
     log.error("[ig-worker] Fatal error:", error);
     return new Response(JSON.stringify({ error: errMsg }), {

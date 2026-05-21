@@ -148,6 +148,7 @@ serve(async (req) => {
     });
 
   } catch (error: unknown) {
+    if (error instanceof Response) return error;
     log.error("Buffer processor error", { error: error instanceof Error ? error.message : String(error) });
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(JSON.stringify({ error: errorMessage }), {

@@ -218,6 +218,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: unknown) {
+    if (err instanceof Response) return err;
     const errMsg = err instanceof Error ? err.message : String(err);
     log.error("[trigger-dispatcher] Error:", err);
     return new Response(JSON.stringify({ error: errMsg }), {

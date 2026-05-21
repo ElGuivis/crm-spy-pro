@@ -486,6 +486,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error: unknown) {
+    if (error instanceof Response) return error;
     // Release lock on error
     try {
       const supabaseUrl = Deno.env.get('SUPABASE_URL')!;

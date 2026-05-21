@@ -203,6 +203,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ success: true, processed: processedCount, success_count: successCount, failed_count: failedCount }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error: unknown) {
+    if (error instanceof Response) return error;
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     log.error('Reminder processor error:', errorMessage);
     return new Response(JSON.stringify({ success: false, error: errorMessage }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

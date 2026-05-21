@@ -275,6 +275,7 @@ Deno.serve(async (req) => {
     );
 
   } catch (err: unknown) {
+    if (err instanceof Response) return err;
     const msg = err instanceof Error ? err.message : "Unknown error";
     log.error("[bulk-status-update] Error:", msg);
     return new Response(

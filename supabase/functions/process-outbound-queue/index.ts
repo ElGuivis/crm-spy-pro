@@ -231,7 +231,8 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error: unknown) {
-    log.error("Worker error", { error: error.message });
+    if (error instanceof Response) return error;
+    log.error("Worker error", { error: error instanceof Error ? error.message : String(error) });
     await recordMetrics({
       functionName: FUNCTION_NAME,
       correlationId,

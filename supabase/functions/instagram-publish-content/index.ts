@@ -172,6 +172,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: unknown) {
+    if (err instanceof Response) return err;
     log.error("[publish-content] Error:", err);
 
     try {

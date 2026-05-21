@@ -424,6 +424,7 @@ Deno.serve(async (req) => {
     });
 
   } catch (error: unknown) {
+    if (error instanceof Response) return error;
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     log.error('[BIRTHDAY] Fatal error:', errorMessage);
     return new Response(JSON.stringify({ success: false, error: errorMessage }), {

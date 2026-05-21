@@ -213,6 +213,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: unknown) {
+    if (error instanceof Response) return error;
     const errMsg = error instanceof Error ? error.message : String(error);
     log.error("Fatal error", { error: errMsg });
 

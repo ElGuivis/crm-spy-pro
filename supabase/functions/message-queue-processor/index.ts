@@ -289,6 +289,7 @@ Deno.serve(async (req) => {
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error: unknown) {
+    if (error instanceof Response) return error;
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     log.error('[MESSAGE-QUEUE-PROCESSOR] Error:', errorMessage);
     return new Response(JSON.stringify({ success: false, error: errorMessage }), { 
