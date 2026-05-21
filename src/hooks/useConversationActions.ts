@@ -108,7 +108,7 @@ export function useAssignConversation() {
 export function useCloseConversation() {
   const queryClient = useQueryClient();
   const { tenantId, user } = useAuth();
-  const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string) ?? 'https://fsrgtnasverkkqkbnmzf.supabase.co';
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
 
   return useMutation({
     mutationFn: async ({ conversationId }: { conversationId: string }) => {

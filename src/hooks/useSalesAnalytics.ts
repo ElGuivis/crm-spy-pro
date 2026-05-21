@@ -18,16 +18,21 @@ const EFFECTIVE_STATUSES = ["Pedido Entregue", "Pedido Enviado", "Pedido Pago"];
 async function fetchSalesAnalytics(tenantId: string): Promise<SalesAnalyticsData> {
   const thirtyDaysAgo = subDays(new Date(), 30).toISOString();
 
-  const [
-    { data: liOrders },
-    { data: blingOrders },
-    { data: liItems },
-    { data: blingItems },
-  ] = await Promise.all([
+  const [{ data: liOrders }, { data: blingOrders }] = await Promise.all([
     supabase.from("li_orders").select("id, created_at_remote, totals_json, status_name").eq("tenant_id", tenantId).gte("created_at_remote", thirtyDaysAgo).limit(1000),
     supabase.from("bling_orders").select("id, data_criacao, valor_total").eq("tenant_id", tenantId).gte("data_criacao", thirtyDaysAgo).limit(1000),
-    supabase.from("li_order_items").select("name, qty, price, order_id").eq("tenant_id", tenantId).limit(1000),
-    supabase.from("bling_order_items").select("produto_nome, quantidade, valor_total, order_id").eq("tenant_id", tenantId).limit(1000),
+  ]);
+
+  const liIds = (liOrders || []).map(o => o.id);
+  const blingIds = (blingOrders || []).map(o => o.id);
+
+  const [{ data: liItems }, { data: blingItems }] = await Promise.all([
+    liIds.length > 0
+      ? supabase.from("li_order_items").select("name, qty, price, order_id").in("order_id", liIds)
+      : Promise.resolve({ data: [] as { name: string; qty: number; price: number; order_id: string }[] }),
+    blingIds.length > 0
+      ? supabase.from("bling_order_items").select("produto_nome, quantidade, valor_total, order_id").in("order_id", blingIds)
+      : Promise.resolve({ data: [] as { produto_nome: string; quantidade: number; valor_total: number; order_id: string }[] }),
   ]);
 
   const effectiveLI = (liOrders || []).filter(o => EFFECTIVE_STATUSES.includes(o.status_name || ""));
@@ -58,19 +63,17 @@ async function fetchSalesAnalytics(tenantId: string): Promise<SalesAnalyticsData
     if (ticketMap[d]) { ticketMap[d].total += Number(o.valor_total || 0); ticketMap[d].count++; }
   }
 
-  // Top products
+  // Top products (items already scoped to last-30-days orders via .in() query)
   const productMap: Record<string, { revenue: number; quantity: number }> = {};
-  const liOrderIds = new Set(effectiveLI.map(o => o.id));
+  const effectiveLIIds = new Set(effectiveLI.map(o => o.id));
   for (const item of liItems || []) {
-    if (!liOrderIds.has(item.order_id)) continue;
+    if (!effectiveLIIds.has(item.order_id)) continue;
     const name = item.name || "Sem nome";
     if (!productMap[name]) productMap[name] = { revenue: 0, quantity: 0 };
     productMap[name].revenue += (item.price || 0) * (item.qty || 0);
     productMap[name].quantity += item.qty || 0;
   }
-  const blingOrderIds = new Set(effectiveBling.map(o => o.id));
   for (const item of blingItems || []) {
-    if (!blingOrderIds.has(item.order_id)) continue;
     const name = item.produto_nome || "Sem nome";
     if (!productMap[name]) productMap[name] = { revenue: 0, quantity: 0 };
     productMap[name].revenue += item.valor_total || 0;

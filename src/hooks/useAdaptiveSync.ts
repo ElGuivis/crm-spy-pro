@@ -35,14 +35,17 @@ export function useAdaptiveSync(integrationId: string, syncType: string = 'all')
       return;
     }
 
+    let cancelled = false;
     const fetchIntegrationType = async () => {
       setIsLoading(true);
-      
+
       const { data, error } = await supabase
         .from('integrations')
         .select('type')
         .eq('id', integrationId)
         .single();
+
+      if (cancelled) return;
 
       if (error) {
         log.error('[useAdaptiveSync] Error fetching integration type:', error);
@@ -50,11 +53,12 @@ export function useAdaptiveSync(integrationId: string, syncType: string = 'all')
       } else {
         setIntegrationType(data?.type || null);
       }
-      
+
       setIsLoading(false);
     };
 
     fetchIntegrationType();
+    return () => { cancelled = true; };
   }, [integrationId]);
 
   // Get the appropriate sync status based on integration type

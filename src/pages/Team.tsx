@@ -370,7 +370,7 @@ export default function Team() {
         </div>
         <Dialog open={isAddDialogOpen} onOpenChange={(open) => { setIsAddDialogOpen(open); if (!open) resetForm(); }}>
           <DialogTrigger asChild>
-            <Button className="gradient-whatsapp">
+            <Button className="gradient-whatsapp" disabled={!tenant?.id}>
               <UserPlus className="w-4 h-4 mr-2" />
               Convidar Membro
             </Button>

@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useConversationAI');
 
 export type ConvIntent = 'compra' | 'suporte' | 'reclamacao' | 'outro' | null;
 export type ConvSentiment = 'positive' | 'neutral' | 'negative' | null;
@@ -18,25 +21,39 @@ export function useConversationAI(conversationId: string | null) {
     if (processedRef.current.has(conversationId)) return;
     processedRef.current.add(conversationId);
 
+    let cancelled = false;
+
     supabase.functions.invoke('ai-assist', {
       body: { action: 'classify', conversation_id: conversationId, tenant_id: tenantId },
     }).then(({ data }) => {
+      if (cancelled) return;
       const i = data?.result?.intent as ConvIntent;
       if (i) {
         setIntent(i);
-        supabase.from('conversations').update({ intent: i } as any).eq('id', conversationId);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase.from('conversations') as any).update({ intent: i }).eq('id', conversationId)
+          .then(({ error }: { error: unknown }) => {
+            if (error) log.error('Failed to persist intent', error);
+          });
       }
-    }).catch(() => { /* silent */ });
+    }).catch((err) => log.error('classify failed', err));
 
     supabase.functions.invoke('ai-assist', {
       body: { action: 'sentiment', conversation_id: conversationId, tenant_id: tenantId },
     }).then(({ data }) => {
+      if (cancelled) return;
       const s = data?.result?.sentiment as ConvSentiment;
       if (s) {
         setSentiment(s);
-        supabase.from('conversations').update({ ai_sentiment: s } as any).eq('id', conversationId);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (supabase.from('conversations') as any).update({ ai_sentiment: s }).eq('id', conversationId)
+          .then(({ error }: { error: unknown }) => {
+            if (error) log.error('Failed to persist sentiment', error);
+          });
       }
-    }).catch(() => { /* silent */ });
+    }).catch((err) => log.error('sentiment failed', err));
+
+    return () => { cancelled = true; };
   }, [conversationId, tenantId]);
 
   return { intent, sentiment };

@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4'
 type ServiceClient = ReturnType<typeof createClient>;
 import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts"
 import { requireResource } from "../_shared/resource-guard.ts"

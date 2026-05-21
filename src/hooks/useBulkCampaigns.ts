@@ -41,12 +41,17 @@ export function useBulkCampaigns() {
   }, [tenantId]);
 
   const loadIntegrations = useCallback(async () => {
-    const { data } = await supabase
-      .from("integrations")
-      .select("id, name, metadata")
-      .eq("type", "evolution_whatsapp")
-      .eq("status", "connected");
-    setIntegrations((data || []) as WhatsAppIntegration[]);
+    try {
+      const { data, error } = await supabase
+        .from("integrations")
+        .select("id, name, metadata")
+        .eq("type", "evolution_whatsapp")
+        .eq("status", "connected");
+      if (error) throw error;
+      setIntegrations((data || []) as WhatsAppIntegration[]);
+    } catch (e) {
+      logger.error("Error loading integrations", e);
+    }
   }, []);
 
   const startCampaign = async (id: string) => {
@@ -121,7 +126,9 @@ export function useBulkCampaigns() {
 
   const pauseCampaign = async (id: string) => {
     const { error } = await supabase.from("bulk_campaigns").update({ status: "paused" }).eq("id", id);
-    if (!error) {
+    if (error) {
+      toast({ title: "Erro ao pausar", description: error.message, variant: "destructive" });
+    } else {
       toast({ title: "Campanha pausada" });
       loadCampaigns();
     }

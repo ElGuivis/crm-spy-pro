@@ -123,6 +123,7 @@ export function useDashboardStats(): EnhancedDashboardStats {
   useEffect(() => {
     if (!tenantId) return;
 
+    let cancelled = false;
     const fetchStats = async () => {
       try {
         const now = new Date();
@@ -246,6 +247,7 @@ export function useDashboardStats(): EnhancedDashboardStats {
         const totalDelivered = bulkCampaignsData?.reduce((sum, c) => sum + (c.delivered_count || 0), 0) || 0;
         const successRate = totalSent > 0 ? Math.round((totalDelivered / totalSent) * 100) : 0;
 
+        if (cancelled) return;
         setStats({
           activeConversations: activeConversations || 0,
           totalContacts: totalContacts || 0,
@@ -276,6 +278,7 @@ export function useDashboardStats(): EnhancedDashboardStats {
           isLoading: false,
         });
       } catch (error) {
+        if (cancelled) return;
         logger.error('Error fetching dashboard stats', error);
         setStats(prev => ({ ...prev, isLoading: false }));
       }
@@ -303,6 +306,7 @@ export function useDashboardStats(): EnhancedDashboardStats {
       .subscribe();
 
     return () => {
+      cancelled = true;
       if (debounceRef.timer) clearTimeout(debounceRef.timer);
       supabase.removeChannel(channel);
     };

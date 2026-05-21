@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
 import { requireUserAuth, assertTenantMatch } from "../_shared/auth-guard.ts";
 import { ensureBlingToken } from "../_shared/bling-token-refresh.ts";
 import type { BlingConnectionRecord, ServiceClient } from "../_shared/supabase-types.ts";

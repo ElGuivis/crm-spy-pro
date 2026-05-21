@@ -5,7 +5,7 @@
  * Domain logic extracted to _shared/bling-sync-{orders,customers,products}.ts
  */
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
 import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
 import { ensureBlingToken } from "../_shared/bling-token-refresh.ts";
