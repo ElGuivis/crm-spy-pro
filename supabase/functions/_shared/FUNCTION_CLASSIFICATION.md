@@ -73,8 +73,8 @@ Internal callers use `Authorization: Bearer <service_role_key>` or `x-cron-secre
 | bling-job-processor | `useBlingSync.ts` | cron via li-job-processor (service_role) |
 | bling-products-job-processor | `useBlingSync.ts` | `bling-sync-products.ts` (service_role) |
 | bling-sync | `useBlingSync.ts` | cron, shared helpers (service_role) |
-| bulk-campaign-processor | `BulkCampaigns.tsx` | `bulk-campaign-scheduler` (service_role) |
-| email-campaign-send | `ConfirmSendDialog.tsx` | `email-campaign-scheduler` (service_role) |
+| bulk-campaign-processor | `BulkCampaigns.tsx` | `schedule_bulk_campaigns()` Postgres fn (cron #33) |
+| email-campaign-send | `ConfirmSendDialog.tsx` | `schedule_email_campaigns()` Postgres fn (cron #34) |
 | instagram-healthcheck | `InstagramChannelContext`, `useInstagramChannel` | cron monitoring (service_role) |
 | instagram-publish-content | `useInstagramContent.ts` | `instagram-schedule-content` (service_role) |
 | instagram-schedule-content | `useInstagramContent.ts` | cron (action=process) (service_role) |
@@ -84,7 +84,7 @@ Internal callers use `Authorization: Bearer <service_role_key>` or `x-cron-secre
 | li-reconciliation-processor | `ClientsContent`, `ProductsContent` | cron (service_role) |
 | li-sync | `InitialSyncProgress`, `ProductsContent`, `AddStoreConnectionDialog` | `li-job-processor` (service_role) |
 | me-job-processor | `useMelhorEnvioAutoSync.ts` | cron (service_role) |
-| rfm-calculator | `useRFMData.ts` | `rfm-cron-trigger` (service_role) |
+| rfm-calculator | `useRFMData.ts` | `trigger_rfm_calculations()` Postgres fn (cron #32) |
 
 #### HYBRID (OAuth) — state-based fallback for OAuth callbacks
 
@@ -145,17 +145,14 @@ These are called by pg_cron or other edge functions, never directly by users.
 | birthday-processor | Cron: birthday automations |
 
 | bot-engine | Called by whatsapp-webhook |
-| bulk-campaign-scheduler | Cron: schedule campaigns |
 | bulk-status-update-li | Cron: update LI statuses |
 | cashback-reminder-processor | Cron: cashback reminders |
 | conversation-inactivity-processor | Cron: inactivity timeouts |
-| email-campaign-scheduler | Cron: schedule email campaigns |
 | instagram-backfill-contacts | Internal: backfill contacts |
 | instagram-dead-letter-retry | Cron: retry dead letters |
 | instagram-experimental-trigger | Internal testing |
 | instagram-flow-resume-worker | Cron: resume paused flows |
 | instagram-flow-runner | Called by trigger-dispatcher |
-| instagram-metrics-rollup | Cron: aggregate metrics |
 | instagram-outbox-dispatch | Cron: dispatch outbox messages |
 | instagram-refresh-token | Cron: refresh expiring tokens |
 | instagram-save-contact-data | Called by flow-runner (no frontend callers) |
@@ -168,8 +165,6 @@ These are called by pg_cron or other edge functions, never directly by users.
 | li-job-processor | Cron: process LI sync jobs |
 | message-queue-processor | Cron: process message queue |
 | process-outbound-queue | Cron: dispatch outbound messages |
-| rfm-cron-trigger | Cron: trigger RFM recalculation |
-
 ## 🌐 PUBLIC (webhook/callback — no JWT, validates via signature/secret/state)
 Auth pattern: Signature verification (HMAC), token validation, or none (idempotent/safe).
 These MUST validate incoming data via other means (webhook signature, state token, etc.)

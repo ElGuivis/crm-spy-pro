@@ -292,9 +292,6 @@ verify_jwt = false
 [functions.instagram-flow-runner]
 verify_jwt = false
 
-[functions.instagram-metrics-rollup]
-verify_jwt = false
-
 [functions.instagram-sync-insights]
 # INTERNAL — daily cron: sync account + media insights from Meta Graph API
 verify_jwt = false
@@ -322,20 +319,8 @@ verify_jwt = false
 # INTERNAL — cron-triggered birthday message processor
 verify_jwt = false
 
-[functions.email-campaign-scheduler]
-# INTERNAL — cron-triggered email campaign scheduler
-verify_jwt = false
-
-[functions.rfm-cron-trigger]
-# INTERNAL — cron-triggered RFM recalculation
-verify_jwt = false
-
 [functions.reactivation-processor]
 # INTERNAL — cron: reactivation processing
-verify_jwt = false
-
-[functions.bulk-campaign-scheduler]
-# INTERNAL — cron: schedule campaigns
 verify_jwt = false
 
 # =============================================================================

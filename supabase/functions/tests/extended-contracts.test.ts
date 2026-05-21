@@ -58,7 +58,6 @@ const ADDITIONAL_INTERNAL_FUNCTIONS = [
   "instagram-outbox-dispatch",
   "instagram-webhook-worker",
   "instagram-flow-resume-worker",
-  "instagram-metrics-rollup",
   "message-queue-processor",
   "process-outbound-queue",
   "li-reconciliation-processor",

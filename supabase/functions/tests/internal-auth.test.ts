@@ -49,7 +49,6 @@ testRejectsWithoutInternalAuth("bot-engine", { conversation_id: "fake" });
 
 // --- Campaigns ---
 testRejectsWithoutInternalAuth("bulk-campaign-processor", { campaign_id: "fake" });
-testRejectsWithoutInternalAuth("bulk-campaign-scheduler");
 testRejectsWithoutInternalAuth("cashback-reminder-processor");
 
 // --- Birthday ---
@@ -63,7 +62,6 @@ testRejectsWithoutInternalAuth("bling-products-job-processor");
 testRejectsWithoutInternalAuth("conversation-inactivity-processor");
 
 // --- Email ---
-testRejectsWithoutInternalAuth("email-campaign-scheduler");
 testRejectsWithoutInternalAuth("email-campaign-send", { campaign_id: "fake" });
 
 // --- Instagram ---
@@ -73,7 +71,6 @@ testRejectsWithoutInternalAuth("instagram-experimental-trigger");
 testRejectsWithoutInternalAuth("instagram-flow-resume-worker");
 testRejectsWithoutInternalAuth("instagram-flow-runner", { run_id: "fake" });
 testRejectsWithoutInternalAuth("instagram-healthcheck");
-testRejectsWithoutInternalAuth("instagram-metrics-rollup");
 testRejectsWithoutInternalAuth("instagram-outbox-dispatch");
 testRejectsWithoutInternalAuth("instagram-refresh-token");
 testRejectsWithoutInternalAuth("instagram-seed-test-flows");
@@ -98,4 +95,3 @@ testRejectsWithoutInternalAuth("process-outbound-queue");
 
 // --- RFM ---
 testRejectsWithoutInternalAuth("rfm-calculator");
-testRejectsWithoutInternalAuth("rfm-cron-trigger");
