@@ -1,8 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import { useRFMCohort } from '@/hooks/useRFMCohort';
-import { CalendarRange } from 'lucide-react';
+import { CalendarRange, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface RFMCohortAnalysisProps {
@@ -23,6 +24,25 @@ function formatCohortLabel(cohort: string): string {
   const [year, month] = cohort.split('-');
   const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
   return `${months[parseInt(month) - 1]} ${year}`;
+}
+
+function exportCohortCSV(cohorts: ReturnType<typeof useRFMCohort>['cohorts'], retentionWindows: ReturnType<typeof useRFMCohort>['retentionWindows']) {
+  const header = ['Coorte', 'Clientes', ...retentionWindows.map((w) => w.label)].join(',');
+  const rows = cohorts.map((r) =>
+    [
+      formatCohortLabel(r.cohort),
+      r.cohortSize,
+      ...retentionWindows.map((w) => r.retention[w.key] ?? 0),
+    ].join(','),
+  );
+  const csv = [header, ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'cohort_retencao.csv';
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 export function RFMCohortAnalysis({ integrationId, sourceType }: RFMCohortAnalysisProps) {
@@ -61,13 +81,26 @@ export function RFMCohortAnalysis({ integrationId, sourceType }: RFMCohortAnalys
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
-          <CalendarRange className="h-5 w-5" />
-          Análise de Coortes — Retenção por Mês de 1ª Compra
-        </CardTitle>
-        <p className="text-sm text-muted-foreground">
-          % de clientes que fizeram uma 2ª compra dentro do período indicado após a 1ª compra
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <CalendarRange className="h-5 w-5" />
+              Análise de Coortes — Retenção por Mês de 1ª Compra
+            </CardTitle>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              % de clientes que fizeram uma 2ª compra dentro do período indicado após a 1ª compra
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 shrink-0"
+            onClick={() => exportCohortCSV(cohorts, retentionWindows)}
+          >
+            <Download className="h-3.5 w-3.5" />
+            Exportar CSV
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">

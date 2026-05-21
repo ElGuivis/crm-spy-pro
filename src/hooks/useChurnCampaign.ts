@@ -41,8 +41,10 @@ export function useChurnCampaign() {
     enabled: !!tenantId,
   });
 
+  const threshold = query.data?.churn_threshold ?? 0.7;
+
   const statsQuery = useQuery({
-    queryKey: ["churn-campaign-stats", tenantId],
+    queryKey: ["churn-campaign-stats", tenantId, threshold],
     queryFn: async () => {
       if (!tenantId) return { totalTriggeredThisMonth: 0, atRiskCount: 0 };
 
@@ -52,7 +54,7 @@ export function useChurnCampaign() {
         supabase.from("churn_campaign_triggers").select("id", { count: "exact", head: true })
           .eq("tenant_id", tenantId).gte("triggered_at", monthStart),
         supabase.from("customer_rfm_snapshots").select("customer_id", { count: "exact", head: true })
-          .eq("tenant_id", tenantId).gte("churn_probability", 0.7),
+          .eq("tenant_id", tenantId).gte("churn_probability", threshold),
       ]);
 
       return { totalTriggeredThisMonth: triggeredCount || 0, atRiskCount: atRiskCount || 0 };

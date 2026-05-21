@@ -15,7 +15,9 @@ import { RFMCohortAnalysis } from './RFMCohortAnalysis';
 import { RFMPredictions } from './RFMPredictions';
 import { RFMLtvChurn } from './RFMLtvChurn';
 import { ChurnCampaignCard } from './ChurnCampaignCard';
-import { Calculator, Users, DollarSign, Repeat, CalendarClock, Loader2, Layers, CalendarRange, TrendingUp, Activity, Zap } from 'lucide-react';
+import { RFMRevenueAttribution } from './RFMRevenueAttribution';
+import { RFMSalesFunnel } from './RFMSalesFunnel';
+import { Calculator, Users, DollarSign, Repeat, CalendarClock, Loader2, Layers, CalendarRange, TrendingUp, Activity, Zap, GitMerge, BarChart3 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -116,30 +118,38 @@ export function RFMDashboard({ integrationId, sourceType, integrationName }: RFM
 
       {totalClients > 0 && (
         <Tabs defaultValue="global" className="w-full">
-          <TabsList>
-            <TabsTrigger value="global" className="gap-2">
-              <Users className="h-4 w-4" />
+          <TabsList className="h-auto flex-wrap gap-1 justify-start">
+            <TabsTrigger value="global" className="gap-1.5 text-xs">
+              <Users className="h-3.5 w-3.5" />
               Visão Global
             </TabsTrigger>
-            <TabsTrigger value="category" className="gap-2">
-              <Layers className="h-4 w-4" />
+            <TabsTrigger value="category" className="gap-1.5 text-xs">
+              <Layers className="h-3.5 w-3.5" />
               Por Categoria
             </TabsTrigger>
-            <TabsTrigger value="cohort" className="gap-2">
-              <CalendarRange className="h-4 w-4" />
+            <TabsTrigger value="cohort" className="gap-1.5 text-xs">
+              <CalendarRange className="h-3.5 w-3.5" />
               Coortes
             </TabsTrigger>
-            <TabsTrigger value="predictions" className="gap-2">
-              <TrendingUp className="h-4 w-4" />
+            <TabsTrigger value="predictions" className="gap-1.5 text-xs">
+              <TrendingUp className="h-3.5 w-3.5" />
               Previsões
             </TabsTrigger>
-            <TabsTrigger value="ltv" className="gap-2">
-              <Activity className="h-4 w-4" />
+            <TabsTrigger value="ltv" className="gap-1.5 text-xs">
+              <Activity className="h-3.5 w-3.5" />
               LTV & Churn
             </TabsTrigger>
-            <TabsTrigger value="automacao" className="gap-2">
-              <Zap className="h-4 w-4" />
+            <TabsTrigger value="automacao" className="gap-1.5 text-xs">
+              <Zap className="h-3.5 w-3.5" />
               Automação
+            </TabsTrigger>
+            <TabsTrigger value="atribuicao" className="gap-1.5 text-xs">
+              <BarChart3 className="h-3.5 w-3.5" />
+              Atribuição
+            </TabsTrigger>
+            <TabsTrigger value="funil" className="gap-1.5 text-xs">
+              <GitMerge className="h-3.5 w-3.5" />
+              Funil
             </TabsTrigger>
           </TabsList>
 
@@ -216,6 +226,14 @@ export function RFMDashboard({ integrationId, sourceType, integrationName }: RFM
             <div className="max-w-xl">
               <ChurnCampaignCard />
             </div>
+          </TabsContent>
+
+          <TabsContent value="atribuicao" className="mt-4">
+            <RFMRevenueAttribution />
+          </TabsContent>
+
+          <TabsContent value="funil" className="mt-4">
+            <RFMSalesFunnel snapshots={snapshots} />
           </TabsContent>
         </Tabs>
       )}
