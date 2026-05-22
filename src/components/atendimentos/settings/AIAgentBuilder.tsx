@@ -83,7 +83,7 @@ export function AIAgentBuilder() {
         </CardContent>
       </Card>
 
-      {agent && <AIAgentEditor agent={agent} onUpdate={updateAgent.mutateAsync} isPending={updateAgent.isPending} />}
+      {agent && <AIAgentEditor key={agent.id} agent={agent} onUpdate={updateAgent.mutateAsync} isPending={updateAgent.isPending} />}
 
       {!agent && agents.length > 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
