@@ -103,17 +103,29 @@ serve(async (req) => {
     }
     await supabase.from("oauth_states").delete().eq("id", stateData.id);
 
-    // 2. Exchange code for token
-    const tokenRes = await fetch(TOKEN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: NUVEMSHOP_APP_ID,
-        client_secret: NUVEMSHOP_CLIENT_SECRET,
-        grant_type: "authorization_code",
-        code,
-      }),
-    });
+    // 2. Exchange code for token (com timeout 10s pra evitar pendurar wall time da edge fn)
+    const tokenController = new AbortController();
+    const tokenTimeout = setTimeout(() => tokenController.abort(), 10000);
+    let tokenRes: Response;
+    try {
+      tokenRes = await fetch(TOKEN_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: NUVEMSHOP_APP_ID,
+          client_secret: NUVEMSHOP_CLIENT_SECRET,
+          grant_type: "authorization_code",
+          code,
+        }),
+        signal: tokenController.signal,
+      });
+    } catch (err) {
+      clearTimeout(tokenTimeout);
+      const aborted = (err as Error).name === "AbortError";
+      log.error("[nuvemshop-oauth-callback] Token exchange fetch error:", aborted ? "TIMEOUT (10s)" : (err as Error).message);
+      return safeRedirect(frontendUrl, aborted ? "ns_error=token_exchange_timeout" : "ns_error=token_exchange_failed");
+    }
+    clearTimeout(tokenTimeout);
 
     const tokenData = await tokenRes.json().catch(() => ({}));
     if (!tokenRes.ok || !tokenData.access_token || !tokenData.user_id) {

@@ -16,6 +16,7 @@ import { VariablesPicker } from '../VariablesPicker';
 import { ProductPickerDialog } from './ProductPickerDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface BlockPropertiesPanelProps {
   block: EmailBlock | null;
@@ -27,16 +28,22 @@ export function BlockPropertiesPanel({ block, onUpdate, onClose }: BlockProperti
   const [productPickerOpen, setProductPickerOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const { toast } = useToast();
+  const { tenantId } = useAuth();
 
   const handleImageUpload = async (file: File, field: string) => {
     if (!file.type.startsWith('image/')) {
       toast({ title: 'Arquivo inválido', description: 'Selecione uma imagem (JPEG, PNG, GIF, WebP).', variant: 'destructive' });
       return;
     }
+    if (!tenantId) {
+      toast({ title: 'Erro de autenticação', description: 'Faça login novamente.', variant: 'destructive' });
+      return;
+    }
     setUploading(true);
     try {
       const ext = file.name.split('.').pop() ?? 'jpg';
-      const path = `${crypto.randomUUID()}.${ext}`;
+      // Path com prefixo de tenant para permitir isolamento via RLS
+      const path = `${tenantId}/${crypto.randomUUID()}.${ext}`;
       const { error } = await supabase.storage.from('email-images').upload(path, file, { upsert: false });
       if (error) throw error;
       const { data: { publicUrl } } = supabase.storage.from('email-images').getPublicUrl(path);

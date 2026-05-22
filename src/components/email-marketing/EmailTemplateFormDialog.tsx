@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -91,12 +91,19 @@ export function EmailTemplateFormDialog({
     },
   });
 
+  const skipDirtyRef = useRef(false);
+  const resetSilently = useCallback((values?: Parameters<typeof form.reset>[0]) => {
+    skipDirtyRef.current = true;
+    form.reset(values);
+    setTimeout(() => { skipDirtyRef.current = false; }, 0);
+  }, [form]);
+
   // Reset all state when dialog opens
   useEffect(() => {
     if (open) {
       if (!templateId) {
         // Creating new template — reset everything
-        form.reset({
+        resetSilently({
           name: "",
           description: "",
           template_type: "newsletter",
@@ -110,16 +117,10 @@ export function EmailTemplateFormDialog({
     }
   }, [open, templateId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (defaultValues) {
-      form.reset(defaultValues);
-    }
-  }, [defaultValues, form]);
-
   // Load existing template content AND form fields
   useEffect(() => {
     if (existingTemplate) {
-      form.reset({
+      resetSilently({
         name: existingTemplate.name || '',
         description: existingTemplate.description || '',
         template_type: (existingTemplate.template_type as TemplateFormData['template_type']) || 'newsletter',
@@ -131,11 +132,14 @@ export function EmailTemplateFormDialog({
       setEditorKey(prev => prev + 1);
       setIsDirty(false);
     }
-  }, [existingTemplate, form]);
+  }, [existingTemplate, resetSilently]);
 
-  // Track dirtiness
+  // Track dirtiness (skip during programmatic resets)
   useEffect(() => {
-    const subscription = form.watch(() => setIsDirty(true));
+    const subscription = form.watch(() => {
+      if (skipDirtyRef.current) return;
+      setIsDirty(true);
+    });
     return () => subscription.unsubscribe();
   }, [form]);
 

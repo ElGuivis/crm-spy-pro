@@ -153,33 +153,25 @@ export default function Team() {
     },
   });
 
-  // Update permissions mutation
+  // Update permissions mutation (atomic via RPC)
   const updatePermissionsMutation = useMutation({
     mutationFn: async ({ memberId, permissions }: {
       memberId: string;
       permissions: Record<string, { view: boolean; edit: boolean }>;
     }) => {
-      await supabase
-        .from('member_permissions')
-        .delete()
-        .eq('team_member_id', memberId);
-
-      const newPermissions = Object.entries(permissions)
+      const permissionsPayload = Object.entries(permissions)
         .filter(([_, perms]) => perms.view || perms.edit)
         .map(([module, perms]) => ({
-          team_member_id: memberId,
-          permission: module as ModulePermission,
+          permission: module,
           can_view: perms.view,
           can_edit: perms.edit,
         }));
 
-      if (newPermissions.length > 0) {
-        const { error } = await supabase
-          .from('member_permissions')
-          .insert(newPermissions);
-
-        if (error) throw error;
-      }
+      const { error } = await (supabase.rpc as any)('replace_member_permissions', {
+        p_team_member_id: memberId,
+        p_permissions: permissionsPayload,
+      });
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['member-permissions'] });
