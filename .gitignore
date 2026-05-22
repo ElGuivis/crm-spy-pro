@@ -36,3 +36,7 @@ edge-functions-export/
 
 # Commit message scratchpad (Bash interop on Windows)
 .commit-msg.tmp
+
+# Audit scratchpads
+.audit-*.sql
+.audit-*.log
