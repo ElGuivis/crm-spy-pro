@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -145,9 +145,16 @@ export function useEmailCampaignForm({ open, onOpenChange, campaignId, defaultVa
 
   const totalSenders = (integrationSenders?.length || 0) + 1;
 
+  const skipDirtyRef = useRef(false);
+  const resetSilently = useCallback((values: Parameters<typeof form.reset>[0]) => {
+    skipDirtyRef.current = true;
+    form.reset(values);
+    setTimeout(() => { skipDirtyRef.current = false; }, 0);
+  }, [form]);
+
   useEffect(() => {
     if (open && !campaignId) {
-      form.reset({ internal_name: "", subject: "", preheader: "", sender_name: "", sender_email: "", reply_to: "", campaign_type: "newsletter", email_integration_id: "", ...initialDefaultValues });
+      resetSilently({ internal_name: "", subject: "", preheader: "", sender_name: "", sender_email: "", reply_to: "", campaign_type: "newsletter", email_integration_id: "", ...initialDefaultValues });
       setEmailContent(null);
       setEmailHTML("");
       setActiveTab("details");
@@ -161,23 +168,24 @@ export function useEmailCampaignForm({ open, onOpenChange, campaignId, defaultVa
 
   useEffect(() => {
     const subscription = form.watch((values) => {
-      setIsDirty(true);
       setWatchedIntegrationId(values.email_integration_id || undefined);
+      if (skipDirtyRef.current) return;
+      setIsDirty(true);
     });
     return () => subscription.unsubscribe();
   }, [form]);
 
   useEffect(() => {
     if (initialDefaultValues) {
-      form.reset(initialDefaultValues);
+      resetSilently(initialDefaultValues);
       setIsDirty(false);
     }
-  }, [initialDefaultValues, form]);
+  }, [initialDefaultValues, resetSilently]);
 
   useEffect(() => {
     if (existingCampaign) {
       const integId = (existingCampaign as any).email_integration_id || "";
-      form.reset({
+      resetSilently({
         internal_name: existingCampaign.internal_name || "",
         subject: existingCampaign.subject || "",
         preheader: existingCampaign.preheader || "",
@@ -201,7 +209,7 @@ export function useEmailCampaignForm({ open, onOpenChange, campaignId, defaultVa
       setEditorKey((prev) => prev + 1);
       setIsDirty(false);
     }
-  }, [existingCampaign, form]);
+  }, [existingCampaign, resetSilently]);
 
   useEffect(() => {
     let cancelled = false;
