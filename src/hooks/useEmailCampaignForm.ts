@@ -176,13 +176,6 @@ export function useEmailCampaignForm({ open, onOpenChange, campaignId, defaultVa
   }, [form]);
 
   useEffect(() => {
-    if (initialDefaultValues) {
-      resetSilently(initialDefaultValues);
-      setIsDirty(false);
-    }
-  }, [initialDefaultValues, resetSilently]);
-
-  useEffect(() => {
     if (existingCampaign) {
       const integId = (existingCampaign as any).email_integration_id || "";
       resetSilently({
