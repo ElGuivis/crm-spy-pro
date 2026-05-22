@@ -328,15 +328,9 @@ export function ReactivationConfigDialog({ open, onOpenChange, editingId, onSave
         configId = inserted.id;
       }
 
-      // Save cycle steps
+      // Save cycle steps atomically via RPC (transaction-safe replace)
       if (configId) {
-        // Delete existing steps and re-insert
-        await supabase.from('reactivation_cycle_steps').delete().eq('config_id', configId);
-
-        const stepsToInsert = config.cycleSteps.map((step, idx) => ({
-          config_id: configId,
-          tenant_id: tenant?.id,
-          step_number: idx + 1,
+        const stepsPayload = config.cycleSteps.map((step) => ({
           delay_days: step.delayDays,
           message_template: step.messageTemplate,
           is_active: step.isActive,
@@ -344,8 +338,11 @@ export function ReactivationConfigDialog({ open, onOpenChange, editingId, onSave
           coupon_discount_percent: step.useCustomCoupon ? step.couponDiscountPercent : null,
           coupon_duration_days: step.useCustomCoupon ? step.couponDurationDays : null,
         }));
-
-        const { error: stepsError } = await supabase.from('reactivation_cycle_steps').insert(stepsToInsert);
+        const { error: stepsError } = await (supabase.rpc as any)('replace_reactivation_cycle_steps', {
+          p_config_id: configId,
+          p_tenant_id: tenant?.id,
+          p_steps: stepsPayload,
+        });
         if (stepsError) throw stepsError;
       }
 

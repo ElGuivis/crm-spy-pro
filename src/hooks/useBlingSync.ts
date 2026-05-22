@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useId } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 import { createLogger } from '@/lib/logger';
@@ -81,11 +81,12 @@ export function useBlingSync(integrationId: string, syncType: string = 'all'): U
   }, [integrationId, syncType]);
 
   // Subscribe to job updates
+  const channelInstanceId = useId();
   useEffect(() => {
     if (!integrationId) return;
 
     const channel = supabase
-      .channel(`bling-sync-${integrationId}-${syncType}-${Date.now()}`)
+      .channel(`bling-sync-${integrationId}-${syncType}-${channelInstanceId}`)
       .on(
         'postgres_changes',
         {
@@ -150,7 +151,7 @@ export function useBlingSync(integrationId: string, syncType: string = 'all'): U
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [integrationId, syncType]);
+  }, [integrationId, syncType, channelInstanceId]);
 
   // Periodically check heartbeat age for stuck detection
   useEffect(() => {

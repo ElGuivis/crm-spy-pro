@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -242,11 +242,12 @@ export function useRFMData(integrationId: string) {
   }
 
   // Realtime subscription for auto-refresh when snapshots change
+  const rfmChannelInstanceId = useId();
   useEffect(() => {
     if (!integrationId) return;
 
     const channel = supabase
-      .channel(`rfm-snapshots-${integrationId}-${Date.now()}`)
+      .channel(`rfm-snapshots-${integrationId}-${rfmChannelInstanceId}`)
       .on(
         'postgres_changes',
         {
@@ -267,7 +268,7 @@ export function useRFMData(integrationId: string) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [integrationId, queryClient]);
+  }, [integrationId, queryClient, rfmChannelInstanceId]);
 
   return {
     snapshots: snapshots || [],

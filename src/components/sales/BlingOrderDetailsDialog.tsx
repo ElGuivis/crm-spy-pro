@@ -32,6 +32,7 @@ export function BlingOrderDetailsDialog({
   const [loadingCustomer, setLoadingCustomer] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     async function fetchCustomer() {
       if (!order?.cliente_id || !order?.integration_id) { setCustomer(null); return; }
       setLoadingCustomer(true);
@@ -42,15 +43,17 @@ export function BlingOrderDetailsDialog({
           .eq('bling_id', order.cliente_id)
           .eq('integration_id', order.integration_id)
           .maybeSingle();
+        if (cancelled) return;
         if (error) log.error('Error fetching customer:', error);
         else setCustomer(data);
       } catch (err) {
-        log.error('Error fetching customer:', err);
+        if (!cancelled) log.error('Error fetching customer:', err);
       } finally {
-        setLoadingCustomer(false);
+        if (!cancelled) setLoadingCustomer(false);
       }
     }
     if (open && order) fetchCustomer();
+    return () => { cancelled = true; };
   }, [order, open]);
 
   const copyToClipboard = (text: string, label: string) => {

@@ -33,3 +33,6 @@ edge-functions-export/
 
 # Claude Code session
 .claude/
+
+# Commit message scratchpad (Bash interop on Windows)
+.commit-msg.tmp

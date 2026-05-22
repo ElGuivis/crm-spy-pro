@@ -106,45 +106,31 @@ export function useInstagramFlowBuilder(flowId: string | null) {
     if (!currentVersionId || !tenantId) return;
     setIsSaving(true);
     try {
-      // Delete existing and re-insert
-      await Promise.all([
-        supabase.from("instagram_flow_edges").delete().eq("version_id", currentVersionId),
-      ]);
-      // Must delete edges first (FK), then nodes
-      await supabase.from("instagram_flow_nodes").delete().eq("version_id", currentVersionId);
-
-      // Insert nodes
-      if (updatedNodes.length > 0) {
-        const nodeInserts = updatedNodes.map(n => ({
-          id: n.id,
-          tenant_id: tenantId,
-          version_id: currentVersionId,
-          node_type: n.node_type,
-          label: n.label,
-          config: n.config,
-          position_x: n.position_x,
-          position_y: n.position_y,
-          is_entry: n.is_entry,
-        }));
-        const { error: nErr } = await supabase.from("instagram_flow_nodes").insert(nodeInserts);
-        if (nErr) throw nErr;
-      }
-
-      // Insert edges
-      if (updatedEdges.length > 0) {
-        const edgeInserts = updatedEdges.map(e => ({
-          id: e.id,
-          tenant_id: tenantId,
-          version_id: currentVersionId,
-          source_node_id: e.source_node_id,
-          target_node_id: e.target_node_id,
-          source_handle: e.source_handle,
-          label: e.label,
-          condition: e.condition,
-        }));
-        const { error: eErr } = await supabase.from("instagram_flow_edges").insert(edgeInserts);
-        if (eErr) throw eErr;
-      }
+      // Atomic replace via RPC (transacao unica)
+      const nodesPayload = updatedNodes.map(n => ({
+        id: n.id,
+        node_type: n.node_type,
+        label: n.label,
+        config: n.config,
+        position_x: n.position_x,
+        position_y: n.position_y,
+        is_entry: n.is_entry,
+      }));
+      const edgesPayload = updatedEdges.map(e => ({
+        id: e.id,
+        source_node_id: e.source_node_id,
+        target_node_id: e.target_node_id,
+        source_handle: e.source_handle,
+        label: e.label,
+        condition: e.condition,
+      }));
+      const { error } = await (supabase.rpc as any)("replace_instagram_flow_version", {
+        p_version_id: currentVersionId,
+        p_tenant_id: tenantId,
+        p_nodes: nodesPayload,
+        p_edges: edgesPayload,
+      });
+      if (error) throw error;
 
       setNodes(updatedNodes);
       setEdges(updatedEdges);

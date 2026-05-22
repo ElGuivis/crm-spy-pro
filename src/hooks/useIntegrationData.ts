@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useId } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -225,11 +225,12 @@ export function useIntegrationData({ category }: UseIntegrationDataOptions) {
   }, [fetchIntegrations]);
 
   // Subscribe to integration changes
+  const integrationsChannelId = useId();
   useEffect(() => {
     if (!tenantId) return;
 
     const channel = supabase
-      .channel(`integrations-${category}-${Date.now()}`)
+      .channel(`integrations-${category}-${integrationsChannelId}`)
       .on(
         'postgres_changes',
         {
@@ -247,7 +248,7 @@ export function useIntegrationData({ category }: UseIntegrationDataOptions) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [tenantId, category, fetchIntegrations]);
+  }, [tenantId, category, fetchIntegrations, integrationsChannelId]);
 
   return {
     integrations,

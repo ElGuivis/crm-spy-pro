@@ -116,40 +116,29 @@ export function ChatbotFlowCanvas({ flowId, flowName, onBack }: Props) {
   };
 
   const persistFlow = async () => {
-    // Delete all then re-insert (simple replace strategy)
-    await supabase.from("chatbot_flow_edges" as any).delete().eq("flow_id", flowId);
-    await supabase.from("chatbot_flow_nodes" as any).delete().eq("flow_id", flowId);
-
-    if (nodes.length > 0) {
-      const { error } = await supabase.from("chatbot_flow_nodes" as any).insert(
-        nodes.map((n) => ({
-          id: n.id,
-          flow_id: flowId,
-          tenant_id: tenantId!,
-          node_type: n.type!,
-          label: String((n.data as any).label || "") || null,
-          config: (n.data as any).config ?? {},
-          position_x: n.position.x,
-          position_y: n.position.y,
-          is_entry: !!(n.data as any).is_entry,
-        })),
-      );
-      if (error) throw error;
-    }
-
-    if (edges.length > 0) {
-      const { error } = await supabase.from("chatbot_flow_edges" as any).insert(
-        edges.map((e) => ({
-          id: e.id,
-          flow_id: flowId,
-          tenant_id: tenantId!,
-          source_node_id: e.source,
-          target_node_id: e.target,
-          condition: e.sourceHandle ? { source_handle: e.sourceHandle } : (e.data as any)?.condition ?? null,
-        })),
-      );
-      if (error) throw error;
-    }
+    // Atomic replace via RPC (transacao unica — falha em qualquer ponto faz rollback)
+    const nodesPayload = nodes.map((n) => ({
+      id: n.id,
+      node_type: n.type!,
+      label: String((n.data as any).label || "") || null,
+      config: (n.data as any).config ?? {},
+      position_x: n.position.x,
+      position_y: n.position.y,
+      is_entry: !!(n.data as any).is_entry,
+    }));
+    const edgesPayload = edges.map((e) => ({
+      id: e.id,
+      source_node_id: e.source,
+      target_node_id: e.target,
+      condition: e.sourceHandle ? { source_handle: e.sourceHandle } : (e.data as any)?.condition ?? null,
+    }));
+    const { error } = await (supabase.rpc as any)("replace_chatbot_flow", {
+      p_flow_id: flowId,
+      p_tenant_id: tenantId!,
+      p_nodes: nodesPayload,
+      p_edges: edgesPayload,
+    });
+    if (error) throw error;
   };
 
   const handleSave = async () => {

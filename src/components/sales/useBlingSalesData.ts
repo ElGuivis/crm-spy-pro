@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useId } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useBlingSync } from "@/hooks/useBlingSync";
@@ -155,15 +155,16 @@ export function useBlingSalesData(integrationId: string) {
   useEffect(() => { fetchOrders(); fetchStats(); fetchIntegrationName(); }, [fetchOrders, fetchStats, fetchIntegrationName]);
   useEffect(() => { setCurrentPage(1); }, [searchTerm]);
 
+  const channelInstanceId = useId();
   useEffect(() => {
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    const channel = supabase.channel(`bling-orders-${integrationId}-${Date.now()}`)
+    const channel = supabase.channel(`bling-orders-${integrationId}-${channelInstanceId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bling_orders', filter: `integration_id=eq.${integrationId}` }, () => {
         if (debounceTimer) clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => { silentRefresh(); fetchStats(); }, 500);
       }).subscribe();
     return () => { if (debounceTimer) clearTimeout(debounceTimer); supabase.removeChannel(channel); };
-  }, [integrationId, silentRefresh, fetchStats]);
+  }, [integrationId, silentRefresh, fetchStats, channelInstanceId]);
 
   useEffect(() => { if (syncStatus === 'completed') { silentRefresh(); fetchStats(); } }, [syncStatus, silentRefresh, fetchStats]);
 
