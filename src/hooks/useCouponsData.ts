@@ -90,11 +90,19 @@ export function useCouponsData(integrationId: string) {
   }, [integrationId]);
 
   useEffect(() => {
-    const { data: integData } = supabase.from("integrations").select("name, type").eq("id", integrationId).single().then(({ data }) => {
-      if (data) { setIntegrationName(data.name); setIntegrationType(data.type || ""); }
-      return { data };
-    });
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase.from("integrations").select("name, type").eq("id", integrationId).single();
+        if (cancelled) return;
+        if (error) { log.error("Error loading integration info:", error); return; }
+        if (data) { setIntegrationName(data.name); setIntegrationType(data.type || ""); }
+      } catch (e) {
+        if (!cancelled) log.error("Error loading integration info:", e);
+      }
+    })();
     loadCoupons();
+    return () => { cancelled = true; };
   }, [integrationId, loadCoupons]);
 
   useEffect(() => {

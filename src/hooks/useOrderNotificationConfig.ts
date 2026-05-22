@@ -246,16 +246,21 @@ export function useOrderNotificationConfig({ open, onOpenChange, editingId, onSa
         configId = data.id;
       }
       if (configId) {
-        await supabase.from("order_notification_status_rules").delete().eq("config_id", configId);
-        const rulesData = config.status_rules.filter((r) => r.is_enabled).map((r) => ({
-          config_id: configId, tenant_id: tenant?.id, status_name: r.status_name,
-          status_id: r.status_id || null, is_enabled: r.is_enabled, message_template: r.message_template,
-          email_subject: r.email_subject || null, email_body: r.email_body || null, delay_minutes: r.delay_minutes || 0,
+        const rulesPayload = config.status_rules.filter((r) => r.is_enabled).map((r) => ({
+          status_name: r.status_name,
+          status_id: r.status_id ?? null,
+          is_enabled: r.is_enabled,
+          message_template: r.message_template,
+          email_subject: r.email_subject || null,
+          email_body: r.email_body || null,
+          delay_minutes: r.delay_minutes || 0,
         }));
-        if (rulesData.length > 0) {
-          const { error: rulesError } = await supabase.from("order_notification_status_rules").insert(rulesData);
-          if (rulesError) throw rulesError;
-        }
+        const { error: rpcError } = await (supabase.rpc as any)("replace_order_notification_rules", {
+          p_config_id: configId,
+          p_tenant_id: tenant?.id,
+          p_rules: rulesPayload,
+        });
+        if (rpcError) throw rpcError;
       }
       onSave();
       toast({ title: "Configuração salva", description: editingId ? "A notificação de pedido foi atualizada." : "Nova notificação de pedido criada." });

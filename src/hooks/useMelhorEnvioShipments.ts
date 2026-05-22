@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useId } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from "@/lib/logger";
 import { MelhorEnvioShipment, ShipmentFilters, GlobalShipmentStats, calculateAverageDeliveryDays } from "./melhor-envio-types";
@@ -84,15 +84,15 @@ export function useMelhorEnvioShipments(filters: ShipmentFilters = {}) {
 
   useEffect(() => { fetchShipments(); fetchGlobalStats(); }, [fetchShipments, fetchGlobalStats]);
 
+  const instanceId = useId();
   useEffect(() => {
-    const channel = supabase.channel("me_shipments_changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "me_shipments" }, (payload) => {
-        if (payload.eventType === "INSERT") setShipments((prev) => [payload.new as MelhorEnvioShipment, ...prev]);
-        else if (payload.eventType === "UPDATE") setShipments((prev) => prev.map((s) => s.id === (payload.new as any).id ? payload.new as MelhorEnvioShipment : s));
-        else if (payload.eventType === "DELETE") setShipments((prev) => prev.filter((s) => s.id !== (payload.old as any).id));
+    const channel = supabase.channel(`me_shipments_changes_${instanceId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "me_shipments" }, () => {
+        fetchShipments();
+        fetchGlobalStats();
       }).subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [instanceId, fetchShipments, fetchGlobalStats]);
 
   const carriers = [...new Set(shipments.map((s) => s.carrier).filter(Boolean))];
   const cities = [...new Set(shipments.map((s) => s.receiver_city).filter(Boolean))];
