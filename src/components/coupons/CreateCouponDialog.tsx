@@ -93,8 +93,8 @@ export const CreateCouponDialog = ({
 
   const selectedType = form.watch("tipo");
 
-  const platformName = integrationType === 'bling' ? 'Bling' : integrationType === 'nuvem_shop' ? 'Nuvemshop' : 'Loja Integrada';
-  const functionName = integrationType === 'bling' ? 'bling-coupon-create' : integrationType === 'nuvem_shop' ? 'nuvemshop-coupon-create' : 'li-coupon-create';
+  const platformName = integrationType === 'bling' ? 'Bling' : integrationType === 'nuvemshop' ? 'Nuvemshop' : 'Loja Integrada';
+  const functionName = integrationType === 'bling' ? 'bling-coupon-create' : integrationType === 'nuvemshop' ? 'nuvemshop-coupon-create' : 'li-coupon-create';
 
   const onSubmit = async (data: CouponFormData) => {
     setIsSubmitting(true);

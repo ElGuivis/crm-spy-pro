@@ -101,13 +101,13 @@ export const defaultConfig: CashbackConfig = {
   reminder2Message: DEFAULT_REMINDER_2,
 };
 
-export const STORE_TYPES = ['loja_integrada', 'nuvem_shop', 'shopify', 'woocommerce'];
+export const STORE_TYPES = ['loja_integrada', 'nuvemshop', 'shopify', 'woocommerce'];
 export const WHATSAPP_TYPES = ['evolution_whatsapp', 'whatsapp_api', 'z_api'];
 
 export const getStoreIntegrationIcon = (type: string): string => {
   switch (type) {
     case 'loja_integrada': return '🛒';
-    case 'nuvem_shop': return '☁️';
+    case 'nuvemshop': return '☁️';
     case 'shopify': return '🛍️';
     case 'woocommerce': return '🔮';
     default: return '🏪';

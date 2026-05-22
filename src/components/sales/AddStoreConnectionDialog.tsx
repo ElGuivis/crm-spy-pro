@@ -40,7 +40,7 @@ const STORE_TYPES: StoreType[] = [
     ]
   },
   {
-    id: 'nuvem_shop',
+    id: 'nuvemshop',
     name: 'Nuvem Shop',
     description: 'Plataforma de e-commerce completa',
     color: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
@@ -99,7 +99,7 @@ export function AddStoreConnectionDialog({
 
       if (!tenantId) return;
 
-      const ecommerceTypes = ['loja_integrada', 'bling', 'nuvem_shop'];
+      const ecommerceTypes = ['loja_integrada', 'bling', 'nuvemshop'];
       
       const { data: integrations } = await supabase
         .from('integrations')

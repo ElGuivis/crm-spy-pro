@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
       statuses = Array.from(statusMap.values()).sort((a, b) => 
         a.name.localeCompare(b.name, 'pt-BR')
       );
-    } else if (integration.type === 'nuvem_shop') {
+    } else if (integration.type === 'nuvemshop') {
       // Default Nuvemshop statuses
       statuses = [
         { id: 1, name: 'Aberto' },

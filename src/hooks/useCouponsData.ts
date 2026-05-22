@@ -113,7 +113,7 @@ export function useCouponsData(integrationId: string) {
     setIsSyncing(true);
     setSyncProgress(null);
     try {
-      const syncFunction = integrationType === "bling" ? "bling-coupon-sync" : integrationType === "nuvem_shop" ? "nuvemshop-coupon-sync" : "li-coupon-sync";
+      const syncFunction = integrationType === "bling" ? "bling-coupon-sync" : integrationType === "nuvemshop" ? "nuvemshop-coupon-sync" : "li-coupon-sync";
       const { data, error } = await supabase.functions.invoke(syncFunction, { body: { integrationId, action } });
       if (error) throw error;
       const newCount = data.new ?? data.synced ?? 0;

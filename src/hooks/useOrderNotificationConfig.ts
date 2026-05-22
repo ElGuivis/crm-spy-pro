@@ -57,11 +57,11 @@ const DEFAULT_MESSAGES: Record<string, string> = {
   "Pedido Cancelado": "Olá {{cliente_primeiro_nome}}, seu pedido #{{numero_pedido}} foi cancelado. Se tiver dúvidas, entre em contato.",
 };
 
-const STORE_TYPES = ["loja_integrada", "nuvem_shop", "shopify", "woocommerce", "bling"];
+const STORE_TYPES = ["loja_integrada", "nuvemshop", "shopify", "woocommerce", "bling"];
 const WHATSAPP_TYPES = ["evolution_whatsapp", "whatsapp_api", "z_api"];
 
 export const getStoreIntegrationIcon = (type: string): string => {
-  const map: Record<string, string> = { loja_integrada: "🛒", nuvem_shop: "☁️", shopify: "🛍️", woocommerce: "🔮", bling: "📊" };
+  const map: Record<string, string> = { loja_integrada: "🛒", nuvemshop: "☁️", shopify: "🛍️", woocommerce: "🔮", bling: "📊" };
   return map[type] || "🏪";
 };
 

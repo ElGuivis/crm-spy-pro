@@ -18,7 +18,7 @@ function IntegrationSelector({ onSelect }: { onSelect: (id: string) => void }) {
         .select("id, name, type, status")
         .eq("tenant_id", tenantId!)
         .eq("status", "connected")
-        .in("type", ["loja_integrada", "bling", "nuvem_shop"])
+        .in("type", ["loja_integrada", "bling", "nuvemshop"])
         .order("name");
       return data || [];
     },
