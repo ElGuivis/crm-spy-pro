@@ -75,11 +75,18 @@ export function IntegrationTypePanel({
   }
 
   if (integrationType === "ai") {
+    const aiProviderLabels: Record<string, string> = {
+      ai_openai: "OpenAI (GPT)",
+      ai_google: "Google AI (Gemini)",
+      ai_groq: "Groq (Llama/Mixtral)",
+      ai_mistral: "Mistral AI",
+    };
+    const aiLabel = type && aiProviderLabels[type] ? aiProviderLabels[type] : "Provedor de IA";
     return (
       <div className="mt-4 p-3 rounded-lg bg-muted/30 border border-border/50">
         <div className="flex items-center gap-2 text-sm">
           {status === "connected"
-            ? <><Bot className="h-4 w-4 text-violet-500" /><span className="text-violet-600 font-medium">{type === "ai_openai" ? "OpenAI (GPT)" : "Google AI (Gemini)"}</span></>
+            ? <><Bot className="h-4 w-4 text-violet-500" /><span className="text-violet-600 font-medium">{aiLabel}</span></>
             : <><AlertCircle className="h-4 w-4 text-destructive" /><span className="text-destructive font-medium">Desconectado</span></>}
         </div>
         <Button

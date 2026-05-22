@@ -67,10 +67,6 @@ export function useMelhorEnvio() {
     }
   }, [toast]);
 
-  const handleCallback = useCallback(async (_code: string) => {
-    logger.debug("handleCallback called - processed by backend");
-  }, []);
-
   const disconnect = useCallback(async () => {
     try {
       const { data: result, error } = await supabase.functions.invoke("melhor-envio", { body: { action: "disconnect" } });
@@ -126,5 +122,5 @@ export function useMelhorEnvio() {
     }
   }, [toast]);
 
-  return { status, isLoading, isConnecting, isSyncing, syncProgress, startOAuthFlow, handleCallback, disconnect, syncShipments, syncTracking, syncSingleShipment, refetch: fetchStatus };
+  return { status, isLoading, isConnecting, isSyncing, syncProgress, startOAuthFlow, disconnect, syncShipments, syncTracking, syncSingleShipment, refetch: fetchStatus };
 }

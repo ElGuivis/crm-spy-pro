@@ -1,4 +1,3 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import type { ServiceClient } from "./supabase-types.ts";
 import { createLogger } from "./correlation.ts";
 import { PRIMARY_FRONTEND_URL } from "./frontend-config.ts";

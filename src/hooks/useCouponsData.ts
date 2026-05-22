@@ -133,12 +133,12 @@ export function useCouponsData(integrationId: string) {
     } finally { setIsSyncing(false); setSyncProgress(null); }
   };
 
-  const getCouponStatus = (coupon: GeneratedCoupon): { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: string } => {
-    if (coupon.used_at) return { label: "Utilizado", variant: "default", icon: "check" };
+  const getCouponStatus = (coupon: GeneratedCoupon): { code: "used" | "expired" | "limit_reached" | "active"; label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: string } => {
+    if (coupon.used_at) return { code: "used", label: "Utilizado", variant: "default", icon: "check" };
     const now = new Date();
-    if (new Date(coupon.expires_at) < now) return { label: "Expirado", variant: "destructive", icon: "x" };
-    if (coupon.li_quantidade_uso_maximo != null && (coupon.li_quantidade_usada ?? 0) >= coupon.li_quantidade_uso_maximo) return { label: "Limite atingido", variant: "destructive", icon: "x" };
-    return { label: "Ativo", variant: "secondary", icon: "clock" };
+    if (new Date(coupon.expires_at) < now) return { code: "expired", label: "Expirado", variant: "destructive", icon: "x" };
+    if (coupon.li_quantidade_uso_maximo != null && (coupon.li_quantidade_usada ?? 0) >= coupon.li_quantidade_uso_maximo) return { code: "limit_reached", label: "Limite atingido", variant: "destructive", icon: "x" };
+    return { code: "active", label: "Ativo", variant: "secondary", icon: "clock" };
   };
 
   const getCouponSource = (source?: string): { label: string; className: string } => {
@@ -158,10 +158,10 @@ export function useCouponsData(integrationId: string) {
     if (!matchesSearch) return false;
     if (sourceFilter !== "all" && (coupon.source || "cashback") !== sourceFilter) return false;
     if (statusFilter !== "all") {
-      const status = getCouponStatus(coupon);
-      if (statusFilter === "used" && status.label !== "Utilizado") return false;
-      if (statusFilter === "expired" && !["Expirado", "Limite atingido"].includes(status.label)) return false;
-      if (statusFilter === "active" && status.label !== "Ativo") return false;
+      const { code } = getCouponStatus(coupon);
+      if (statusFilter === "used" && code !== "used") return false;
+      if (statusFilter === "expired" && code !== "expired" && code !== "limit_reached") return false;
+      if (statusFilter === "active" && code !== "active") return false;
     }
     return true;
   });

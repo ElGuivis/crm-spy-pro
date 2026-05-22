@@ -75,7 +75,7 @@ export async function handleSyncShipments(opts: SyncShipmentsOpts): Promise<Resp
     .from("me_sync_jobs")
     .update({
       status: "failed",
-      error_message: "Job travado - timeout automático (5min)",
+      error_message: "Job travado - timeout automático (10min)",
       completed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })

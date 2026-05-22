@@ -193,7 +193,16 @@ export function useEmailCampaignForm({ open, onOpenChange, campaignId, defaultVa
       setWatchedIntegrationId(integId || undefined);
       setAudienceType((existingCampaign.audience_type || "all") as AudienceType);
       try {
-        setAudienceReference(existingCampaign.audience_reference ? JSON.parse(existingCampaign.audience_reference) : {});
+        const ref = existingCampaign.audience_reference;
+        if (!ref) {
+          setAudienceReference({});
+        } else if (typeof ref === "string") {
+          setAudienceReference(JSON.parse(ref));
+        } else if (typeof ref === "object") {
+          setAudienceReference(ref as AudienceReference);
+        } else {
+          setAudienceReference({});
+        }
       } catch {
         setAudienceReference({});
       }

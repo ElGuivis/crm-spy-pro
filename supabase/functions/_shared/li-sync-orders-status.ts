@@ -140,9 +140,6 @@ export async function updateOrderStatuses(
         const currentTrackingCode2 = (order.raw_json as Record<string, unknown>)?.codigo_rastreio || null;
         const trackingChanged = codigoRastreio && codigoRastreio !== currentTrackingCode2;
 
-        if (order.order_number === "9908" || order.order_number === 9908) {
-          log.info(`[DEBUG-9908] Status check: currentId=${order.status_id}, apiId=${apiStatusId}, currentNome="${order.status_name}", apiNome="${apiStatusNome}", changed=${statusChanged}`);
-        }
         if (statusChanged) log.info(`[FULL-SYNC] Order #${order.order_number} status: "${order.status_name}" -> "${apiStatusNome}"`);
         if (trackingChanged) log.info(`[FULL-SYNC] Order #${order.order_number} tracking: ${codigoRastreio}`);
 

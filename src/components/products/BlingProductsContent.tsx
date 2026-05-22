@@ -58,7 +58,7 @@ export function BlingProductsContent({ integrationId }: BlingProductsContentProp
     return () => { supabase.removeChannel(channel); };
   }, [integrationId, refetchProducts]);
 
-  useEffect(() => { setCurrentPage(1); }, [searchQuery, showOnlyInStock, sortBy, variationData]);
+  useEffect(() => { setCurrentPage(1); }, [searchQuery, showOnlyInStock, sortBy, setCurrentPage]);
 
   const isSyncing = syncStatus === "syncing" || syncStatus === "pending";
 
