@@ -86,13 +86,14 @@ export function useMelhorEnvioShipments(filters: ShipmentFilters = {}) {
 
   const instanceId = useId();
   useEffect(() => {
+    const filterParam = filters.integrationId ? { filter: `integration_id=eq.${filters.integrationId}` } : {};
     const channel = supabase.channel(`me_shipments_changes_${instanceId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "me_shipments" }, () => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "me_shipments", ...filterParam }, () => {
         fetchShipments();
         fetchGlobalStats();
       }).subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [instanceId, fetchShipments, fetchGlobalStats]);
+  }, [instanceId, fetchShipments, fetchGlobalStats, filters.integrationId]);
 
   const carriers = [...new Set(shipments.map((s) => s.carrier).filter(Boolean))];
   const cities = [...new Set(shipments.map((s) => s.receiver_city).filter(Boolean))];

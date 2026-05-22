@@ -81,14 +81,6 @@ export function EnviosContent({ integrationId }: EnviosContentProps) {
     }
   }, [syncProgress.status, refetch, resetProgress]);
 
-  useEffect(() => {
-    const channel = supabase.channel('me-shipments-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'me_shipments', filter: `integration_id=eq.${integrationId}` },
-        (payload) => { log.info('[Realtime] Shipment update:', payload.eventType); refetch(); })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [integrationId, refetch]);
-
   const handleTabChange = (tab: string) => {
     setActiveTab(tab); setCurrentPage(1); setCardFilter(null);
     const params = new URLSearchParams();

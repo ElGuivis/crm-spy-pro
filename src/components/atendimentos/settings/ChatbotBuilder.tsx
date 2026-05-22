@@ -129,6 +129,7 @@ export function ChatbotBuilder() {
       {/* Editor */}
       {chatbot && (
         <ChatbotEditor
+          key={chatbot.id}
           chatbot={chatbot}
           onUpdate={updateChatbot.mutateAsync}
           isPending={updateChatbot.isPending}
