@@ -4,7 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Settings, Save } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Settings, Save, MessageSquare } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
@@ -32,12 +35,34 @@ export function LoyaltyConfigCard({ integrationId }: LoyaltyConfigCardProps) {
     enabled: !!integrationId,
   });
 
+  const { data: waIntegrations } = useQuery({
+    queryKey: ["wa-integrations", tenantId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("integrations")
+        .select("id, name, metadata")
+        .eq("tenant_id", tenantId!)
+        .eq("type", "evolution_whatsapp")
+        .eq("status", "connected");
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
   const [name, setName] = useState("");
   const [pointsPerBrl, setPointsPerBrl] = useState("");
   const [minRedeem, setMinRedeem] = useState("");
   const [pointsToBrl, setPointsToBrl] = useState("");
   const [championMultiplier, setChampionMultiplier] = useState("");
   const [isActive, setIsActive] = useState(true);
+  const [notifyWhatsapp, setNotifyWhatsapp] = useState(false);
+  const [waIntegrationId, setWaIntegrationId] = useState<string>("");
+  const [templateEarn, setTemplateEarn] = useState(
+    "Olá {{cliente_primeiro_nome}}! Você ganhou {{pontos}} pontos. Total: {{total_pontos}} pontos. 🎉"
+  );
+  const [templateRedeem, setTemplateRedeem] = useState(
+    "Cupom {{cupom_codigo}} gerado com {{pontos}} pontos. Use até {{validade}}. 🎁"
+  );
   const [initialized, setInitialized] = useState(false);
 
   if (program && !initialized) {
@@ -47,6 +72,10 @@ export function LoyaltyConfigCard({ integrationId }: LoyaltyConfigCardProps) {
     setPointsToBrl(String(program.points_to_brl));
     setChampionMultiplier(String(program.champion_multiplier));
     setIsActive(program.is_active);
+    setNotifyWhatsapp((program as any).notify_via_whatsapp ?? false);
+    setWaIntegrationId((program as any).whatsapp_integration_id ?? "");
+    setTemplateEarn((program as any).notification_template_earn || templateEarn);
+    setTemplateRedeem((program as any).notification_template_redeem || templateRedeem);
     setInitialized(true);
   }
 
@@ -69,6 +98,7 @@ export function LoyaltyConfigCard({ integrationId }: LoyaltyConfigCardProps) {
       if (isNaN(mr) || mr < 1) throw new Error("Mínimo de resgate inválido");
       if (isNaN(ptb) || ptb <= 0) throw new Error("Valor do ponto inválido");
       if (isNaN(cm) || cm < 1) throw new Error("Multiplicador inválido");
+      if (notifyWhatsapp && !waIntegrationId) throw new Error("Selecione um canal WhatsApp para notificações");
       const payload = {
         tenant_id: tenantId!,
         integration_id: integrationId,
@@ -78,13 +108,17 @@ export function LoyaltyConfigCard({ integrationId }: LoyaltyConfigCardProps) {
         points_to_brl: ptb,
         champion_multiplier: cm,
         is_active: isActive,
+        notify_via_whatsapp: notifyWhatsapp,
+        whatsapp_integration_id: notifyWhatsapp && waIntegrationId ? waIntegrationId : null,
+        notification_template_earn: templateEarn,
+        notification_template_redeem: templateRedeem,
         updated_at: new Date().toISOString(),
       };
       if (program) {
-        const { error } = await supabase.from("loyalty_programs").update(payload).eq("id", program.id);
+        const { error } = await supabase.from("loyalty_programs" as any).update(payload).eq("id", program.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("loyalty_programs").insert(payload);
+        const { error } = await supabase.from("loyalty_programs" as any).insert(payload);
         if (error) throw error;
       }
     },
@@ -147,7 +181,78 @@ export function LoyaltyConfigCard({ integrationId }: LoyaltyConfigCardProps) {
             />
           </div>
         </div>
-        <div className="flex items-center justify-between pt-1">
+
+        <Separator />
+
+        {/* Notificação WhatsApp */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-semibold flex items-center gap-1.5">
+              <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+              Notificar cliente via WhatsApp
+            </Label>
+            <Switch checked={notifyWhatsapp} onCheckedChange={setNotifyWhatsapp} />
+          </div>
+
+          {notifyWhatsapp && (
+            <div className="space-y-3 pl-1">
+              <div>
+                <Label className="text-xs text-muted-foreground">Canal WhatsApp</Label>
+                <Select value={waIntegrationId} onValueChange={setWaIntegrationId}>
+                  <SelectTrigger className="mt-1 h-8 text-sm">
+                    <SelectValue placeholder="Selecione um canal..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(waIntegrations || []).map((i) => (
+                      <SelectItem key={i.id} value={i.id}>
+                        {i.name || (i.metadata as any)?.instanceName || i.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(!waIntegrations || waIntegrations.length === 0) && (
+                  <p className="text-[10px] text-destructive mt-1">
+                    Nenhum canal WhatsApp conectado. Conecte um em Integrações.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label className="text-xs text-muted-foreground">
+                  Mensagem ao ganhar pontos
+                </Label>
+                <Textarea
+                  value={templateEarn}
+                  onChange={(e) => setTemplateEarn(e.target.value)}
+                  rows={2}
+                  className="mt-1 text-xs resize-none"
+                />
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Variáveis: {'{{cliente_primeiro_nome}}'} {'{{pontos}}'} {'{{total_pontos}}'}
+                </p>
+              </div>
+
+              <div>
+                <Label className="text-xs text-muted-foreground">
+                  Mensagem ao resgatar pontos
+                </Label>
+                <Textarea
+                  value={templateRedeem}
+                  onChange={(e) => setTemplateRedeem(e.target.value)}
+                  rows={2}
+                  className="mt-1 text-xs resize-none"
+                />
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Variáveis: {'{{cupom_codigo}}'} {'{{pontos}}'} {'{{validade}}'}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <Separator />
+
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Switch checked={isActive} onCheckedChange={setIsActive} />
             <Label className="text-xs text-muted-foreground">
