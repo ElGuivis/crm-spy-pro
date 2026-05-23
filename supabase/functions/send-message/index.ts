@@ -112,37 +112,16 @@ serve(async (req) => {
       });
     }
 
-    // Resolve channel_id: from conversation or find from integrations
-    let channelId = conversation.channel_id;
+    // Resolve channel_id: deve vir da conversa — sem fallback "primeiro disponível"
+    const channelId = conversation.channel_id;
 
     if (!channelId) {
-      // Find channel from integration or first available
-      const { data: channel } = await supabase
-        .from('whatsapp_channels')
-        .select('id')
-        .eq('tenant_id', conversation.tenant_id)
-        .eq('status', 'connected')
-        .limit(1)
-        .maybeSingle();
-
-      if (channel) {
-        channelId = channel.id;
-      }
-    }
-
-    // If still no channel, try legacy path (direct Evolution API send)
-    if (!channelId) {
-      // Fallback: find integration and create a temporary reference
-      const integration = conversation.integration;
-      if (!integration?.metadata) {
-        return new Response(JSON.stringify({ error: 'No WhatsApp channel or integration found' }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      // Legacy direct send path for tenants without whatsapp_channels configured
-      return await legacyDirectSend(supabase, conversation, contact, content, sender_id, sender_name);
+      return new Response(
+        JSON.stringify({
+          error: 'Conversa sem canal WhatsApp associado. Reconecte a integração ou archive esta conversa e inicie uma nova.',
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Create message with status 'queued'
@@ -255,31 +234,21 @@ serve(async (req) => {
 });
 
 /**
- * Legacy direct send for tenants without whatsapp_channels configured.
- * This preserves backward compatibility during migration.
+ * Send via Evolution API direto (sem whatsapp_channels). Usado apenas quando
+ * a conversa tem integration_id mas ainda não tem channel_id (legado pré-migração).
+ * Não busca integração alguma por conta própria — falha explicitamente se não configurado.
  */
 async function legacyDirectSend(supabase: ReturnType<typeof createClient>, conversation: Record<string, unknown>, contact: { phone: string; metadata?: Record<string, string> | null }, content: string, sender_id?: string, sender_name?: string) {
   const evolutionApiUrl = Deno.env.get('EVOLUTION_API_URL');
   const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
 
-  let whatsappIntegration = conversation.integration;
-  if (!whatsappIntegration || whatsappIntegration.status !== 'connected') {
-    const { data: wpIntegration } = await supabase
-      .from('integrations')
-      .select('id, metadata, status')
-      .eq('tenant_id', conversation.tenant_id)
-      .eq('type', 'evolution_whatsapp')
-      .eq('status', 'connected')
-      .limit(1)
-      .maybeSingle();
-    whatsappIntegration = wpIntegration;
-  }
+  const whatsappIntegration = conversation.integration;
 
-  if (!whatsappIntegration?.metadata) {
-    return new Response(JSON.stringify({ error: 'No connected WhatsApp integration found' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+  if (!whatsappIntegration?.metadata || (whatsappIntegration as Record<string, unknown>).status !== 'connected') {
+    return new Response(
+      JSON.stringify({ error: 'Conversa sem integração WhatsApp ativa. Reconecte a integração ou archive esta conversa.' }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } }
+    );
   }
 
   const metadata = whatsappIntegration.metadata as { instanceName?: string };

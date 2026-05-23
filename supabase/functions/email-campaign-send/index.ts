@@ -422,25 +422,13 @@ serve(async (req) => {
       );
     }
 
-    // Resolve which email integration to use
-    let integrationId: string | null = campaign.email_integration_id || null;
-
-    if (!integrationId) {
-      // Fallback: pick most recent active integration
-      const { data: fallbackInteg, error: fallbackErr } = await supabase
-        .from("email_integrations")
-        .select("id")
-        .eq("tenant_id", tenantId)
-        .eq("is_active", true)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (fallbackErr || !fallbackInteg) {
-        throw new Error("No active email integration found");
-      }
-      integrationId = fallbackInteg.id;
+    // Resolve which email integration to use — campanha DEVE ter email_integration_id
+    if (!campaign.email_integration_id) {
+      throw new Error(
+        "Esta campanha não tem integração de e-mail configurada. Edite a campanha em Email Marketing e selecione uma integração SMTP antes de enviar."
+      );
     }
+    const integrationId: string = campaign.email_integration_id;
 
     // Fetch the full integration row for limits
     const { data: integrationRow } = await supabase

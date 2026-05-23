@@ -54,33 +54,25 @@ serve(async (req) => {
       throw new Error("Campaign not found");
     }
 
-    // Get email integration - prefer campaign's specific integration, fallback to most recent active
-    let emailIntegration = null;
-    if (campaign.email_integration_id) {
-      const { data } = await supabase
-        .from("email_integrations")
-        .select("id, tenant_id, smtp_host, smtp_port, smtp_user, smtp_password_encrypted, smtp_secure, smtp_tls, sender_email, sender_name, reply_to, name, is_active")
-        .eq("id", campaign.email_integration_id)
-        .eq("tenant_id", tenantId)
-        .eq("is_active", true)
-        .maybeSingle();
-      emailIntegration = data;
+    // Get email integration — campanha DEVE ter email_integration_id configurado
+    if (!campaign.email_integration_id) {
+      throw new Error(
+        "Esta campanha não tem integração de e-mail configurada. Edite a campanha em Email Marketing e selecione uma integração SMTP no campo 'Integração SMTP' antes de enviar."
+      );
     }
 
-    if (!emailIntegration) {
-      const { data, error: intError } = await supabase
-        .from("email_integrations")
-        .select("id, tenant_id, smtp_host, smtp_port, smtp_user, smtp_password_encrypted, smtp_secure, smtp_tls, sender_email, sender_name, reply_to, name, is_active")
-        .eq("tenant_id", tenantId)
-        .eq("is_active", true)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+    const { data: emailIntegration } = await supabase
+      .from("email_integrations")
+      .select("id, tenant_id, smtp_host, smtp_port, smtp_user, smtp_password_encrypted, smtp_secure, smtp_tls, sender_email, sender_name, reply_to, name, is_active")
+      .eq("id", campaign.email_integration_id)
+      .eq("tenant_id", tenantId)
+      .eq("is_active", true)
+      .maybeSingle();
 
-      if (intError || !data) {
-        throw new Error("Nenhuma integração de e-mail ativa. Configure o SMTP primeiro.");
-      }
-      emailIntegration = data;
+    if (!emailIntegration) {
+      throw new Error(
+        "Integração de e-mail da campanha não encontrada ou inativa. Verifique a configuração SMTP em Email Marketing."
+      );
     }
 
     // Get email config
