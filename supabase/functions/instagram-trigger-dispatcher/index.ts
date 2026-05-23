@@ -89,13 +89,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Fetch matching rules
+    // Fetch matching rules — filtra por instagram_integration_id diretamente (sem depender do JOIN)
     const { data: rules } = await supabase
       .from("instagram_trigger_rules")
-      .select("*, flow:instagram_flows!inner(id, live_version_id, status, allow_parallel_runs, channel_id)")
+      .select("*, flow:instagram_flows!inner(id, live_version_id, status, allow_parallel_runs)")
       .in("trigger_type", triggerTypes)
       .eq("is_active", true)
-      .eq("flow.channel_id", channel_id)
+      .eq("instagram_integration_id", channel_id)
       .eq("flow.status", "active")
       .order("priority", { ascending: false });
 

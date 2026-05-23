@@ -152,10 +152,10 @@ Deno.serve(async (req) => {
         .delete()
         .eq("flow_id", flow_id);
 
-      // Get flow's tenant_id
+      // Get flow's tenant_id + channel_id (usado como instagram_integration_id)
       const { data: flowData } = await supabase
         .from("instagram_flows")
-        .select("tenant_id")
+        .select("tenant_id, channel_id")
         .eq("id", flow_id)
         .single();
 
@@ -163,6 +163,7 @@ Deno.serve(async (req) => {
       const rulePayload: Record<string, unknown> = {
         tenant_id: flowData?.tenant_id || version.tenant_id,
         flow_id: flow_id,
+        instagram_integration_id: flowData?.channel_id || null,
         trigger_type: triggerType,
         is_active: true,
         priority: tc.priority ?? 10,
