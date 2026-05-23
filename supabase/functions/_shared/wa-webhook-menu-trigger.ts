@@ -76,6 +76,22 @@ export async function handleMenuTrigger(ctx: WaCtx): Promise<Response | null> {
   const shouldShowMenu = triggerKeywords.some(kw => messageLower === kw.toLowerCase());
 
   if (shouldShowMenu) {
+    // Rate limit: if the bot already responded in the last 30s, ignore the keyword.
+    // Prevents infinite loops caused by auto-responders that echo "menu" back.
+    const thirtySecondsAgo = new Date(Date.now() - 30_000).toISOString();
+    const { count: recentBotCount } = await supabase
+      .from('messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('conversation_id', conversation.id)
+      .eq('sender_type', 'bot')
+      .gte('created_at', thirtySecondsAgo);
+    if ((recentBotCount ?? 0) > 0) {
+      log.warn('⚠️ Menu keyword rate-limited: bot already responded in the last 30s, skipping to prevent loop');
+      return new Response(JSON.stringify({ success: true, skipped: true, reason: 'menu_rate_limited' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     log.info('🤵 Menu trigger keyword detected, re-showing menu...');
     const { success: menuSent, menuText } = await sendReceptionistMenu({
       config: receptionistConfig, whatsAppConfig, phone, contactName: contact.name,
