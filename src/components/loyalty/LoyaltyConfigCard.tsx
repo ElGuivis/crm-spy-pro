@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,30 +63,32 @@ export function LoyaltyConfigCard({ integrationId }: LoyaltyConfigCardProps) {
   const [templateRedeem, setTemplateRedeem] = useState(
     "Cupom {{cupom_codigo}} gerado com {{pontos}} pontos. Use até {{validade}}. 🎁"
   );
-  const [initialized, setInitialized] = useState(false);
 
-  if (program && !initialized) {
-    setName(program.name);
-    setPointsPerBrl(String(program.points_per_brl));
-    setMinRedeem(String(program.min_points_redeem));
-    setPointsToBrl(String(program.points_to_brl));
-    setChampionMultiplier(String(program.champion_multiplier));
-    setIsActive(program.is_active);
-    setNotifyWhatsapp((program as any).notify_via_whatsapp ?? false);
-    setWaIntegrationId((program as any).whatsapp_integration_id ?? "");
-    setTemplateEarn((program as any).notification_template_earn || templateEarn);
-    setTemplateRedeem((program as any).notification_template_redeem || templateRedeem);
-    setInitialized(true);
-  }
-
-  if (!program && !initialized) {
-    setName("Programa de Pontos");
-    setPointsPerBrl("1");
-    setMinRedeem("100");
-    setPointsToBrl("0.01");
-    setChampionMultiplier("2");
-    setInitialized(true);
-  }
+  useEffect(() => {
+    if (isLoading) return;
+    if (program) {
+      setName(program.name);
+      setPointsPerBrl(String(program.points_per_brl));
+      setMinRedeem(String(program.min_points_redeem));
+      setPointsToBrl(String(program.points_to_brl));
+      setChampionMultiplier(String(program.champion_multiplier));
+      setIsActive(program.is_active);
+      setNotifyWhatsapp((program as any).notify_via_whatsapp ?? false);
+      setWaIntegrationId((program as any).whatsapp_integration_id ?? "");
+      if ((program as any).notification_template_earn) {
+        setTemplateEarn((program as any).notification_template_earn);
+      }
+      if ((program as any).notification_template_redeem) {
+        setTemplateRedeem((program as any).notification_template_redeem);
+      }
+    } else {
+      setName("Programa de Pontos");
+      setPointsPerBrl("1");
+      setMinRedeem("100");
+      setPointsToBrl("0.01");
+      setChampionMultiplier("2");
+    }
+  }, [program, isLoading]);
 
   const { mutate: save, isPending } = useMutation({
     mutationFn: async () => {
