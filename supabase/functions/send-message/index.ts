@@ -50,7 +50,10 @@ serve(async (req) => {
       contact_id: string;
       integration_id: string;
       channel: string;
+      channel_id: string | null;
       status: string;
+      assigned_to: string | null;
+      last_incoming_message_id: string | null;
       contact: { id: string; phone: string; name: string; metadata: Record<string, unknown> } | null;
       integration: { id: string; metadata: Record<string, unknown>; status: string } | null;
     }>(
@@ -233,121 +236,3 @@ serve(async (req) => {
   }
 });
 
-/**
- * Send via Evolution API direto (sem whatsapp_channels). Usado apenas quando
- * a conversa tem integration_id mas ainda não tem channel_id (legado pré-migração).
- * Não busca integração alguma por conta própria — falha explicitamente se não configurado.
- */
-async function legacyDirectSend(supabase: ReturnType<typeof createClient>, conversation: Record<string, unknown>, contact: { phone: string; metadata?: Record<string, string> | null }, content: string, sender_id?: string, sender_name?: string) {
-  const evolutionApiUrl = Deno.env.get('EVOLUTION_API_URL');
-  const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
-
-  const whatsappIntegration = conversation.integration;
-
-  if (!whatsappIntegration?.metadata || (whatsappIntegration as Record<string, unknown>).status !== 'connected') {
-    return new Response(
-      JSON.stringify({ error: 'Conversa sem integração WhatsApp ativa. Reconecte a integração ou archive esta conversa.' }),
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  const metadata = whatsappIntegration.metadata as { instanceName?: string };
-  const instanceName = metadata.instanceName;
-
-  if (!instanceName || !evolutionApiUrl || !evolutionApiKey) {
-    return new Response(JSON.stringify({ error: 'WhatsApp integration not properly configured' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  const rawContactPhone = contact.phone as string;
-  const isLidContact = rawContactPhone.includes('@lid');
-  const contactMeta = (contact.metadata || {}) as Record<string, string>;
-  const realPhoneFromMeta = contactMeta.real_phone || contactMeta.lid_phone || null;
-  const phoneToUse = isLidContact && realPhoneFromMeta ? realPhoneFromMeta : rawContactPhone;
-  const shouldUseReply = isLidContact && !realPhoneFromMeta;
-  const lastIncomingMessageId = conversation.last_incoming_message_id;
-
-  const baseUrl = evolutionApiUrl.replace(/\/$/, '');
-  let evolutionResult: Record<string, unknown>;
-
-  function formatPhone(phone: string): string {
-    let cleaned = phone.replace(/\D/g, '');
-    if (cleaned.startsWith('0')) cleaned = cleaned.substring(1);
-    if (!cleaned.startsWith('55') && cleaned.length <= 11) cleaned = '55' + cleaned;
-    return cleaned;
-  }
-
-  if (shouldUseReply && lastIncomingMessageId) {
-    // Ainda é LID sem número real: usar reply na thread LID
-    const lidNumber = rawContactPhone.includes('@lid') ? rawContactPhone : `${rawContactPhone}@lid`;
-    const response = await fetch(`${baseUrl}/message/sendText/${instanceName}`, {
-      method: 'POST',
-      headers: { 'apikey': evolutionApiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        number: lidNumber,
-        text: content,
-        quoted: { key: { remoteJid: lidNumber, id: lastIncomingMessageId }, message: { conversation: "" } },
-      }),
-    });
-    evolutionResult = await response.json();
-    if (!response.ok) throw new Error(`Evolution API error: ${JSON.stringify(evolutionResult)}`);
-  } else {
-    // Número real disponível: enviar normalmente
-    const formattedPhone = formatPhone(phoneToUse);
-    const response = await fetch(`${baseUrl}/message/sendText/${instanceName}`, {
-      method: 'POST',
-      headers: { 'apikey': evolutionApiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ number: formattedPhone, text: content }),
-    });
-    evolutionResult = await response.json();
-    if (!response.ok) throw new Error(`Evolution API error: ${JSON.stringify(evolutionResult)}`);
-  }
-
-  const { data: message } = await supabase
-    .from('messages')
-    .insert({
-      conversation_id: conversation.id,
-      tenant_id: conversation.tenant_id,
-      sender_type: 'agent',
-      sender_id: sender_id || null,
-      content,
-      content_type: 'text',
-      status: 'sent',
-      direction: 'outbound',
-      type: 'text',
-      metadata: {
-        agent_name: sender_name || 'Atendente',
-        whatsapp_message_id: evolutionResult.key?.id || evolutionResult.messageId,
-        sent_via: 'panel_legacy',
-      },
-    })
-    .select()
-    .single();
-
-  await supabase.rpc('deduct_tokens', {
-    _tenant_id: conversation.tenant_id,
-    _amount: 1,
-    _type: 'agent_message',
-    _description: 'Mensagem enviada pelo atendente (legacy)',
-    _reference_id: message?.id || null,
-  });
-
-  await supabase
-    .from('conversations')
-    .update({
-      last_message_at: new Date().toISOString(),
-      status: conversation.status === 'bot' ? 'open' : conversation.status,
-      assigned_to: conversation.assigned_to || sender_id || null,
-    })
-    .eq('id', conversation.id);
-
-  return new Response(JSON.stringify({
-    success: true,
-    message_id: message?.id,
-    whatsapp_message_id: evolutionResult.key?.id || evolutionResult.messageId,
-  }), {
-    headers: { 'Content-Type': 'application/json' },
-  });
-}

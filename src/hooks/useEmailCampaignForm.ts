@@ -26,7 +26,7 @@ export const campaignSchema = z.object({
   campaign_type: z.enum(["newsletter", "promotion", "relationship", "automation", "update"]),
   template_id: z.string().optional(),
   scheduled_at: z.string().optional(),
-  email_integration_id: z.string().optional(),
+  email_integration_id: z.string().uuid("Selecione uma integração SMTP"),
 });
 
 export type CampaignFormData = z.infer<typeof campaignSchema>;
@@ -276,7 +276,7 @@ export function useEmailCampaignForm({ open, onOpenChange, campaignId, defaultVa
         template_id: data.template_id || undefined, audience_type: audienceType,
         audience_reference: JSON.stringify(audienceReference),
         scheduled_at: data.scheduled_at || undefined, content_json: emailContent,
-        content_html: emailHTML, email_integration_id: data.email_integration_id || undefined,
+        content_html: emailHTML, email_integration_id: data.email_integration_id,
       };
       if (campaignId) {
         await updateMutation.mutateAsync({ id: campaignId, updates: payload });

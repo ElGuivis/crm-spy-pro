@@ -124,28 +124,29 @@ export function EmailCampaignDetailsTab({
 
         <FormField control={form.control} name="email_integration_id" render={({ field }) => (
           <FormItem>
-            <FormLabel className="flex items-center gap-2"><Mail className="h-4 w-4" />Integração SMTP</FormLabel>
+            <FormLabel className="flex items-center gap-2"><Mail className="h-4 w-4" />Integração SMTP *</FormLabel>
             <Select
               onValueChange={(value) => {
-                const v = value === "__none__" ? "" : value;
-                field.onChange(v);
-                setWatchedIntegrationId(v || undefined);
-                if (v) {
-                  const integ = emailIntegrations?.find((i) => i.id === v);
-                  if (integ) {
-                    form.setValue("sender_name", (integ as any).sender_name || integ.name || "");
-                    form.setValue("sender_email", integ.sender_email || "");
-                  }
+                field.onChange(value);
+                setWatchedIntegrationId(value);
+                const integ = emailIntegrations?.find((i) => i.id === value);
+                if (integ) {
+                  form.setValue("sender_name", (integ as any).sender_name || integ.name || "");
+                  form.setValue("sender_email", integ.sender_email || "");
                 }
               }}
-              value={field.value || "__none__"}
+              value={field.value || ""}
             >
               <FormControl><SelectTrigger><SelectValue placeholder="Selecione uma integração" /></SelectTrigger></FormControl>
               <SelectContent>
-                <SelectItem value="__none__">Nenhuma (manual)</SelectItem>
                 {emailIntegrations?.map((i) => <SelectItem key={i.id} value={i.id}>{i.name} — {i.sender_email}</SelectItem>)}
               </SelectContent>
             </Select>
+            {(!emailIntegrations || emailIntegrations.length === 0) && (
+              <FormDescription className="text-destructive">
+                Nenhuma integração SMTP conectada. Configure uma em Integrações antes de criar campanhas.
+              </FormDescription>
+            )}
             {watchedIntegrationId && totalSenders > 1 && (
               <FormDescription className="flex items-center gap-1.5">
                 <Badge variant="secondary" className="text-xs">{totalSenders} remetentes em rotação</Badge>
