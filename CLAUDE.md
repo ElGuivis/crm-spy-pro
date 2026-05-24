@@ -170,14 +170,6 @@ Para subscriptions com múltiplos consumidores, **não** usar `Date.now()` em ch
 - Cascade deletes (`delete_account_data`, `delete_integration_cascade`) excedem o `statement_timeout` de 8s do PostgREST. **Usar conexão DB direta** com `SET LOCAL statement_timeout = 0` dentro de transação. Modelo: `manage-sync-jobs/index.ts` e `delete-account/index.ts`.
 - Funções cron-driven que demoram muito: `EdgeRuntime.waitUntil(...)` para retornar 202 imediato e continuar em background. Edge runtime dá ~150s wall time. Modelos: `li-sync/index.ts`, `li-job-processor/index.ts`.
 
-## Pendências (estado em 2026-05-09)
-
-1. Reautorizar OAuth do **Melhor Envio** (token antigo não decifrável). Bloqueia `bulk-li-status-update-cron` que precisa do novo UUID.
-2. Reconfigurar **Email/SMTP** e credenciais de **AI providers** (mesma razão).
-3. Reconectar 3 canais **Instagram** (todos disconnected após migração).
-4. Reconectar canal WhatsApp `hazetabacria` (Evolution refaz webhook ao abrir tela).
-5. Recriar **configs de automação** no painel (birthday/cashback/reactivation) — todas perdidas na migração; crons rodam saudáveis mas sem nada a processar.
-
 ## Comandos úteis
 
 ```sh
