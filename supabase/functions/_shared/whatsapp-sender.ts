@@ -665,55 +665,6 @@ export async function sendListWithTokenCharge(
   return { ...sendResult, tokenDeducted: !!deducted };
 }
 
-/**
- * Get WhatsApp integration config for a tenant
- */
-export async function getWhatsAppConfig(
-  supabase: ServiceClient,
-  tenantId: string,
-  integrationId?: string
-): Promise<{ config: WhatsAppConfig | null; error?: string }> {
-  const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
-  const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
-
-  if (!evolutionUrl || !evolutionApiKey) {
-    return { config: null, error: 'Evolution API credentials not configured' };
-  }
-
-  // Build query
-  let query = supabase
-    .from('integrations')
-    .select('id, metadata')
-    .eq('tenant_id', tenantId)
-    .eq('type', 'evolution_whatsapp')
-    .eq('status', 'connected');
-  
-  if (integrationId) {
-    query = query.eq('id', integrationId);
-  }
-  
-  const { data: integration, error } = await query.limit(1).maybeSingle();
-
-  if (error || !integration) {
-    return { config: null, error: 'No connected WhatsApp integration found' };
-  }
-
-  const metadata = integration.metadata as Record<string, unknown>;
-  const instanceName = metadata?.instanceName || metadata?.instance_name;
-
-  if (!instanceName) {
-    return { config: null, error: 'WhatsApp instance name not found' };
-  }
-
-  return {
-    config: {
-      evolutionApiUrl: evolutionUrl,
-      evolutionApiKey: evolutionApiKey,
-      instanceName: instanceName as string
-    }
-  };
-}
-
 // ========== UTILITY FUNCTIONS ==========
 
 /**
