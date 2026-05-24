@@ -18,6 +18,7 @@ interface FlowRow {
   description: string | null;
   is_active: boolean;
   is_published: boolean;
+  trigger_keywords: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -34,7 +35,7 @@ export function ChatbotFlowManager() {
     queryFn: async () => {
       const { data } = await supabase
         .from("chatbot_flows" as any)
-        .select("id,name,description,is_active,is_published,created_at,updated_at")
+        .select("id,name,description,is_active,is_published,trigger_keywords,created_at,updated_at")
         .eq("tenant_id", tenantId!)
         .order("created_at", { ascending: false });
       return (data as FlowRow[]) ?? [];
@@ -87,6 +88,13 @@ export function ChatbotFlowManager() {
     queryClient.invalidateQueries({ queryKey: ["chatbot-flows"] });
   };
 
+  const handleKeywordsChange = async (id: string, raw: string) => {
+    const keywords = raw.split(",").map((k) => k.trim()).filter(Boolean);
+    const { error } = await supabase.from("chatbot_flows" as any).update({ trigger_keywords: keywords }).eq("id", id);
+    if (error) { toast.error("Erro ao salvar keywords"); return; }
+    queryClient.invalidateQueries({ queryKey: ["chatbot-flows"] });
+  };
+
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-6">
     <div className="space-y-4 max-w-3xl">
@@ -94,7 +102,7 @@ export function ChatbotFlowManager() {
       <Card className="border-dashed bg-muted/20">
         <CardContent className="pt-4 pb-3 text-sm text-muted-foreground space-y-1">
           <p className="font-medium text-foreground flex items-center gap-2"><Workflow className="h-4 w-4" />Flow Builder Visual</p>
-          <p>Crie fluxos de conversa com drag-and-drop. Após publicar, vincule o flow a um chatbot nas configurações da Inbox.</p>
+          <p>Crie fluxos de conversa com drag-and-drop. Quando ativo e publicado, o flow dispara em conversas do WhatsApp ao receber alguma das <strong>palavras-gatilho</strong> abaixo (match exato, case-insensitive).</p>
         </CardContent>
       </Card>
 
@@ -125,43 +133,58 @@ export function ChatbotFlowManager() {
         <div className="space-y-2">
           {flows.map((flow) => (
             <Card key={flow.id}>
-              <CardContent className="py-3 flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-medium">{flow.name}</p>
-                    {flow.is_published && (
-                      <Badge className="text-[10px] h-4">Publicado</Badge>
-                    )}
-                    {!flow.is_active && (
-                      <Badge variant="secondary" className="text-[10px] h-4">Inativo</Badge>
+              <CardContent className="py-3 space-y-2">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium">{flow.name}</p>
+                      {flow.is_published && (
+                        <Badge className="text-[10px] h-4">Publicado</Badge>
+                      )}
+                      {!flow.is_active && (
+                        <Badge variant="secondary" className="text-[10px] h-4">Inativo</Badge>
+                      )}
+                    </div>
+                    {flow.description && (
+                      <p className="text-xs text-muted-foreground mt-0.5">{flow.description}</p>
                     )}
                   </div>
-                  {flow.description && (
-                    <p className="text-xs text-muted-foreground mt-0.5">{flow.description}</p>
-                  )}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Switch
+                      checked={flow.is_active}
+                      onCheckedChange={() => handleToggle(flow.id, flow.is_active)}
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs gap-1.5"
+                      onClick={() => setEditingFlowId(flow.id)}
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Editar
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-destructive"
+                      onClick={() => handleDelete(flow.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Switch
-                    checked={flow.is_active}
-                    onCheckedChange={() => handleToggle(flow.id, flow.is_active)}
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground shrink-0">Palavras-gatilho:</span>
+                  <Input
+                    defaultValue={(flow.trigger_keywords ?? []).join(", ")}
+                    placeholder="ex: cardapio, comprar, suporte"
+                    className="h-7 text-xs"
+                    onBlur={(e) => {
+                      const newValue = e.target.value;
+                      const currentValue = (flow.trigger_keywords ?? []).join(", ");
+                      if (newValue !== currentValue) handleKeywordsChange(flow.id, newValue);
+                    }}
                   />
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="h-7 text-xs gap-1.5"
-                    onClick={() => setEditingFlowId(flow.id)}
-                  >
-                    <Pencil className="h-3 w-3" />
-                    Editar
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 text-destructive"
-                    onClick={() => handleDelete(flow.id)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
                 </div>
               </CardContent>
             </Card>

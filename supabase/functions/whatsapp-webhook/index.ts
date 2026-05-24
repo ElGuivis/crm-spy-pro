@@ -16,6 +16,7 @@ import {
   handleReceptionistButtonClick,
 } from "../_shared/wa-webhook-receptionist-handler.ts";
 import { handleMenuTrigger } from "../_shared/wa-webhook-menu-trigger.ts";
+import { handleChatbotFlow } from "../_shared/wa-webhook-flow-handler.ts";
 import { routeToAI } from "../_shared/wa-webhook-ai-routing.ts";
 
 declare const EdgeRuntime: { waitUntil: (promise: Promise<void>) => void } | undefined;
@@ -182,6 +183,11 @@ serve(async (req) => {
     if (result) return result;
 
     result = await handleReceptionistButtonClick(ctx);
+    if (result) return result;
+
+    // Chatbot Flow: sessão ativa OU keyword match. Roda antes do menu para que
+    // flows possam interceptar conversas em andamento.
+    result = await handleChatbotFlow(ctx);
     if (result) return result;
 
     result = await handleMenuTrigger(ctx);
