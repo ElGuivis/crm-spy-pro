@@ -7,11 +7,11 @@ import BlingClientDetailsDialog from "@/components/clients/BlingClientDetailsDia
 import type { Tables } from "@/integrations/supabase/types";
 import { createLogger } from "@/lib/logger";
 import { BlingClientsHeader } from "./bling/BlingClientsHeader";
-import { BlingClientsStats } from "./bling/BlingClientsStats";
-import { BlingClientsFilters } from "./bling/BlingClientsFilters";
 import { BlingClientsTable } from "./bling/BlingClientsTable";
-import { BlingClientsPagination } from "./bling/BlingClientsPagination";
-import { parseEnderecoGeral } from "./bling/blingClientsHelpers";
+import { ClientsStatsCards } from "./shared/ClientsStatsCards";
+import { ClientsFilters } from "./shared/ClientsFilters";
+import { ClientsPaginationFooter } from "./shared/ClientsPaginationFooter";
+import { parseBlingEnderecoGeral } from "./shared/clientsHelpers";
 
 const log = createLogger("BlingClientsContent");
 
@@ -26,6 +26,7 @@ export function BlingClientsContent({ integrationId }: Props) {
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   const data = useBlingClientsData(integrationId);
+  const isSyncing = data.sync.syncStatus === "syncing";
 
   const handleExport = async () => {
     const { data: allClients, error } = await supabase
@@ -43,7 +44,7 @@ export function BlingClientsContent({ integrationId }: Props) {
       filename: "clientes-bling",
       headers: ["Nome", "Email", "Celular", "Telefone", "CPF/CNPJ", "Cidade", "UF"],
       data: allClients.map((c) => {
-        const geral = parseEnderecoGeral(c.endereco);
+        const geral = parseBlingEnderecoGeral(c.endereco);
         return [c.nome, c.email, c.celular, c.telefone, c.cpf_cnpj, geral.municipio, geral.uf];
       }),
     });
@@ -81,16 +82,20 @@ export function BlingClientsContent({ integrationId }: Props) {
         onExport={handleExport}
       />
 
-      <BlingClientsStats
+      <ClientsStatsCards
         totalCount={data.totalCount}
         integration={data.integration}
-        isSyncing={data.sync.syncStatus === "syncing"}
-        currentJob={data.sync.currentJob}
+        syncProgress={isSyncing && data.sync.currentJob ? {
+          saved: data.sync.currentJob.saved_count ?? 0,
+          total: data.sync.currentJob.total_count ?? 0,
+        } : null}
+        progressLabel="Sincronizando clientes..."
       />
 
-      <BlingClientsFilters
+      <ClientsFilters
         searchTerm={data.searchTerm}
         pageSize={data.pageSize}
+        placeholder="Buscar por nome, email, telefone, CPF/CNPJ..."
         onSearch={data.handleSearch}
         onPageSizeChange={data.handlePageSizeChange}
       />
@@ -104,7 +109,7 @@ export function BlingClientsContent({ integrationId }: Props) {
         onViewDetails={handleViewDetails}
       />
 
-      <BlingClientsPagination
+      <ClientsPaginationFooter
         currentPage={data.currentPage}
         pageSize={data.pageSize}
         totalPages={data.totalPages}

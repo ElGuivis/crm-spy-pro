@@ -1,22 +1,25 @@
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { getPageNumbers } from "./blingClientsHelpers";
+import { getPageNumbers } from "./clientsHelpers";
 
 interface Props {
   currentPage: number;
   pageSize: number;
   totalPages: number;
   displayCount: number;
+  itemLabel?: string;
   onPageChange: (page: number) => void;
 }
 
-export function BlingClientsPagination({ currentPage, pageSize, totalPages, displayCount, onPageChange }: Props) {
+export function ClientsPaginationFooter({
+  currentPage, pageSize, totalPages, displayCount, itemLabel = "clientes", onPageChange,
+}: Props) {
   if (totalPages <= 1) return null;
 
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex items-center justify-between flex-wrap gap-3">
       <p className="text-sm text-muted-foreground">
-        Mostrando {((currentPage - 1) * pageSize) + 1} a {Math.min(currentPage * pageSize, displayCount)} de {displayCount} clientes
+        Mostrando {((currentPage - 1) * pageSize) + 1} a {Math.min(currentPage * pageSize, displayCount)} de {displayCount.toLocaleString('pt-BR')} {itemLabel}
       </p>
       <div className="flex items-center gap-1">
         <Button

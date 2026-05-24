@@ -1,8 +1,6 @@
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-export const formatPhone = (phone: string | null) => phone || '-';
-
 export const getInitials = (name: string | null) => {
   if (!name) return '??';
   return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
@@ -61,7 +59,8 @@ interface AddressGeral {
   uf?: string;
 }
 
-export const parseEnderecoGeral = (endereco: unknown): AddressGeral => {
+/** Parses Bling-style endereco column (handles {geral: {...}} OR flat). */
+export const parseBlingEnderecoGeral = (endereco: unknown): AddressGeral => {
   const e = endereco as Record<string, unknown> | null;
   if (!e) return {};
   return (e.geral || e) as AddressGeral;

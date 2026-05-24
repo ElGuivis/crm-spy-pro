@@ -1,12 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Users, Clock } from "lucide-react";
-import { formatLastSync, getMostRecentSync } from "./blingClientsHelpers";
-
-interface CurrentJob {
-  total_count?: number;
-  saved_count?: number;
-}
+import { formatLastSync, getMostRecentSync } from "./clientsHelpers";
 
 interface Props {
   totalCount?: number;
@@ -15,22 +10,25 @@ interface Props {
     last_sync_customers_at?: string | null;
     last_sync_at?: string | null;
   } | null;
-  isSyncing: boolean;
-  currentJob?: CurrentJob | null;
+  /** When set, renders a sync progress card above the stats grid. */
+  syncProgress?: { saved: number; total: number } | null;
+  progressLabel?: string;
 }
 
-export function BlingClientsStats({ totalCount, integration, isSyncing, currentJob }: Props) {
+export function ClientsStatsCards({ totalCount, integration, syncProgress, progressLabel }: Props) {
+  const showProgress = syncProgress && syncProgress.total > 0;
+
   return (
     <>
-      {isSyncing && currentJob && (currentJob.total_count ?? 0) > 0 && (
+      {showProgress && (
         <Card>
           <CardContent className="pt-4">
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span>Sincronizando clientes...</span>
-                <span>{currentJob.saved_count} de {currentJob.total_count}</span>
+                <span>{progressLabel || "Sincronizando..."}</span>
+                <span>{syncProgress.saved} de {syncProgress.total}</span>
               </div>
-              <Progress value={((currentJob.saved_count ?? 0) / (currentJob.total_count ?? 1)) * 100} className="h-2" />
+              <Progress value={(syncProgress.saved / syncProgress.total) * 100} className="h-2" />
             </div>
           </CardContent>
         </Card>

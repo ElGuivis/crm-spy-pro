@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Users, Phone, Mail, MapPin, Eye, ShoppingBag } from "lucide-react";
 import type { Tables } from "@/integrations/supabase/types";
-import { getInitials, parseEnderecoGeral } from "./blingClientsHelpers";
+import { getInitials, parseBlingEnderecoGeral } from "../shared/clientsHelpers";
 
 interface Props {
   clients: Tables<"bling_customers">[] | undefined;
@@ -63,7 +63,7 @@ export function BlingClientsTable({ clients, isLoading, pageSize, searchTerm, or
             </tr>
           ) : (
             clients?.map((client) => {
-              const enderecoGeral = parseEnderecoGeral(client.endereco);
+              const enderecoGeral = parseBlingEnderecoGeral(client.endereco);
               const cidade = enderecoGeral.municipio || '';
               const uf = enderecoGeral.uf || '';
               const cidadeUf = cidade && uf ? `${cidade}/${uf}` : cidade || uf || '';
