@@ -6,7 +6,7 @@ import {
   buildFilterOptions, filterCatalogProducts,
 } from "@/components/catalogo/catalogoHelpers";
 
-export function useCatalogoProducts(integrationId: string) {
+export function useCatalogoProducts(integrationId: string, enabled = true) {
   const [searchQuery, setSearchQuery] = useState("");
   const [onlyInStock, setOnlyInStock] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -20,6 +20,7 @@ export function useCatalogoProducts(integrationId: string) {
       const { data } = await supabase.from("integrations").select("name, type").eq("id", integrationId).maybeSingle();
       return data;
     },
+    enabled: enabled && !!integrationId,
   });
 
   const isBling = integration?.type === "bling";
@@ -32,7 +33,7 @@ export function useCatalogoProducts(integrationId: string) {
         .eq("integration_id", integrationId).eq("active", true);
       return data || [];
     },
-    enabled: !!integrationId && !isBling,
+    enabled: enabled && !!integrationId && !isBling,
   });
 
   const { data: blingProducts, isLoading: blingLoading } = useQuery({
@@ -43,7 +44,7 @@ export function useCatalogoProducts(integrationId: string) {
         .eq("integration_id", integrationId).is("produto_pai_id", null);
       return data || [];
     },
-    enabled: !!integrationId && isBling === true,
+    enabled: enabled && !!integrationId && isBling === true,
   });
 
   const products: CatalogProduct[] = useMemo(() => {
