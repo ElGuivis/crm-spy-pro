@@ -51,6 +51,7 @@ async function main() {
       if (relativePath.includes("_shared/")) continue;
       if (relativePath.includes(".test.")) continue;
       if (relativePath.endsWith("types.ts") && relativePath.includes("integrations")) continue;
+      if (relativePath.startsWith("src/components/ui/")) continue; // shadcn/ui generated
 
       const content = await Deno.readTextFile(entry.path);
       const lineCount = content.split("\n").length;

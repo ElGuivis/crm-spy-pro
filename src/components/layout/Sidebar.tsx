@@ -1,10 +1,6 @@
-import { 
-  LayoutDashboard, Plug, Settings, Headset, Zap, ChevronLeft, ChevronRight, ChevronDown,
-  ShoppingCart, UserCircle, Package, Ticket, UsersRound, LogOut, Coins, Lock,
-  Truck, Megaphone, Grid3X3, X, BookImage,
-  Mail, Activity, Instagram, Star
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, LogOut, Lock, X } from "lucide-react";
 import { TenantSwitcher } from "@/components/layout/TenantSwitcher";
+import { navGroups, type NavItem } from "@/components/layout/sidebar-nav";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { SpyProLogo } from "@/components/common/SpyProLogo";
@@ -16,71 +12,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNewOrders } from "@/contexts/NewOrdersContext";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useIsMobile } from "@/hooks/use-mobile";
-
-interface NavItem {
-  icon: React.ElementType;
-  label: string;
-  href?: string;
-  badgeKey?: 'sales' | 'conversations';
-  adminOnly?: boolean;
-  isSubItem?: boolean;
-  permissionKey?: string;
-  children?: NavItem[];
-  isCollapsible?: boolean;
-}
-
-interface NavGroup {
-  label: string;
-  items: NavItem[];
-}
-
-const navGroups: NavGroup[] = [
-  {
-    label: "Principal",
-    items: [
-      { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard", permissionKey: "dashboard" },
-      { icon: Headset, label: "Atendimentos", href: "/atendimentos", permissionKey: "conversations" },
-    ]
-  },
-  {
-    label: "E-commerce",
-    items: [
-      { icon: ShoppingCart, label: "Vendas", href: "/sales", badgeKey: 'sales', permissionKey: "sales" },
-      { icon: UserCircle, label: "Clientes", href: "/clients", permissionKey: "clients" },
-      { icon: Grid3X3, label: "Matriz RFM", href: "/rfm", permissionKey: "dashboard" },
-      { icon: Package, label: "Produtos", href: "/products", permissionKey: "products" },
-      { icon: Ticket, label: "Cupons", href: "/coupons", permissionKey: "coupons" },
-      { icon: Star, label: "Fidelidade", href: "/fidelidade", permissionKey: "coupons" },
-      { icon: Truck, label: "Envios", href: "/envios", permissionKey: "sales" },
-      { icon: BookImage, label: "Catálogo WhatsApp", href: "/catalogo-whatsapp", permissionKey: "products" },
-    ]
-  },
-  {
-    label: "Comunicação",
-    items: [
-      { icon: Megaphone, label: "Disparos", href: "/disparos", permissionKey: "conversations" },
-      { icon: Mail, label: "E-mail Marketing", href: "/email-marketing", permissionKey: "conversations" },
-      
-    ]
-  },
-  {
-    label: "Automação",
-    items: [
-      { icon: Zap, label: "Pós Venda", href: "/automations", permissionKey: "automations" },
-      { icon: Instagram, label: "Instagram", href: "/instagram", permissionKey: "conversations" },
-    ]
-  },
-  {
-    label: "Sistema",
-    items: [
-      { icon: Plug, label: "Integrações", href: "/integrations", permissionKey: "integrations" },
-      { icon: Coins, label: "Tokens", href: "/tokens", adminOnly: true },
-      { icon: UsersRound, label: "Equipe", href: "/team", adminOnly: true },
-      { icon: Activity, label: "Operações", href: "/operations", adminOnly: true },
-      { icon: Settings, label: "Configurações", href: "/settings", permissionKey: "settings" },
-    ]
-  }
-];
 
 interface SidebarProps {
   mobileOpen?: boolean;
