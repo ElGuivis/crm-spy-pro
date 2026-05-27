@@ -15,7 +15,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
-import { PRIMARY_FRONTEND_URL } from "../_shared/frontend-config.ts";
+import { PRIMARY_FRONTEND_URL, isAllowedRedirectUrl } from "../_shared/frontend-config.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { nuvemshopApiBase, nuvemshopFetch } from "../_shared/nuvemshop-helpers.ts";
 
@@ -96,7 +96,7 @@ serve(async (req) => {
       log.error("[nuvemshop-oauth-callback] Invalid state:", stateParam);
       return safeRedirect(frontendUrl, "ns_error=invalid_state");
     }
-    if (stateData.frontend_url) frontendUrl = stateData.frontend_url;
+    if (stateData.frontend_url && isAllowedRedirectUrl(stateData.frontend_url)) frontendUrl = stateData.frontend_url;
     if (new Date(stateData.expires_at) < new Date()) {
       await supabase.from("oauth_states").delete().eq("id", stateData.id);
       return safeRedirect(frontendUrl, "ns_error=state_expired");

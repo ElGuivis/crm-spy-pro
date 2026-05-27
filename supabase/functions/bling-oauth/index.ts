@@ -4,7 +4,7 @@ type ServiceClient = ReturnType<typeof createClient>;
 import { encryptSecret } from "../_shared/secret-crypto.ts";
 import { readBlingTokens } from "../_shared/credential-helpers.ts";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
-import { PRIMARY_FRONTEND_URL } from "../_shared/frontend-config.ts";
+import { PRIMARY_FRONTEND_URL, isAllowedRedirectUrl } from "../_shared/frontend-config.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -127,7 +127,7 @@ async function getAuthUrl(supabase: ServiceClient, body: { tenant_id: string; us
       user_id,
       provider: 'bling',
       redirect_path: '/integrations',
-      frontend_url: frontend_url || PRIMARY_FRONTEND_URL,
+      frontend_url: (frontend_url && isAllowedRedirectUrl(frontend_url)) ? frontend_url : PRIMARY_FRONTEND_URL,
       expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
     });
 
