@@ -19,40 +19,41 @@ serve(async (req) => {
     return new Response("Invalid redirect URL", { status: 400 });
   }
 
-  if (tokenId) {
-    try {
-      const supabase = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-      );
+  // Require a valid campaign token — prevents open redirect abuse
+  if (!tokenId) return new Response("Missing tracking token", { status: 400 });
 
-      const { data: token } = await supabase
+  try {
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+
+    const { data: token } = await supabase
+      .from("email_unsubscribe_tokens")
+      .select("id, tenant_id, campaign_id, recipient_email")
+      .eq("id", tokenId)
+      .maybeSingle();
+
+    if (!token) return new Response("Invalid tracking token", { status: 403 });
+
+    await Promise.all([
+      supabase.from("email_events").insert({
+        tenant_id: token.tenant_id,
+        campaign_id: token.campaign_id,
+        recipient_email: token.recipient_email,
+        event_type: "click",
+        link_url: redirectUrl.href,
+        ip_address: req.headers.get("x-forwarded-for") ?? req.headers.get("cf-connecting-ip"),
+        user_agent: req.headers.get("user-agent"),
+        metadata: { source: "link_tracking" },
+      }),
+      supabase
         .from("email_unsubscribe_tokens")
-        .select("id, tenant_id, campaign_id, recipient_email")
-        .eq("id", tokenId)
-        .maybeSingle();
-
-      if (token) {
-        await Promise.all([
-          supabase.from("email_events").insert({
-            tenant_id: token.tenant_id,
-            campaign_id: token.campaign_id,
-            recipient_email: token.recipient_email,
-            event_type: "click",
-            link_url: redirectUrl.href,
-            ip_address: req.headers.get("x-forwarded-for") ?? req.headers.get("cf-connecting-ip"),
-            user_agent: req.headers.get("user-agent"),
-            metadata: { source: "link_tracking" },
-          }),
-          supabase
-            .from("email_unsubscribe_tokens")
-            .update({ last_clicked_at: new Date().toISOString() })
-            .eq("id", tokenId),
-        ]);
-      }
-    } catch {
-      // Silent fail — always redirect
-    }
+        .update({ last_clicked_at: new Date().toISOString() })
+        .eq("id", tokenId),
+    ]);
+  } catch {
+    return new Response("Invalid tracking token", { status: 403 });
   }
 
   return Response.redirect(redirectUrl.href, 302);
