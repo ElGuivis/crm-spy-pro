@@ -29,6 +29,16 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Validate Evolution API key — prevents forged webhook injection
+  const expectedApiKey = Deno.env.get('EVOLUTION_API_KEY');
+  const incomingApiKey = req.headers.get('apikey');
+  if (!expectedApiKey || incomingApiKey !== expectedApiKey) {
+    log.warn('[whatsapp-webhook] Unauthorized: invalid or missing apikey header');
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
