@@ -62,7 +62,7 @@ export function SetupChecklist() {
       link: '/integrations',
       check: async () => {
         if (!tenant?.id) return false;
-        const { count } = await supabase.from('integrations').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).eq('type', 'whatsapp');
+        const { count } = await supabase.from('integrations').select('id', { count: 'exact', head: true }).eq('tenant_id', tenant.id).in('type', ['whatsapp', 'evolution_whatsapp']);
         return (count || 0) > 0;
       },
     },
