@@ -84,7 +84,7 @@ export function SalesContent({ integrationId }: SalesContentProps) {
         .order('created_at_remote', { ascending: false }).range(from, to);
       const { data, error, count } = await q;
       if (error) throw error;
-      setOrders((data || []).map(d => mapOrder(d)));
+      setOrders((data || []).map((d: Parameters<typeof mapOrder>[0]) => mapOrder(d)));
       setTotalOrders(count || 0);
     } catch (error) {
       log.error('Error fetching orders:', error);
@@ -98,7 +98,7 @@ export function SalesContent({ integrationId }: SalesContentProps) {
       const q = buildFilteredQuery(supabase.from('li_orders').select(LI_ORDER_SELECT, { count: 'exact' }))
         .order('created_at_remote', { ascending: false }).range(from, from + pageSize - 1);
       const { data, error, count } = await q;
-      if (!error && data) { setOrders(data.map(d => mapOrder(d))); setTotalOrders(count || 0); }
+      if (!error && data) { setOrders(data.map((d: Parameters<typeof mapOrder>[0]) => mapOrder(d))); setTotalOrders(count || 0); }
     } catch (error) { log.error('Error in silent refresh:', error); }
   }, [currentPage, pageSize, buildFilteredQuery]);
 

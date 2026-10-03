@@ -25,7 +25,17 @@ interface AddIntegrationDialogProps {
   onSelectNuvemshop?: () => void;
 }
 
-const availableIntegrations = [
+interface IntegrationField { name: string; label: string; placeholder: string; type: string }
+interface IntegrationOption {
+  id: string;
+  name: string;
+  description: string;
+  icon: React.ElementType;
+  fields: IntegrationField[];
+  customFlow?: boolean;
+}
+
+const availableIntegrations: IntegrationOption[] = [
   {
     id: "loja_integrada",
     name: "Loja Integrada",

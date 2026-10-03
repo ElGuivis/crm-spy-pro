@@ -28,11 +28,17 @@ export const PROVIDER_LABELS: Record<string, string> = {
   openai: "OpenAI", google: "Google", groq: "Groq", mistral: "Mistral",
 };
 
+export interface AICredential {
+  provider: string;
+  is_default?: boolean;
+  [key: string]: unknown;
+}
+
 export function useAICredentials() {
   const { tenantId } = useAuth();
   return useQuery({
     queryKey: ["tenant-ai-credentials", tenantId],
-    queryFn: async () => {
+    queryFn: async (): Promise<AICredential[]> => {
       if (!tenantId) return [];
       const { data, error } = await supabase.functions.invoke("manage-credentials", { body: { action: "list" } });
       if (error) throw error;
@@ -49,7 +55,7 @@ export function useAIAgentEditor(
   const { data: credentials = [], isLoading: credentialsLoading } = useAICredentials();
   const availableProviders = credentials.map((c) => c.provider).filter((p: string, i: number, arr: string[]) => arr.indexOf(p) === i);
   const hasAIProvider = availableProviders.length > 0;
-  const defaultProvider = credentials.find((c) => (c as any).is_default)?.provider;
+  const defaultProvider = credentials.find((c) => c.is_default)?.provider;
 
   const [name, setName] = useState(agent.name);
   const [isActive, setIsActive] = useState(agent.is_active);

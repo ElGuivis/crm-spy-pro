@@ -129,7 +129,7 @@ export function normalizeLiProducts(liProducts: any[]): CatalogProduct[] {
         stock,
         imageUrl: liImageUrl(raw, p.image_url),
         sku: p.sku,
-        variations: [],
+        variations: [] as string[],
         parsedAttributes: {},
         source: "li" as const,
       };
