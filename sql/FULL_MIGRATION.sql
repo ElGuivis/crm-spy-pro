@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 6Px6tG0Dj9poY2q4bo1yfnmkSbgvFBfKfDn2jXMVsBsOGWg8VIay587H3z1rcCb
+\restrict Xzu7uCYilvjZA4MDaSTfCcGAuBNSLqdrV97U6ZgzbbVc8BmiTGN3DZoTOQSA7iI
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -2892,6 +2892,7 @@ $$;
 
 CREATE FUNCTION public.update_chatbot_flows_updated_at() RETURNS trigger
     LANGUAGE plpgsql
+    SET search_path TO 'public'
     AS $$
 BEGIN NEW.updated_at = now(); RETURN NEW; END;
 $$;
@@ -16511,5 +16512,5 @@ ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 6Px6tG0Dj9poY2q4bo1yfnmkSbgvFBfKfDn2jXMVsBsOGWg8VIay587H3z1rcCb
+\unrestrict Xzu7uCYilvjZA4MDaSTfCcGAuBNSLqdrV97U6ZgzbbVc8BmiTGN3DZoTOQSA7iI
 
