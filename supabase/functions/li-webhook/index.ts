@@ -3,6 +3,7 @@ type ServiceClient = ReturnType<typeof createClient>;
 
 declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
 import { liAuthHeader } from "../_shared/li-auth.ts";
+import { timingSafeEqual } from "../_shared/timing-safe.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
@@ -60,11 +61,13 @@ Deno.serve(async (req) => {
 
   const integration = (integrations || []).find((i: Record<string, unknown>) => {
     const meta = i.metadata;
-    return meta && typeof meta === 'object' && (meta as Record<string, unknown>).webhook_token === tokenToValidate;
+    if (!meta || typeof meta !== 'object') return false;
+    const stored = (meta as Record<string, unknown>).webhook_token;
+    return typeof stored === 'string' && timingSafeEqual(stored, String(tokenToValidate));
   });
 
   if (lookupError || !integration) {
-    log.error('[WEBHOOK] Invalid token - no matching integration found', { tokenToValidate, count: integrations?.length });
+    log.error('[WEBHOOK] Invalid token - no matching integration found', { count: integrations?.length });
     return new Response(JSON.stringify({ error: 'Invalid token' }), {
       status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
