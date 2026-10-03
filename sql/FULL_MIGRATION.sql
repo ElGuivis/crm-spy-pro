@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict MFIycewDzP86bSVLMOduphmMbXjus5zZXfannYUG3STJwa8bCaWffpHpPLkdS8N
+\restrict 1FBn09SCGDURYbb3FxBCaxueoPRy4hCpaqpZMQIxquSpi5ZdG6Qp3TjymHt3ALc
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.11
@@ -406,7 +406,7 @@ BEGIN
 
   _is_owner := (_owned_tenant_id IS NOT NULL);
 
-  _logs := array_append(_logs, 'Iniciando exclusÃ£o transacional...');
+  _logs := array_append(_logs, 'Iniciando exclusão transacional...');
 
   -- =========================================================
   -- STEP 1: Always remove memberships in OTHER tenants
@@ -445,18 +445,18 @@ BEGIN
     _logs := array_append(_logs, 'AI configs limpos');
 
     DELETE FROM public.tenants WHERE id = _owned_tenant_id;
-    _logs := array_append(_logs, 'Tenant e dados cascateados excluÃ­dos');
+    _logs := array_append(_logs, 'Tenant e dados cascateados excluídos');
   END IF;
 
   -- =========================================================
   -- STEP 3: Always clean up profile and oauth
   -- =========================================================
   DELETE FROM public.profiles WHERE user_id = _user_id;
-  _logs := array_append(_logs, 'Perfil excluÃ­do');
+  _logs := array_append(_logs, 'Perfil excluído');
 
   DELETE FROM public.oauth_states WHERE user_id = _user_id;
 
-  _logs := array_append(_logs, 'âœ… Dados excluÃ­dos com sucesso');
+  _logs := array_append(_logs, '✅ Dados excluídos com sucesso');
 
   RETURN jsonb_build_object(
     'success', true,
@@ -678,9 +678,9 @@ BEGIN
     -- Check if already encrypted (pgcrypto produces specific header bytes)
     BEGIN
       _test := public.decrypt_secret(NEW.api_key_encrypted);
-      -- If decryption succeeds, it's already encrypted â€” leave it
+      -- If decryption succeeds, it's already encrypted — leave it
     EXCEPTION WHEN OTHERS THEN
-      -- Not encrypted yet (probably btoa or plaintext) â€” encrypt it
+      -- Not encrypted yet (probably btoa or plaintext) — encrypt it
       BEGIN
         -- Try to decode as base64 first (btoa legacy)
         NEW.api_key_encrypted := public.encrypt_secret(
@@ -1548,7 +1548,7 @@ DECLARE
   _removed_count integer := 0;
   _logs text[] := ARRAY[]::text[];
 BEGIN
-  _logs := array_append(_logs, 'Removendo participaÃ§Ãµes em equipes...');
+  _logs := array_append(_logs, 'Removendo participações em equipes...');
 
   -- Remove permissions first
   DELETE FROM public.member_permissions
@@ -1563,7 +1563,7 @@ BEGIN
   SELECT count(*) INTO _removed_count FROM deleted;
 
   _logs := array_append(_logs, format('Removido de %s equipe(s)', _removed_count));
-  _logs := array_append(_logs, 'âœ… Saiu de todas as equipes com sucesso');
+  _logs := array_append(_logs, '✅ Saiu de todas as equipes com sucesso');
 
   RETURN jsonb_build_object(
     'success', true,
@@ -1984,8 +1984,8 @@ CREATE FUNCTION public.mask_secret(_plaintext text) RETURNS text
     SET search_path TO 'public'
     AS $$
   SELECT CASE
-    WHEN _plaintext IS NULL OR length(_plaintext) < 5 THEN 'â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢'
-    ELSE 'â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢' || right(_plaintext, 4)
+    WHEN _plaintext IS NULL OR length(_plaintext) < 5 THEN '••••••••'
+    ELSE '••••••••' || right(_plaintext, 4)
   END;
 $$;
 
@@ -2897,22 +2897,22 @@ CREATE TABLE public.ai_agents (
     inactivity_enabled boolean DEFAULT false,
     inactivity_timeout_minutes integer,
     inactivity_target_column_id uuid,
-    inactivity_message text DEFAULT 'Por inatividade estamos finalizando a conversa. Fique Ã  vontade para mandar uma nova mensagem quando precisar!'::text,
+    inactivity_message text DEFAULT 'Por inatividade estamos finalizando a conversa. Fique à vontade para mandar uma nova mensagem quando precisar!'::text,
     keyword_action_rules jsonb DEFAULT '[]'::jsonb,
     message_buffer_enabled boolean DEFAULT false,
     message_buffer_delay_seconds integer DEFAULT 10,
     store_integration_id uuid,
     order_verification_enabled boolean DEFAULT false,
     order_verification_mode text DEFAULT 'sequential'::text,
-    order_verification_messages jsonb DEFAULT '{"ask_cpf": "Agora preciso dos *3 primeiros dÃ­gitos do CPF* cadastrado no pedido para confirmar sua identidade.", "ask_both": "Para consultar seu pedido, por favor informe:\n\n1ï¸âƒ£ *NÃºmero do pedido*\n2ï¸âƒ£ *3 primeiros dÃ­gitos do CPF* cadastrado", "cpf_wrong": "âŒ CPF incorreto. Por favor, tente novamente.\n\n_(Tentativa {attempts}/3)_", "after_verified": "Posso ajudar com mais alguma coisa sobre este pedido?", "order_verified": "âœ… *Pedido encontrado!*\n\n{order_details}", "order_not_found": "âŒ NÃ£o encontrei o pedido *#{order_number}* em nosso sistema.\n\nPor favor, verifique o nÃºmero e tente novamente.", "ask_order_number": "Por favor, informe o *nÃºmero do pedido* para que eu possa consultar.", "cpf_max_attempts": "âš ï¸ VocÃª excedeu o nÃºmero mÃ¡ximo de tentativas.\n\nVou transferir vocÃª para um de nossos atendentes que poderÃ¡ ajudÃ¡-lo."}'::jsonb,
-    order_details_template text DEFAULT 'ðŸ“¦ *Pedido #{numero}*
-ðŸ“… Data: {data_criacao}
-ðŸ‘¤ Cliente: {cliente_nome}
-ðŸ“Š Status: {situacao_nome}
-ðŸ’° Total: R$ {valor_total}
-ðŸšš Rastreio: {codigo_rastreio}
+    order_verification_messages jsonb DEFAULT '{"ask_cpf": "Agora preciso dos *3 primeiros dígitos do CPF* cadastrado no pedido para confirmar sua identidade.", "ask_both": "Para consultar seu pedido, por favor informe:\n\n1️⃣ *Número do pedido*\n2️⃣ *3 primeiros dígitos do CPF* cadastrado", "cpf_wrong": "❌ CPF incorreto. Por favor, tente novamente.\n\n_(Tentativa {attempts}/3)_", "after_verified": "Posso ajudar com mais alguma coisa sobre este pedido?", "order_verified": "✅ *Pedido encontrado!*\n\n{order_details}", "order_not_found": "❌ Não encontrei o pedido *#{order_number}* em nosso sistema.\n\nPor favor, verifique o número e tente novamente.", "ask_order_number": "Por favor, informe o *número do pedido* para que eu possa consultar.", "cpf_max_attempts": "⚠️ Você excedeu o número máximo de tentativas.\n\nVou transferir você para um de nossos atendentes que poderá ajudá-lo."}'::jsonb,
+    order_details_template text DEFAULT '📦 *Pedido #{numero}*
+📅 Data: {data_criacao}
+👤 Cliente: {cliente_nome}
+📊 Status: {situacao_nome}
+💰 Total: R$ {valor_total}
+🚚 Rastreio: {codigo_rastreio}
 
-ðŸ›’ *Itens:*
+🛒 *Itens:*
 {order_items}'::text,
     order_not_found_column_id uuid,
     cpf_max_attempts_column_id uuid,
@@ -2934,22 +2934,22 @@ CREATE TABLE public.ai_assistant_configs (
     tenant_id uuid NOT NULL,
     is_active boolean DEFAULT true NOT NULL,
     system_prompt text,
-    welcome_message text DEFAULT 'OlÃ¡! Sou o assistente virtual. Como posso ajudÃ¡-lo?'::text,
-    transfer_keywords text[] DEFAULT ARRAY['atendente'::text, 'humano'::text, 'pessoa'::text, 'falar com alguÃ©m'::text],
+    welcome_message text DEFAULT 'Olá! Sou o assistente virtual. Como posso ajudá-lo?'::text,
+    transfer_keywords text[] DEFAULT ARRAY['atendente'::text, 'humano'::text, 'pessoa'::text, 'falar com alguém'::text],
     business_hours jsonb DEFAULT '{"enabled": false}'::jsonb,
-    out_of_hours_message text DEFAULT 'Estamos fora do horÃ¡rio de atendimento. Retornaremos em breve!'::text,
+    out_of_hours_message text DEFAULT 'Estamos fora do horário de atendimento. Retornaremos em breve!'::text,
     max_context_messages integer DEFAULT 10,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     default_ai_agent_id uuid,
     inactivity_timeout_minutes integer,
-    inactivity_message text DEFAULT 'Encerrando o atendimento por inatividade. Quando precisar, Ã© sÃ³ chamar novamente!'::text,
+    inactivity_message text DEFAULT 'Encerrando o atendimento por inatividade. Quando precisar, é só chamar novamente!'::text,
     auto_close_enabled boolean DEFAULT false NOT NULL,
     auto_close_minutes integer DEFAULT 120 NOT NULL,
-    auto_close_message text DEFAULT 'Como nÃ£o tivemos mais contato, estamos encerrando o seu atendimento. Caso precise de alguma ajuda, fique Ã  vontade para entrar em contato novamente!'::text NOT NULL,
+    auto_close_message text DEFAULT 'Como não tivemos mais contato, estamos encerrando o seu atendimento. Caso precise de alguma ajuda, fique à vontade para entrar em contato novamente!'::text NOT NULL,
     automation_auto_close_enabled boolean DEFAULT true,
     automation_auto_close_minutes integer DEFAULT 120,
-    automation_auto_close_message text DEFAULT 'Como nÃ£o tivemos mais contato estamos encerrando o seu atendimento, caso precise de alguma ajuda fique a vontade para entrar em contato novamente.'::text
+    automation_auto_close_message text DEFAULT 'Como não tivemos mais contato estamos encerrando o seu atendimento, caso precise de alguma ajuda fique a vontade para entrar em contato novamente.'::text
 );
 
 
@@ -3026,9 +3026,9 @@ CREATE TABLE public.birthday_configs (
     whatsapp_integration_id uuid,
     email_enabled boolean DEFAULT false,
     email_integration_id uuid,
-    email_subject text DEFAULT 'Feliz AniversÃ¡rio! ðŸŽ‚'::text,
+    email_subject text DEFAULT 'Feliz Aniversário! 🎂'::text,
     email_body text,
-    message_template text DEFAULT 'OlÃ¡ {nome}! ðŸŽ‚ðŸŽ‰ Feliz aniversÃ¡rio! Para comemorar, preparamos um cupom especial de {desconto}% de desconto para vocÃª! Use o cÃ³digo *{cupom}* e aproveite. VÃ¡lido por {validade} dias!'::text NOT NULL,
+    message_template text DEFAULT 'Olá {nome}! 🎂🎉 Feliz aniversário! Para comemorar, preparamos um cupom especial de {desconto}% de desconto para você! Use o código *{cupom}* e aproveite. Válido por {validade} dias!'::text NOT NULL,
     tokens_per_execution integer DEFAULT 3 NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
@@ -3489,7 +3489,7 @@ CREATE TABLE public.cashback_configs (
     webhook_url text,
     send_via_whatsapp boolean DEFAULT true,
     whatsapp_integration_id uuid,
-    message_template text DEFAULT 'OlÃ¡ {{cliente_nome}}! ðŸŽ‰ Obrigado pela sua compra! Use o cupom {{cupom}} e ganhe {{valor_cupom}} de desconto na prÃ³xima compra. VÃ¡lido atÃ© {{validade}}.'::text,
+    message_template text DEFAULT 'Olá {{cliente_nome}}! 🎉 Obrigado pela sua compra! Use o cupom {{cupom}} e ganhe {{valor_cupom}} de desconto na próxima compra. Válido até {{validade}}.'::text,
     name text DEFAULT 'Cashback'::text NOT NULL,
     send_via_email boolean DEFAULT false,
     email_integration_id uuid,
@@ -3498,10 +3498,10 @@ CREATE TABLE public.cashback_configs (
     email_body_html text,
     reminder_1_enabled boolean DEFAULT false,
     reminder_1_days_before integer DEFAULT 7,
-    reminder_1_message text DEFAULT 'OlÃ¡ {{cliente_nome}}! â° Seu cupom {{cupom}} de {{valor_cupom}} de desconto expira em {{dias_restantes}} dias! NÃ£o perca essa oportunidade. VÃ¡lido atÃ© {{validade}}.'::text,
+    reminder_1_message text DEFAULT 'Olá {{cliente_nome}}! ⏰ Seu cupom {{cupom}} de {{valor_cupom}} de desconto expira em {{dias_restantes}} dias! Não perca essa oportunidade. Válido até {{validade}}.'::text,
     reminder_2_enabled boolean DEFAULT false,
     reminder_2_days_before integer DEFAULT 3,
-    reminder_2_message text DEFAULT 'OlÃ¡ {{cliente_nome}}! ðŸš¨ Ãšltima chance! Seu cupom {{cupom}} expira em {{dias_restantes}} dias. Use agora e garanta {{valor_cupom}} de desconto!'::text,
+    reminder_2_message text DEFAULT 'Olá {{cliente_nome}}! 🚨 Última chance! Seu cupom {{cupom}} expira em {{dias_restantes}} dias. Use agora e garanta {{valor_cupom}} de desconto!'::text,
     tenant_id uuid,
     integration_id uuid
 );
@@ -5828,7 +5828,7 @@ CREATE TABLE public.oauth_states (
 CREATE TABLE public.order_notification_configs (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     tenant_id uuid NOT NULL,
-    name text DEFAULT 'NotificaÃ§Ã£o de Pedido'::text NOT NULL,
+    name text DEFAULT 'Notificação de Pedido'::text NOT NULL,
     integration_id uuid,
     whatsapp_integration_id uuid,
     email_integration_id uuid,
@@ -5948,13 +5948,13 @@ CREATE TABLE public.quick_replies (
 CREATE TABLE public.reactivation_configs (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     tenant_id uuid NOT NULL,
-    name text DEFAULT 'ReativaÃ§Ã£o de Clientes'::text NOT NULL,
+    name text DEFAULT 'Reativação de Clientes'::text NOT NULL,
     integration_id uuid,
     whatsapp_integration_id uuid,
     inactivity_days integer DEFAULT 30 NOT NULL,
     coupon_discount_percent numeric DEFAULT 10 NOT NULL,
     coupon_duration_days integer DEFAULT 7 NOT NULL,
-    message_template text DEFAULT 'OlÃ¡ {nome}! Sentimos sua falta ðŸ’œ Aqui estÃ¡ um cupom de {desconto}% para sua prÃ³xima compra: {cupom}. VÃ¡lido por {dias} dias!'::text NOT NULL,
+    message_template text DEFAULT 'Olá {nome}! Sentimos sua falta 💜 Aqui está um cupom de {desconto}% para sua próxima compra: {cupom}. Válido por {dias} dias!'::text NOT NULL,
     is_active boolean DEFAULT false,
     activated_at timestamp with time zone,
     tokens_per_execution integer DEFAULT 5 NOT NULL,
@@ -6016,19 +6016,19 @@ CREATE TABLE public.receptionist_configs (
     tenant_id uuid NOT NULL,
     name text DEFAULT 'Recepcionista Virtual'::text NOT NULL,
     is_active boolean DEFAULT false NOT NULL,
-    welcome_message text DEFAULT 'OlÃ¡! ðŸ‘‹ Bem-vindo(a)! Como posso ajudÃ¡-lo(a) hoje?'::text NOT NULL,
+    welcome_message text DEFAULT 'Olá! 👋 Bem-vindo(a)! Como posso ajudá-lo(a) hoje?'::text NOT NULL,
     menu_format text DEFAULT 'buttons'::text NOT NULL,
-    list_title text DEFAULT 'Escolha uma opÃ§Ã£o'::text,
-    list_button_text text DEFAULT 'Ver opÃ§Ãµes'::text,
+    list_title text DEFAULT 'Escolha uma opção'::text,
+    list_button_text text DEFAULT 'Ver opções'::text,
     menu_options jsonb DEFAULT '[{"id": "1", "label": "Falar com atendente", "action_type": "transfer_to_human"}]'::jsonb NOT NULL,
-    menu_trigger_keywords jsonb DEFAULT '["menu", "opÃ§Ãµes", "opcoes"]'::jsonb NOT NULL,
-    human_handoff_message text DEFAULT 'Entendido! Vou transferir vocÃª para um de nossos atendentes. Aguarde um momento, por favor.'::text NOT NULL,
+    menu_trigger_keywords jsonb DEFAULT '["menu", "opções", "opcoes"]'::jsonb NOT NULL,
+    human_handoff_message text DEFAULT 'Entendido! Vou transferir você para um de nossos atendentes. Aguarde um momento, por favor.'::text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     target_column_id uuid,
     lead_capture_enabled boolean DEFAULT false,
-    lead_capture_name_message text DEFAULT 'Para um melhor atendimento, qual Ã© o seu nome? ðŸ˜Š'::text,
-    lead_capture_phone_message text DEFAULT 'Obrigado, {nome}! Agora me informe seu nÃºmero de telefone com DDD:'::text,
+    lead_capture_name_message text DEFAULT 'Para um melhor atendimento, qual é o seu nome? 😊'::text,
+    lead_capture_phone_message text DEFAULT 'Obrigado, {nome}! Agora me informe seu número de telefone com DDD:'::text,
     lead_capture_success_message text DEFAULT 'Perfeito, {nome}! Seus dados foram salvos. Agora vamos ao seu atendimento...'::text,
     CONSTRAINT receptionist_configs_menu_format_check CHECK ((menu_format = ANY (ARRAY['buttons'::text, 'list'::text])))
 );
@@ -16438,5 +16438,5 @@ ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict MFIycewDzP86bSVLMOduphmMbXjus5zZXfannYUG3STJwa8bCaWffpHpPLkdS8N
+\unrestrict 1FBn09SCGDURYbb3FxBCaxueoPRy4hCpaqpZMQIxquSpi5ZdG6Qp3TjymHt3ALc
 
