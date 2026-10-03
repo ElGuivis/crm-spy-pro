@@ -10047,6 +10047,9 @@ export type Database = {
         }
         Returns: boolean
       }
+      caller_has_tenant: { Args: { _tenant_id: string }; Returns: boolean }
+      caller_is_trusted: { Args: never; Returns: boolean }
+      caller_is_user: { Args: { _user_id: string }; Returns: boolean }
       cleanup_old_logs: { Args: never; Returns: undefined }
       cleanup_operational_logs: { Args: never; Returns: undefined }
       clear_message_buffer: {

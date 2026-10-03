@@ -20,7 +20,12 @@ Deno.serve(async (req) => {
 
     const { id, tenant_id, channel_id, name, campaign_id, adset_id, ad_id, flow_id, is_active } = await req.json();
     assertTenantMatch(authTenantId, tenant_id, req);
-    if (!channel_id || !name) throw new Error("Missing required fields");
+    if (!channel_id || !name) {
+      return new Response(JSON.stringify({ error: "Missing required fields" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Validate all referenced resources belong to tenant
     await requireResources(supabase, [

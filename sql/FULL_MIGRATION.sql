@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict Ct7uUxV05pnpvQtdkbxbp602a8CnyGOUb2lj6yZvNYyDFeq1NLhZI1gWx0ABRni
+\restrict 6Px6tG0Dj9poY2q4bo1yfnmkSbgvFBfKfDn2jXMVsBsOGWg8VIay587H3z1rcCb
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -205,6 +205,9 @@ DECLARE
   _current_balance integer;
   _new_balance integer;
 BEGIN
+  IF NOT public.caller_has_tenant(_tenant_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
+  END IF;
   -- Get current balance with lock, create if not exists
   SELECT balance INTO _current_balance
   FROM public.tenant_tokens
@@ -247,6 +250,49 @@ BEGIN
   END IF;
   RAISE EXCEPTION 'Cadastro desativado' USING ERRCODE = 'P0001';
 END;
+$$;
+
+
+--
+-- Name: caller_has_tenant(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.caller_has_tenant(_tenant_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  SELECT public.caller_is_trusted() OR (
+    auth.uid() IS NOT NULL AND (
+      EXISTS (SELECT 1 FROM public.tenants t WHERE t.id = _tenant_id AND t.owner_id = auth.uid())
+      OR EXISTS (SELECT 1 FROM public.team_members tm WHERE tm.tenant_id = _tenant_id AND tm.user_id = auth.uid())
+    )
+  );
+$$;
+
+
+--
+-- Name: caller_is_trusted(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.caller_is_trusted() RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  -- service_role (edge functions) ou conexao direta ao banco (cron, admin). session_user nao muda dentro de
+  -- funcoes SECURITY DEFINER; pelo PostgREST ele e sempre `authenticator`.
+  SELECT coalesce(auth.role(), '') = 'service_role' OR session_user IN ('postgres', 'supabase_admin');
+$$;
+
+
+--
+-- Name: caller_is_user(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.caller_is_user(_user_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  SELECT public.caller_is_trusted() OR (auth.uid() IS NOT NULL AND auth.uid() = _user_id);
 $$;
 
 
@@ -353,6 +399,9 @@ DECLARE
   _current_balance integer;
   _new_balance integer;
 BEGIN
+  IF NOT public.caller_has_tenant(_tenant_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
+  END IF;
   -- Get current balance with lock
   SELECT balance INTO _current_balance
   FROM public.tenant_tokens
@@ -962,7 +1011,7 @@ CREATE FUNCTION public.get_best_send_days(p_tenant_id uuid) RETURNS TABLE(day_of
     EXTRACT(DOW FROM created_at AT TIME ZONE 'America/Sao_Paulo')::INTEGER,
     COUNT(*)
   FROM public.email_events
-  WHERE tenant_id = p_tenant_id
+  WHERE public.caller_has_tenant(p_tenant_id) AND tenant_id = p_tenant_id
     AND event_type = 'open'
     AND created_at >= NOW() - INTERVAL '90 days'
   GROUP BY 1
@@ -982,7 +1031,7 @@ CREATE FUNCTION public.get_best_send_hours(p_tenant_id uuid) RETURNS TABLE(hour_
     EXTRACT(HOUR FROM created_at AT TIME ZONE 'America/Sao_Paulo')::INTEGER,
     COUNT(*)
   FROM public.email_events
-  WHERE tenant_id = p_tenant_id
+  WHERE public.caller_has_tenant(p_tenant_id) AND tenant_id = p_tenant_id
     AND event_type = 'open'
     AND created_at >= NOW() - INTERVAL '90 days'
   GROUP BY 1
@@ -1066,6 +1115,9 @@ DECLARE
   -- Effective LI statuses array
   _effective_statuses text[] := ARRAY['Pedido Entregue', 'Pedido Enviado', 'Pedido Pago'];
 BEGIN
+  IF NOT public.caller_has_tenant(_tenant_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
+  END IF;
   -- LI Revenue this month (effective statuses including Pedido Pago)
   SELECT COALESCE(SUM((totals_json->>'total')::numeric), 0), COUNT(*)
   INTO _li_revenue_this_month, _li_orders_this_month
@@ -1344,7 +1396,8 @@ CREATE FUNCTION public.get_revenue_attribution(p_tenant_id uuid, p_lookback_days
     COALESCE(pc.attributed_revenue, 0)   AS attributed_revenue
   FROM public.email_campaigns ec
   LEFT JOIN per_campaign pc ON pc.campaign_id = ec.id
-  WHERE ec.tenant_id = p_tenant_id
+  WHERE public.caller_has_tenant(p_tenant_id)
+    AND ec.tenant_id = p_tenant_id
     AND ec.status = 'sent'
   ORDER BY COALESCE(pc.attributed_revenue, 0) DESC
   LIMIT 25;
@@ -1359,7 +1412,7 @@ CREATE FUNCTION public.get_tenant_token_balance(_tenant_id uuid) RETURNS integer
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-  SELECT COALESCE(balance, 0) FROM public.tenant_tokens WHERE tenant_id = _tenant_id;
+  SELECT COALESCE(balance, 0) FROM public.tenant_tokens WHERE tenant_id = _tenant_id AND public.caller_has_tenant(_tenant_id);
 $$;
 
 
@@ -1402,13 +1455,13 @@ CREATE FUNCTION public.get_user_tenants(_user_id uuid) RETURNS TABLE(tenant_id u
   -- Tenants owned by user
   SELECT t.id AS tenant_id, t.name AS tenant_name, 'owner'::text AS role
   FROM public.tenants t
-  WHERE t.owner_id = _user_id
+  WHERE public.caller_is_user(_user_id) AND t.owner_id = _user_id
   UNION
   -- Tenants via team membership
   SELECT tm.tenant_id, t.name AS tenant_name, tm.role::text
   FROM public.team_members tm
   JOIN public.tenants t ON t.id = tm.tenant_id
-  WHERE tm.user_id = _user_id;
+  WHERE public.caller_is_user(_user_id) AND tm.user_id = _user_id;
 $$;
 
 
@@ -1470,7 +1523,7 @@ CREATE FUNCTION public.has_enough_tokens(_tenant_id uuid, _amount integer) RETUR
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-  SELECT COALESCE(balance, 0) >= _amount FROM public.tenant_tokens WHERE tenant_id = _tenant_id;
+  SELECT COALESCE(balance, 0) >= _amount FROM public.tenant_tokens WHERE tenant_id = _tenant_id AND public.caller_has_tenant(_tenant_id);
 $$;
 
 
@@ -1599,6 +1652,11 @@ DECLARE
   v_total INTEGER := 0;
   v_already_linked INTEGER := 0;
 BEGIN
+  IF NOT (public.caller_is_trusted() OR (
+        EXISTS (SELECT 1 FROM public.integrations i WHERE i.id = p_me_integration_id AND public.caller_has_tenant(i.tenant_id))
+    AND EXISTS (SELECT 1 FROM public.integrations i WHERE i.id = p_store_integration_id AND public.caller_has_tenant(i.tenant_id)))) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
+  END IF;
   -- Count total
   SELECT COUNT(*) INTO v_total FROM me_shipments WHERE integration_id = p_me_integration_id;
 
@@ -2665,6 +2723,9 @@ CREATE FUNCTION public.set_active_tenant(_user_id uuid, _tenant_id uuid) RETURNS
     SET search_path TO 'public'
     AS $$
 BEGIN
+  IF NOT public.caller_is_user(_user_id) THEN
+    RETURN false;
+  END IF;
   -- Verify user has access to this tenant
   IF NOT EXISTS (
     SELECT 1 FROM public.tenants WHERE id = _tenant_id AND owner_id = _user_id
@@ -16450,5 +16511,5 @@ ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Ct7uUxV05pnpvQtdkbxbp602a8CnyGOUb2lj6yZvNYyDFeq1NLhZI1gWx0ABRni
+\unrestrict 6Px6tG0Dj9poY2q4bo1yfnmkSbgvFBfKfDn2jXMVsBsOGWg8VIay587H3z1rcCb
 
