@@ -48,3 +48,6 @@ edge-functions-export/
 # Audit scratchpads
 .audit-*.sql
 .audit-*.log
+
+# Estado local do Supabase CLI (muda a cada uso)
+supabase/.temp/
