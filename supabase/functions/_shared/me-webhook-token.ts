@@ -3,18 +3,12 @@
 // carrega `?tenant=<id>&token=<hmac>`: HMAC-SHA256(MELHOR_ENVIO_WEBHOOK_SECRET, tenant_id).
 // Cada tenant só consegue forjar eventos dos próprios envios.
 
+import { hmacHex } from "./hmac-token.ts";
 import { timingSafeEqual } from "./timing-safe.ts";
-
-const encoder = new TextEncoder();
 
 export async function meWebhookToken(tenantId: string): Promise<string | null> {
   const secret = Deno.env.get("MELHOR_ENVIO_WEBHOOK_SECRET");
-  if (!secret) return null;
-  const key = await crypto.subtle.importKey(
-    "raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(tenantId));
-  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return secret ? await hmacHex(secret, tenantId) : null;
 }
 
 export async function verifyMeWebhookToken(tenantId: string | null, token: string | null): Promise<boolean> {

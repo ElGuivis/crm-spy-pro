@@ -252,7 +252,8 @@ serve(async (req) => {
             .maybeSingle();
           if (meIntegration) {
             await supabase.from("integrations").update({
-              metadata: { webhooks_registered_at: new Date().toISOString(), webhook_url: webhookUrl },
+              // Grava só a URL base: o token do tenant não deve ficar no banco
+              metadata: { webhooks_registered_at: new Date().toISOString(), webhook_url: `${SUPABASE_URL}/functions/v1/melhor-envio-webhook` },
             }).eq("id", meIntegration.id);
           }
           return new Response(
