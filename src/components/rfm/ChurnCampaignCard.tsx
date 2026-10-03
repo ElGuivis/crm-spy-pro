@@ -32,7 +32,7 @@ export function ChurnCampaignCard() {
     queryKey: ["wa-integrations-churn", tenantId],
     queryFn: async () => {
       const { data } = await supabase.from("integrations").select("id, name, metadata").eq("type", "evolution_whatsapp").eq("status", "connected");
-      return data || [];
+      return (data || []) as unknown as { id: string; name: string; metadata?: { instanceName?: string } }[];
     },
     enabled: !!tenantId,
   });

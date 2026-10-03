@@ -82,7 +82,7 @@ export function ABTestBulkDialog({ campaign, open, onOpenChange, onCreated }: Pr
 
       const { data: campaignB, error: bErr } = await supabase
         .from("bulk_campaigns")
-        .insert(campaignBPayload as Record<string, unknown>)
+        .insert(campaignBPayload)
         .select("id")
         .single();
       if (bErr) throw bErr;

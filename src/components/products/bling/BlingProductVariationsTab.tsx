@@ -15,7 +15,7 @@ interface Props {
 
 export function BlingProductVariationsTab({ product, childProducts }: Props) {
   const images = parseImages(product.imagens);
-  const variacoes = (product.variacoes as BlingInlineVariation[] | null) || null;
+  const variacoes = (product.variacoes as unknown as BlingInlineVariation[] | null) || null;
   const noVariations = (!variacoes || variacoes.length === 0) && (!childProducts || childProducts.length === 0);
 
   return (
@@ -133,6 +133,6 @@ export function BlingProductVariationsTab({ product, childProducts }: Props) {
 }
 
 export function countBlingVariations(product: BlingProduct, childProducts: BlingProduct[]): number {
-  const variacoes = (product.variacoes as BlingInlineVariation[] | null) || [];
+  const variacoes = (product.variacoes as unknown as BlingInlineVariation[] | null) || [];
   return variacoes.length + (childProducts?.length || 0);
 }

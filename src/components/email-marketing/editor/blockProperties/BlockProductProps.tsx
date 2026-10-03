@@ -5,10 +5,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Package } from "lucide-react";
 import { ProductPickerDialog } from "../ProductPickerDialog";
-import type { EmailBlock } from "../types";
+import type { EmailBlock, ProductBlock } from "../types";
 
 interface Props {
-  block: EmailBlock;
+  block: ProductBlock;
   onChange: (field: string, value: any) => void;
   onUpdate: (updates: Partial<EmailBlock>) => void;
 }

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
@@ -131,7 +132,7 @@ export function useInstagramExperimental(channelId: string | null) {
 
   const saveFollowConfig = async (config: Partial<FollowDmConfig>) => {
     if (!tenantId || !channelId) return;
-    const payload = { ...config, tenant_id: tenantId, channel_id: channelId };
+    const payload = { ...config, tenant_id: tenantId, channel_id: channelId } as TablesInsert<"instagram_follow_dm_configs">;
     if (followConfig?.id) {
       await supabase.from("instagram_follow_dm_configs").update(payload).eq("id", followConfig.id);
     } else {
@@ -143,7 +144,7 @@ export function useInstagramExperimental(channelId: string | null) {
 
   const saveShareConfig = async (config: Partial<ShareDmConfig> & { id?: string }) => {
     if (!tenantId || !channelId) return;
-    const payload = { ...config, tenant_id: tenantId, channel_id: channelId };
+    const payload = { ...config, tenant_id: tenantId, channel_id: channelId } as TablesInsert<"instagram_share_dm_configs">;
     if (config.id) {
       await supabase.from("instagram_share_dm_configs").update(payload).eq("id", config.id);
     } else {

@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
 import { Product } from "./products-helpers";
 
@@ -24,7 +25,7 @@ export function ProductInlineEdit({ product, integrationId }: ProductInlineEditP
 
   const { mutate, isPending } = useMutation({
     mutationFn: async () => {
-      const updates: Record<string, number | null> = {
+      const updates: TablesUpdate<"li_products"> = {
         price: price !== "" ? parseFloat(price.replace(",", ".")) : null,
         promotional_price: promoPrice !== "" ? parseFloat(promoPrice.replace(",", ".")) : null,
         stock: stock !== "" ? parseInt(stock, 10) : null,

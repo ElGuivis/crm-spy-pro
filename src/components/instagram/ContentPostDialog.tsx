@@ -87,12 +87,12 @@ export function ContentPostDialog({ open, onOpenChange, channelId, post, default
       const { data, error } = await supabase.from("instagram_content" as any)
         .update(row).eq("id", post.id).select().single();
       if (error) throw error;
-      return data as ContentPost;
+      return data as unknown as ContentPost;
     } else {
       const { data, error } = await supabase.from("instagram_content" as any)
         .insert(row).select().single();
       if (error) throw error;
-      return data as ContentPost;
+      return data as unknown as ContentPost;
     }
   };
 
@@ -149,7 +149,7 @@ export function ContentPostDialog({ open, onOpenChange, channelId, post, default
       .select("reach,impressions,likes,comments,saves,shares,plays")
       .eq("ig_media_id", post.ig_media_id)
       .maybeSingle();
-    setAnalytics((data as Record<string, number>) ?? {});
+    setAnalytics((data as unknown as Record<string, number>) ?? {});
   };
 
   return (

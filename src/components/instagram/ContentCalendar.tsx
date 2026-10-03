@@ -59,7 +59,7 @@ export function ContentCalendar({ channelId }: Props) {
         .eq("tenant_id", tenantId!)
         .order("scheduled_at", { ascending: true, nullsFirst: false })
         .limit(500);
-      return (data as ContentPost[]) ?? [];
+      return (data as unknown as ContentPost[]) ?? [];
     },
     enabled: !!channelId && !!tenantId,
   });

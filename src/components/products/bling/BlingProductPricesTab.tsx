@@ -10,7 +10,7 @@ interface Props {
 
 export function BlingProductPricesTab({ product }: Props) {
   const margem = calcularMargem(product);
-  const estoqueDepositos = (product.estoque_depositos as BlingWarehouseStock[] | null) || null;
+  const estoqueDepositos = (product.estoque_depositos as unknown as BlingWarehouseStock[] | null) || null;
 
   return (
     <TabsContent value="precos" className="space-y-4 pr-4">

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesUpdate } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { AGENT_SELECT_FIELDS, type ChatbotConfig } from "./useChatbots";
@@ -38,7 +39,7 @@ export function useUpdateAIAgent() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, ...updates }: { id: string } & Partial<ChatbotConfig>) => {
-      const { error } = await supabase.from("ai_agents").update(updates as Record<string, unknown>).eq("id", id);
+      const { error } = await supabase.from("ai_agents").update(updates as unknown as TablesUpdate<"ai_agents">).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["ai-agents"] }); toast.success("Agente de IA atualizado"); },

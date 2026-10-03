@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { createLogger } from "@/lib/logger";
@@ -167,7 +168,7 @@ export function useReactivationConfig({ open, editingId, onSave, onOpenChange }:
 
     setIsSaving(true);
     try {
-      const payload: Record<string, unknown> = {
+      const payload: TablesUpdate<"reactivation_configs"> = {
         name: config.name || "Reativação de Clientes",
         integration_id: config.integrationId,
         whatsapp_integration_id: config.whatsappIntegrationId,
@@ -192,7 +193,7 @@ export function useReactivationConfig({ open, editingId, onSave, onOpenChange }:
       } else {
         if (config.isActive) payload.activated_at = new Date().toISOString();
         const { data: inserted, error } = await supabase.from("reactivation_configs")
-          .insert({ ...payload, tenant_id: tenant?.id }).select("id").single();
+          .insert({ ...payload, tenant_id: tenant?.id } as TablesInsert<"reactivation_configs">).select("id").single();
         if (error) throw error;
         configId = inserted.id;
       }

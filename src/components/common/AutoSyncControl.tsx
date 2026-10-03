@@ -4,6 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { RefreshCw, Clock, Zap } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import type { TablesUpdate } from '@/integrations/supabase/types';
 import { useToast } from '@/hooks/use-toast';
 import {
   Select,
@@ -178,7 +179,7 @@ export function AutoSyncControl({ integrationId, syncType, onSyncTriggered }: Au
 
       const { error } = await supabase
         .from('integrations')
-        .update(updateData)
+        .update(updateData as TablesUpdate<'integrations'>)
         .eq('id', integrationId);
 
       if (error) throw error;

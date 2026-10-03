@@ -45,10 +45,19 @@ export function NuvemshopProductsContent({ integrationId }: Props) {
     return q;
   };
 
+  // A contagem precisa do count/head no select inicial: um segundo .select() ignora essas opções.
+  const buildCountQuery = () => {
+    let q = supabase.from("nuvemshop_products").select("id", { count: "exact", head: true }).eq("integration_id", integrationId);
+    if (filterActive === "active") q = q.eq("active", true);
+    if (filterActive === "inactive") q = q.eq("active", false);
+    if (search.trim()) q = q.or(`name.ilike.%${search.trim()}%,sku.ilike.%${search.trim()}%`);
+    return q;
+  };
+
   const { data: totalCount, refetch: refetchCount } = useQuery({
     queryKey: ["ns-products-count", integrationId, search, filterActive],
     queryFn: async () => {
-      const { count } = await buildBaseQuery().select("id", { count: "exact", head: true });
+      const { count } = await buildCountQuery();
       return count ?? 0;
     },
   });

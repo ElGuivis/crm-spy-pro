@@ -38,7 +38,7 @@ export function ChatbotFlowManager() {
         .select("id,name,description,is_active,is_published,trigger_keywords,created_at,updated_at")
         .eq("tenant_id", tenantId!)
         .order("created_at", { ascending: false });
-      return (data as FlowRow[]) ?? [];
+      return (data as unknown as FlowRow[]) ?? [];
     },
     enabled: !!tenantId,
   });
@@ -67,7 +67,7 @@ export function ChatbotFlowManager() {
       if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["chatbot-flows"] });
       setNewName("");
-      setEditingFlowId((data as FlowRow).id);
+      setEditingFlowId((data as unknown as FlowRow).id);
     } catch {
       toast.error("Erro ao criar flow");
     } finally {

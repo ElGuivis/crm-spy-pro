@@ -23,6 +23,21 @@ interface CustomerBalance {
   balance: number;
 }
 
+interface LoyaltyCalculateResult {
+  success?: boolean;
+  error?: string;
+  credited?: number;
+  scanned?: number;
+}
+
+interface LoyaltyRedeemResult {
+  success?: boolean;
+  error?: string;
+  couponCode?: string;
+  couponValue: number;
+  newBalance?: number;
+}
+
 export function LoyaltyRankingTable({ integrationId, minRedeem, pointsToBrl }: LoyaltyRankingTableProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -64,9 +79,10 @@ export function LoyaltyRankingTable({ integrationId, minRedeem, pointsToBrl }: L
   const handleCalculate = async () => {
     setCalculating(true);
     try {
-      const { data, error } = await supabase.rpc("loyalty_calculate", {
+      const { data: rpcData, error } = await supabase.rpc("loyalty_calculate", {
         p_integration_id: integrationId,
       });
+      const data = rpcData as unknown as LoyaltyCalculateResult | null;
       if (error || !data?.success) throw new Error(data?.error || error?.message || "Erro desconhecido");
       toast({ title: `${data.credited} pedidos creditados (${data.scanned} escaneados)` });
       refetch();
@@ -83,11 +99,12 @@ export function LoyaltyRankingTable({ integrationId, minRedeem, pointsToBrl }: L
     if (isNaN(pts) || pts <= 0) return;
     setRedeeming(true);
     try {
-      const { data, error } = await supabase.rpc("loyalty_redeem", {
+      const { data: rpcData, error } = await supabase.rpc("loyalty_redeem", {
         p_integration_id: integrationId,
         p_customer_external_id: redeemCustomer.customer_external_id,
         p_points_to_redeem: pts,
       });
+      const data = rpcData as unknown as LoyaltyRedeemResult | null;
       if (error || !data?.success) throw new Error(data?.error || error?.message);
       toast({
         title: `Cupom gerado: ${data.couponCode}`,
