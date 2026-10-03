@@ -28,7 +28,7 @@ export async function syncCoupons(
 
   try {
     // Fetch coupons from API (limit to recent 200 for incremental sync)
-    const response = await fetch(`${LI_API_BASE}/cupom?limit=200&offset=0`, {
+    const response = await fetch(`${LI_API_BASE}/cupom?limit=50&offset=0`, {
       headers: { 'Authorization': authHeader }
     });
 

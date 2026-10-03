@@ -20,7 +20,7 @@ export async function syncNewCustomers(
   const errors: string[] = [];
   let synced = 0;
   const MAX_SYNC_PER_EXECUTION = 500; // Limit per execution to avoid timeout
-  const BATCH_SIZE = 100; // API pagination size
+  const BATCH_SIZE = 50; // API pagination size (a API da Loja Integrada responde 400 para limit > 50)
 
   if (!tenantId || !integrationId) {
     return { success: false, synced: 0, errors: ['Missing tenant_id or integration_id'] };

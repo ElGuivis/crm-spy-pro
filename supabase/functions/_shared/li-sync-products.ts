@@ -210,7 +210,8 @@ export async function syncNewProducts(
     }
 
     // Fetch the last X products
-    const productsToFetch = Math.min(diff + 5, 200);
+    // A API da Loja Integrada responde 400 para limit > 50; o histórico fica com a reconciliação/sync completo
+    const productsToFetch = Math.min(diff + 5, 50);
     const offset = Math.max(0, totalApiProducts - productsToFetch);
 
     const response = await fetch(`${LI_API_BASE}/produto?limit=${productsToFetch}&offset=${offset}`, {
