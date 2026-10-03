@@ -64,7 +64,9 @@ export async function syncNewOrders(
 
     // LI API rejects requests where offset + limit > ~10000
     const MAX_API_OFFSET_LIMIT = 9500;
-    let ordersToFetch = Math.min(500, totalApiOrders);
+    // A API da Loja Integrada (token pessoal) responde 400 para limit > 50 (a reconciliação já usa lotes de 50).
+    // Esta rotina roda a cada 5 min e só precisa dos pedidos mais recentes; o histórico fica com a reconciliação.
+    let ordersToFetch = Math.min(50, totalApiOrders);
     let offset = Math.max(0, totalApiOrders - ordersToFetch);
 
     if (offset > MAX_API_OFFSET_LIMIT) {
