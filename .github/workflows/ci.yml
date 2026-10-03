@@ -121,7 +121,7 @@ jobs:
       - name: Load public environment
         run: |
           tr -d '\r' < .env.production >> "$GITHUB_ENV"
-          echo "VITE_SUPABASE_PROJECT_ID=fsrgtnasverkkqkbnmzf" >> "$GITHUB_ENV"
+          echo "VITE_SUPABASE_PROJECT_ID=spypro-selfhosted" >> "$GITHUB_ENV"
           echo "FRONTEND_URL=https://spypro.com.br" >> "$GITHUB_ENV"
           echo "ALLOW_PREVIEW_ORIGINS=false" >> "$GITHUB_ENV"
 

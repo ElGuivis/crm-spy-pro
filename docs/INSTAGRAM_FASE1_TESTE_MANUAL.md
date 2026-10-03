@@ -134,7 +134,7 @@ WHERE id = '<CHANNEL_ID>';
 | 1 | Marque o canal como pronto para refresh via SQL: | — | — |
 |   | `UPDATE instagram_channels SET token_refresh_at = NOW() - INTERVAL '1 hour' WHERE id = '<CHANNEL_ID>';` | — | — |
 | 2 | Invoque a edge function manualmente: | — | — |
-|   | `curl -X POST https://fsrgtnasverkkqkbnmzf.supabase.co/functions/v1/instagram-refresh-token -H "Authorization: Bearer <SERVICE_ROLE_KEY>"` | Response: `{ "refreshed": 1, "errors": 0 }` | `refreshed: 0` ou `errors: 1` |
+|   | `curl -X POST https://api.spypro.com.br/functions/v1/instagram-refresh-token -H "Authorization: Bearer <SERVICE_ROLE_KEY>"` | Response: `{ "refreshed": 1, "errors": 0 }` | `refreshed: 0` ou `errors: 1` |
 | 3 | Verifique no banco | — | — |
 
 **Verificação SQL:**
@@ -162,7 +162,7 @@ WHERE id = '<CHANNEL_ID>';
 | # | Passo | Resultado Esperado | Critério de Reprovação |
 |---|-------|--------------------|-----------------------|
 | 1 | No portal **Meta Developers**, vá em **Webhooks** | — | — |
-| 2 | Configure o Callback URL: `https://fsrgtnasverkkqkbnmzf.supabase.co/functions/v1/instagram-webhook-ingest` | — | — |
+| 2 | Configure o Callback URL: `https://api.spypro.com.br/functions/v1/instagram-webhook-ingest` | — | — |
 | 3 | Insira o Verify Token (igual ao secret `META_WEBHOOK_VERIFY_TOKEN`) | — | — |
 | 4 | Clique em **Verificar e salvar** | Meta exibe ✅ "Callback URL verificada" | Falha na verificação — verificar se o secret está correto e se `verify_jwt = false` está no config.toml |
 
@@ -424,7 +424,7 @@ LIMIT 10;
 |   | VALUES ('<CHANNEL_ID>', '<THREAD_ID>', 'Teste retry', 'pending', gen_random_uuid()::text, 3); | — | — |
 |   | ``` | — | — |
 | 2 | Invoque o dispatcher manualmente: | — | — |
-|   | `curl -X POST https://fsrgtnasverkkqkbnmzf.supabase.co/functions/v1/instagram-outbox-dispatch -H "Authorization: Bearer <SERVICE_ROLE_KEY>"` | — | — |
+|   | `curl -X POST https://api.spypro.com.br/functions/v1/instagram-outbox-dispatch -H "Authorization: Bearer <SERVICE_ROLE_KEY>"` | — | — |
 | 3 | Verifique que o `attempts` incrementou | — | — |
 
 **Verificação SQL após cada tentativa:**
@@ -458,7 +458,7 @@ ORDER BY created_at DESC;
 | # | Passo | Resultado Esperado | Critério de Reprovação |
 |---|-------|--------------------|-----------------------|
 | 1 | Na tela de Integrações, clique em **Verificar Saúde** (se disponível) ou invoque via curl: | — | — |
-|   | `curl -X POST https://fsrgtnasverkkqkbnmzf.supabase.co/functions/v1/instagram-healthcheck -H "Authorization: Bearer <SERVICE_ROLE_KEY>" -d '{"channel_id": "<CHANNEL_ID>"}'` | — | — |
+|   | `curl -X POST https://api.spypro.com.br/functions/v1/instagram-healthcheck -H "Authorization: Bearer <SERVICE_ROLE_KEY>" -d '{"channel_id": "<CHANNEL_ID>"}'` | — | — |
 | 2 | Verifique a resposta | — | — |
 
 | Cenário | Resposta Esperada |

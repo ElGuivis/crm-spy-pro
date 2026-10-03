@@ -56,7 +56,7 @@ O script ignora funções que são triggers ou helpers internos e não aparecem 
 ### Passo 1 — Regenerar `sql/FULL_MIGRATION.sql`
 
 ```bash
-pg_dump -s -n public --no-owner --no-privileges --no-comments -f sql/FULL_MIGRATION.sql   # conexão em sessão (porta 5432 do pooler)
+pg_dump -s -n public --no-owner --no-privileges --no-comments -f sql/FULL_MIGRATION.sql   # com o túnel SSH aberto (ssh -i ~/.ssh/spypro_vps -L 6543:127.0.0.1:6543 root@37.148.134.55), host 127.0.0.1 porta 6543, usuário postgres
 ```
 
 ### Passo 2 — Validar
@@ -77,7 +77,7 @@ O snapshot (`FULL_MIGRATION.sql`) deve ser commitado junto com a migration que c
 
 | Ação | Responsável |
 |------|-------------|
-| Regenerar `types.ts` | Quem aplica a migration: `supabase gen types typescript --project-id <ref>` (em Git Bash; o `>` do PowerShell 5.1 grava UTF-16) |
+| Regenerar `types.ts` | Quem aplica a migration: `supabase gen types typescript --db-url <url via túnel> --schema public` (em Git Bash; o `>` do PowerShell 5.1 grava UTF-16) |
 | Regenerar `types.ts` | Lovable Cloud (automático após migration) |
 | Regenerar `FULL_MIGRATION.sql` (pg_dump) e `types.ts` (supabase gen types) | Quem aplica a migration, no mesmo commit |
 | Validar drift no CI | `scripts/check-schema-drift.ts` (gate bloqueante) |

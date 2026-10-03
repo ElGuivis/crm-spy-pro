@@ -1,41 +1,47 @@
 # CRM Spy Pro
 
-CRM/ERP multi-tenant em produção (https://spypro.com.br) com integrações de e-commerce, mensageria e marketing. Originado no Lovable Cloud, migrado em 2026-05-08 para um Supabase próprio (sa-east-1) com frontend self-hosted via EasyPanel.
+CRM/ERP multi-tenant em produção (https://spypro.com.br) com integrações de e-commerce, mensageria e marketing. Originado no Lovable Cloud, migrado em 2026-05-08 para um Supabase próprio no cloud e, em **2026-10-03, para um Supabase auto-hospedado numa VPS própria** (Fase M). O projeto cloud (`fsrgtnasverkkqkbnmzf`) segue ligado só até ser pausado após a validação. Frontend self-hosted via EasyPanel.
 
 > **Secrets** (DB password, service_role JWT, CRON_SECRET, edge function secret values, PATs) **não estão neste arquivo**. Estão na auto memory local em `~/.claude/projects/.../memory/reference_secrets.md` (gitignored). Se precisar deles e não tiver acesso à memory: pegar com o owner do projeto.
 
 ## Stack
 
 - **Frontend**: Vite 5 + React 18 + TypeScript + shadcn/ui (Radix) + Tailwind + React Router 7 + TanStack Query 5. Build: `vite build`. Dev: `npm run dev`.
-- **Backend**: Supabase (Postgres + Edge Functions Deno). 99 edge functions, 139 tabelas com RLS, ~354 policies, 22 cron jobs.
-- **Deploy**: frontend via EasyPanel (Dockerfile + nginx, rebuild manual). Edge functions via `supabase functions deploy --project-ref fsrgtnasverkkqkbnmzf <nome>`.
-- **Owner / login dev**: `lojaoutback@gmail.com`.
+- **Backend**: Supabase auto-hospedado (Postgres 17 + Auth + REST + Realtime + Storage + Edge Functions Deno). 96 edge functions, 152 tabelas com RLS, 387 policies, 30 cron jobs.
+- **Deploy**: frontend via EasyPanel (Dockerfile + nginx, rebuild manual, Build Args `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`). Edge functions: `powershell scripts/deploy-functions-vps.ps1 [-Only <nome>]` (copia para a VPS e reinicia o runtime; `supabase functions deploy` NÃO se aplica ao servidor novo).
+- **Owner / login dev**: `usechronic@gmail.com` (único usuário; cadastros bloqueados por trigger + `DISABLE_SIGNUP`).
 
-## Projeto Supabase ativo
+## Supabase ativo (auto-hospedado na VPS)
 
 | Campo | Valor |
 |---|---|
-| Ref | `fsrgtnasverkkqkbnmzf` |
-| URL | `https://fsrgtnasverkkqkbnmzf.supabase.co` |
-| Região | `sa-east-1` (São Paulo) |
-| DB pooler | `aws-1-sa-east-1.pooler.supabase.com:6543` |
-| DB user | `postgres.fsrgtnasverkkqkbnmzf` |
-| DB password | _ver memory_ |
+| API / Auth / Storage / Functions | `https://api.spypro.com.br` |
+| Studio (basic auth) | `https://studio.spypro.com.br` |
+| Servidor | VPS `37.148.134.55` (Ubuntu, 4 vCPU / 8 GB), SSH como root com a chave `~/.ssh/spypro_vps` |
+| Stack | `/opt/supabase` (docker compose oficial + `docker-compose.spypro.yml`); `sh run.sh status|logs|restart` |
+| Segredos do stack | `/opt/supabase/.env` (cópia local em `Documents/segredos/vps-supabase.env`) |
+| Secrets das edge functions | `/opt/supabase/functions.env` (`docker compose up -d functions` após editar) |
+| Banco | só por túnel SSH: `ssh -L 6543:127.0.0.1:6543 root@37.148.134.55`, usuário `postgres`, senha em `.env` (`POSTGRES_PASSWORD`) |
+| Backup | diário 03:30 em `/opt/backups` (3 versões) + cópia criptografada no Google Drive (rclone) |
 
-> Projeto antigo do Lovable: `vmqyklqchwtwbrpowdgk` (eu-west-1) — desativado em 2026-05-08, referenciado só em histórico.
+> Detalhes operacionais, pendências e armadilhas da migração: memory `project_vps_migration.md`. Projetos antigos: Lovable `vmqyklqchwtwbrpowdgk` (desativado) e Supabase cloud `fsrgtnasverkkqkbnmzf` (a pausar).
 
 ### JWTs
 
-- **Anon** (publishable, já vai pro bundle do cliente): `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZzcmd0bmFzdmVya2txa2JubXpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNjgyMzksImV4cCI6MjA5Mzc0NDIzOX0.spmW9Cn5TqQBIjLvWSD4yDOLNtYTXhhYC1PTO-1ck8U`
-- **Service Role**: _ver memory_
+- **Anon** (publicável, já vai pro bundle do cliente): `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkxMDU1ODc3LCJleHAiOjE5NDg3MzU4Nzd9.ki0jQ7AACUbRaqhgwSTC-EHOq1S0CsaEBdGnVIyWi3g`
+- **Service Role**: _ver `/opt/supabase/.env` ou memory_
 
 ### Auth dos JWTs (importante)
 
-O projeto usa **signing keys ES256**, mas o gateway do Supabase só valida HS256 → todos os edge functions têm `verify_jwt = false` em `supabase/config.toml`. **Auth é feita em código** via `_shared/auth-guard.ts`:
+O stack usa **chaves assimétricas ES256** (mais as legadas HS256). Por compatibilidade com o desenho original, todos os edge functions seguem com `verify_jwt = false` em `supabase/config.toml` e o runtime com `FUNCTIONS_VERIFY_JWT=false`. **Auth é feita em código** via `_shared/auth-guard.ts`:
 
 - `requireUserAuth(req)` — exige JWT do usuário (resolve tenant via `get_user_tenant_id`).
 - `requireInternalAuth(req)` — aceita `SUPABASE_SERVICE_ROLE_KEY` (Bearer) ou `CRON_SECRET` (Bearer ou header `x-cron-secret`).
 - `requireUserOrInternalAuth(req)` — aceita ambos (usado em funções com modo "usuário" e modo "cron/watchdog").
+
+**CORS:** o gateway Envoy foi restrito a `spypro.com.br`, `studio` e `api` (o padrão do compose oficial refletia qualquer origem). Reaplicar em `volumes/api/envoy/lds.template.yaml` se rodar `update.sh`.
+
+**URL das funções em SQL:** nunca escrever o domínio em cron/função; usar `public.functions_base_url() || '/functions/v1/<fn>'` (setting `app.settings.functions_url` ou padrão do servidor).
 
 Catch handler de função deve repassar `Response` thrown pelo guard:
 ```ts
@@ -53,9 +59,9 @@ Vault (`vault.secrets`):
   (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'CRON_SECRET' LIMIT 1)
   ```
   Para crons, usar a função utilitária `public.get_internal_headers()` que monta `{Content-Type, x-cron-secret}` direto.
-- `TENANT_DATA_ENCRYPTION_KEY` — gerada em 2026-05-08, usada pelos triggers `trg_encrypt_bling_tokens`, `trg_encrypt_melhor_envio_tokens`, `trg_encrypt_email_smtp_password`. **Tokens criptografados antes da migração não são decifráveis com a nova key — exigem reconexão das integrações.**
+- `TENANT_DATA_ENCRYPTION_KEY` — gerada em 2026-05-08, usada pelos triggers `trg_encrypt_bling_tokens`, `trg_encrypt_melhor_envio_tokens`, `trg_encrypt_email_smtp_password`. A chave foi **copiada do cloud para o servidor novo**, então tokens cifrados continuam decifráveis (o reset de 2026-10-03 zerou as integrações; a Loja Integrada já foi reconectada com Personal Token).
 
-Edge Function Secrets (configurados em 2026-05-08, valores em memory):
+Edge Function Secrets (hoje em `/opt/supabase/functions.env` no servidor; valores também em memory):
 ```
 ALLOW_PREVIEW_ORIGINS, BLING_CLIENT_ID/SECRET, CHATWOOT_*, CRON_SECRET,
 EVOLUTION_API_KEY/URL, FRONTEND_URL, INSTAGRAM_APP_ID/SECRET,
@@ -63,7 +69,7 @@ LI_WEBHOOK_SECRET, LOJA_INTEGRADA_API_KEY/APP_KEY,
 MELHOR_ENVIO_CLIENT_ID/SECRET/ENVIRONMENT/WEBHOOK_SECRET,
 META_APP_ID/SECRET/WEBHOOK_VERIFY_TOKEN, N8N_WEBHOOK_URL
 ```
-`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `SUPABASE_DB_URL` são injetados pelo runtime das edge functions.
+`SUPABASE_URL` (aqui = URL pública `https://api.spypro.com.br`, porque as funções montam URLs de webhook/OAuth/e-mail a partir dela), `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`, `SUPABASE_DB_URL` são injetados pelo runtime.
 
 ## Estrutura
 
@@ -77,7 +83,7 @@ src/
   integrations/supabase/ # client.ts (auto-gerado) + types.ts (tipos do DB, regenerar via gen types)
   contexts/              # AuthContext, etc.
 supabase/
-  functions/             # ~99 edge functions Deno
+  functions/             # 96 edge functions Deno
     _shared/             # auth-guard.ts, li-sync-*.ts, melhor-envio-*.ts, ai-chat-*.ts, ...
     li-sync/             # sync de Loja Integrada (waitUntil + time budget 110s)
     li-job-processor/    # incremental sync recorrente (waitUntil)
@@ -93,19 +99,14 @@ supabase/
 docs/, sql/, scripts/    # docs internos, snippets SQL ad-hoc, scripts utilitários
 ```
 
-`src/integrations/supabase/types.ts` é **autogerado** — não editar manualmente. Regenerar com `supabase gen types typescript --project-id fsrgtnasverkkqkbnmzf`.
+`src/integrations/supabase/types.ts` é **autogerado** — não editar manualmente. Regenerar com túnel SSH aberto: `supabase gen types typescript --db-url postgresql://postgres:<senha>@127.0.0.1:6543/postgres --schema public` (UTF-8/LF; ver `sql/SOURCE_OF_TRUTH.md`).
 
 ## Tenants e dados
 
-- Tenants ativos: `SpyComp` (`8585c60d-1c0f-4311-a108-c6387530050d`) e `teste` (`27354002-7044-4d08-b32a-e5a756f8bb78`).
-- Loja LI principal (SpyComp): integration_id `0bb3f763-03cc-4e83-872f-2797eec8d28c`, type `loja_integrada`, status `connected`.
-- Volumes (2026-05-09 — sync inicial 100% completo):
-  - 15.830 customers
-  - 7.279 products
-  - 9.824+ orders
-  - 4.178 envios Melhor Envio
-- WhatsApp channels: `useokok` ✅, `outback` ✅, `hazetabacria` ⛔ (precisa reconectar).
-- Instagram: 3 canais — todos disconnected pós-migração, exigem reautorização.
+- Tenant único: **Use Chronic** (o banco foi zerado em 2026-10-03; todos os demais usuários/tenants de teste foram apagados).
+- Loja Integrada reconectada com Personal Token (expira em 03/01/2027); dados reimportados (≈15,8 mil clientes, 7,3 mil produtos, 9,8 mil pedidos).
+- Melhor Envio, Instagram (3 canais), WhatsApp (instâncias Evolution), SMTP e credenciais de IA: **a reconectar** (Fase 5 do plano).
+- Antes do reset (histórico): WhatsApp `useokok`/`outback` ok, `hazetabacria` a reconectar.
 
 ## Sync de Loja Integrada
 
@@ -144,7 +145,7 @@ Migrações: `20260509000001_li_sync_watchdog.sql`, `20260509000002_me_sync_watc
 
 ## Cron jobs e auth
 
-22 jobs ativos. Padrão correto: `headers := public.get_internal_headers()` no `net.http_post`. Para crons que demoram >5s, adicionar `timeout_milliseconds := 90000`.
+30 jobs ativos. Padrão correto: `headers := public.get_internal_headers()` no `net.http_post`. Para crons que demoram >5s, adicionar `timeout_milliseconds := 90000`.
 
 Funções cron-driven que requerem `requireInternalAuth` aceitam o header `x-cron-secret` que `get_internal_headers()` envia.
 
@@ -178,12 +179,16 @@ npm run dev          # http://localhost:8080 (vite)
 npm run build        # bundle prod em dist/
 npm run lint
 
-# Edge functions
-supabase functions deploy --project-ref fsrgtnasverkkqkbnmzf <nome>
+# Edge functions (servidor novo)
+powershell -File scripts/deploy-functions-vps.ps1 -Only <nome>   # ou sem -Only para todas
 
-# DB direto (psql) — password está em memory/reference_secrets.md
-$env:PGPASSWORD='<DB_PASSWORD>'
-psql -h aws-1-sa-east-1.pooler.supabase.com -p 6543 -U postgres.fsrgtnasverkkqkbnmzf -d postgres
+# DB direto (psql) — túnel SSH + senha em /opt/supabase/.env (POSTGRES_PASSWORD)
+ssh -i ~/.ssh/spypro_vps -L 6543:127.0.0.1:6543 root@37.148.134.55
+$env:PGPASSWORD='<POSTGRES_PASSWORD>'; $env:PGCLIENTENCODING='UTF8'
+psql -h 127.0.0.1 -p 6543 -U postgres -d postgres
+
+# Servidor
+ssh -i ~/.ssh/spypro_vps root@37.148.134.55 "cd /opt/supabase && sh run.sh status"
 ```
 
 ## Plataforma
@@ -201,3 +206,7 @@ psql -h aws-1-sa-east-1.pooler.supabase.com -p 6543 -U postgres.fsrgtnasverkkqkb
 - `20260509000007-008`: timeout extension em crons lentos
 - `20260509000009`: bulk-li-status-update-cron auth fix
 - `20260509000010-011`: aposentar feature de carrinho abandonado
+- `20261003000001`: bloqueio de novos cadastros em `auth.users`
+- `20261003000002`: repara textos padrão com dupla codificação (UTF-8 lido como cp1252)
+- `20261003000003`: cron diário de limpeza do histórico dos crons
+- `20261003000004`: `public.functions_base_url()` — URL das funções deixa de ficar fixa em crons/funções SQL

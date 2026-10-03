@@ -2,10 +2,10 @@
 -- PostgreSQL database dump
 --
 
-\restrict 1FBn09SCGDURYbb3FxBCaxueoPRy4hCpaqpZMQIxquSpi5ZdG6Qp3TjymHt3ALc
+\restrict Ct7uUxV05pnpvQtdkbxbp602a8CnyGOUb2lj6yZvNYyDFeq1NLhZI1gWx0ABRni
 
 -- Dumped from database version 17.6
--- Dumped by pg_dump version 17.11
+-- Dumped by pg_dump version 17.6
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -935,6 +935,18 @@ BEGIN
 
   RETURN jsonb_build_object('total_with_email', _total, 'suppressed', _suppressed, 'eligible', GREATEST(_total - _suppressed, 0));
 END;
+$$;
+
+
+--
+-- Name: functions_base_url(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.functions_base_url() RETURNS text
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  SELECT coalesce(nullif(current_setting('app.settings.functions_url', true), ''), 'https://api.spypro.com.br');
 $$;
 
 
@@ -2545,7 +2557,7 @@ CREATE FUNCTION public.schedule_bulk_campaigns() RETURNS jsonb
     SET search_path TO 'public'
     AS $$
 DECLARE
-  v_base_url   TEXT := 'https://fsrgtnasverkkqkbnmzf.supabase.co/functions/v1/bulk-campaign-processor';
+  v_base_url   TEXT := public.functions_base_url() || '/functions/v1/bulk-campaign-processor';
   v_headers    JSONB := public.get_internal_headers();
   v_now        TIMESTAMPTZ := NOW();
   v_campaign   RECORD;
@@ -2617,7 +2629,7 @@ CREATE FUNCTION public.schedule_email_campaigns() RETURNS jsonb
     SET search_path TO 'public'
     AS $$
 DECLARE
-  v_base_url TEXT := 'https://fsrgtnasverkkqkbnmzf.supabase.co/functions/v1/email-campaign-send';
+  v_base_url TEXT := public.functions_base_url() || '/functions/v1/email-campaign-send';
   v_headers  JSONB := public.get_internal_headers();
   v_now      TIMESTAMPTZ := NOW();
   v_campaign RECORD;
@@ -2715,7 +2727,7 @@ CREATE FUNCTION public.trigger_rfm_calculations() RETURNS jsonb
     SET search_path TO 'public'
     AS $$
 DECLARE
-  v_base_url TEXT := 'https://fsrgtnasverkkqkbnmzf.supabase.co/functions/v1/rfm-calculator';
+  v_base_url TEXT := public.functions_base_url() || '/functions/v1/rfm-calculator';
   v_headers  JSONB := public.get_internal_headers();
   v_int      RECORD;
   v_count    INT := 0;
@@ -16438,5 +16450,5 @@ ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 1FBn09SCGDURYbb3FxBCaxueoPRy4hCpaqpZMQIxquSpi5ZdG6Qp3TjymHt3ALc
+\unrestrict Ct7uUxV05pnpvQtdkbxbp602a8CnyGOUb2lj6yZvNYyDFeq1NLhZI1gWx0ABRni
 

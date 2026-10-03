@@ -10074,6 +10074,7 @@ export type Database = {
         Args: { _audience_reference?: Json; _audience_type: string }
         Returns: Json
       }
+      functions_base_url: { Args: never; Returns: string }
       get_best_send_days: {
         Args: { p_tenant_id: string }
         Returns: {

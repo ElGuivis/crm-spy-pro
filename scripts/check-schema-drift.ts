@@ -14,10 +14,10 @@
  * Run: deno run --allow-read scripts/check-schema-drift.ts
  *
  * Como atualizar depois de uma migration (as duas fontes saem do banco):
- *   - types.ts:  supabase gen types typescript --project-id <ref> > src/integrations/supabase/types.ts
+ *   - types.ts:  supabase gen types typescript --db-url <url do banco via túnel SSH> --schema public > src/integrations/supabase/types.ts
  *                (em PowerShell 5.1 `>` grava UTF-16 — use Git Bash ou `cmd /c`)
  *   - snapshot:  pg_dump -s -n public --no-owner --no-privileges --no-comments -f sql/FULL_MIGRATION.sql
- *                (conexão em sessão: porta 5432 do pooler)
+ *                (via túnel SSH: ssh -L 6543:127.0.0.1:6543 root@37.148.134.55)
  */
 
 const TYPES_PATH = "src/integrations/supabase/types.ts";
@@ -276,7 +276,7 @@ function printDrift(result: DriftResult): void {
     );
     result.inTypesOnly.forEach((t) => console.error(`   + ${t}`));
     console.error(
-      "   → Snapshot is stale. Regenerate (porta 5432 do pooler): pg_dump -s -n public --no-owner --no-privileges --no-comments -f sql/FULL_MIGRATION.sql\n"
+      "   → Snapshot is stale. Regenerate (via túnel SSH para o servidor, porta 6543): pg_dump -s -n public --no-owner --no-privileges --no-comments -f sql/FULL_MIGRATION.sql\n"
     );
   }
 
@@ -357,7 +357,7 @@ async function main() {
     );
     columnDriftDetails.forEach((d) => console.error(d));
     console.error(
-      "\n   → Regenerate (porta 5432 do pooler): pg_dump -s -n public --no-owner --no-privileges --no-comments -f sql/FULL_MIGRATION.sql\n"
+      "\n   → Regenerate (via túnel SSH para o servidor, porta 6543): pg_dump -s -n public --no-owner --no-privileges --no-comments -f sql/FULL_MIGRATION.sql\n"
     );
     exitCode = 1;
   }
