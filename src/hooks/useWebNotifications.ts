@@ -1,9 +1,14 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useSyncExternalStore } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { createLogger } from '@/lib/logger';
+import { playNotificationSound, setFaviconBadge, restoreFavicon, type NotificationSound } from './notification-effects';
 
+const log = createLogger('useWebNotifications');
+
+export type { NotificationSound } from './notification-effects';
 export type NotificationEventType = 'new_order' | 'new_message' | 'sync_error' | 'low_stock' | 'rfm_alert' | 'campaign_complete';
-export type NotificationSound = 'default' | 'chime' | 'pop' | 'bell' | 'none';
 
 interface NotificationPreferences {
   enabled: boolean;
@@ -26,170 +31,94 @@ const DEFAULT_PREFS: NotificationPreferences = {
   },
 };
 
-// Sound definitions
-const SOUND_CONFIGS: Record<NotificationSound, { freq: number; type: OscillatorType; duration: number; freq2?: number }> = {
-  default: { freq: 880, type: 'sine', duration: 0.3 },
-  chime: { freq: 1200, type: 'sine', duration: 0.4, freq2: 1600 },
-  pop: { freq: 600, type: 'triangle', duration: 0.15 },
-  bell: { freq: 1400, type: 'sine', duration: 0.5, freq2: 700 },
-  none: { freq: 0, type: 'sine', duration: 0 },
-};
-
-// Favicon badge manager
-let originalFavicon: string | null = null;
-
-function setFaviconBadge(count: number) {
-  const link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
-  if (!link) return;
-  if (!originalFavicon) originalFavicon = link.href;
-
-  if (count <= 0) {
-    link.href = originalFavicon;
-    document.title = document.title.replace(/^\(\d+\)\s/, '');
-    return;
-  }
-
-  document.title = document.title.replace(/^\(\d+\)\s/, '');
-  document.title = `(${count > 99 ? '99+' : count}) ${document.title}`;
-
-  const canvas = document.createElement('canvas');
-  canvas.width = 64;
-  canvas.height = 64;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return;
-
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.onload = () => {
-    ctx.drawImage(img, 0, 0, 64, 64);
-    // Badge circle
-    ctx.fillStyle = '#ef4444';
-    ctx.beginPath();
-    ctx.arc(50, 14, 14, 0, 2 * Math.PI);
-    ctx.fill();
-    // White border
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    // Text
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 18px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(count > 9 ? '9+' : String(count), 50, 15);
-    link.href = canvas.toDataURL('image/png');
-  };
-  img.src = originalFavicon;
-}
-
-function playNotificationSound(soundType: NotificationSound = 'default') {
-  if (soundType === 'none') return;
-  try {
-    const config = SOUND_CONFIGS[soundType];
-    const ctx = new AudioContext();
-    const gain = ctx.createGain();
-    gain.connect(ctx.destination);
-    gain.gain.setValueAtTime(0.25, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + config.duration);
-
-    const osc = ctx.createOscillator();
-    osc.connect(gain);
-    osc.frequency.value = config.freq;
-    osc.type = config.type;
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + config.duration);
-
-    // Second tone for chime/bell
-    if (config.freq2) {
-      const gain2 = ctx.createGain();
-      gain2.connect(ctx.destination);
-      gain2.gain.setValueAtTime(0.2, ctx.currentTime + config.duration * 0.3);
-      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + config.duration * 1.5);
-      const osc2 = ctx.createOscillator();
-      osc2.connect(gain2);
-      osc2.frequency.value = config.freq2;
-      osc2.type = config.type;
-      osc2.start(ctx.currentTime + config.duration * 0.3);
-      osc2.stop(ctx.currentTime + config.duration * 1.5);
-    }
-  } catch { /* áudio indisponível (autoplay bloqueado ou sem AudioContext): ignora */ }
-}
-
 export function previewSound(soundType: NotificationSound) {
   playNotificationSound(soundType);
 }
 
+// Preferências compartilhadas por TODAS as telas que usam o hook (Configurações, aviso de pedidos...).
+// Antes cada uso guardava a própria cópia: mudar na tela de Configurações só valia após recarregar a página.
+let sharedPrefs: NotificationPreferences = DEFAULT_PREFS;
+let loadedForUser: string | null = null;
+const listeners = new Set<() => void>();
+const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
+const getSnapshot = () => sharedPrefs;
+function publish(next: NotificationPreferences) {
+  sharedPrefs = next;
+  listeners.forEach((l) => l());
+}
+
+/** Lê as preferências no momento da chamada (útil dentro de callbacks de realtime, sem cópia desatualizada). */
+export function isNotificationEnabled(event: NotificationEventType): boolean {
+  return sharedPrefs.enabled && sharedPrefs.events[event];
+}
+
+function mergePrefs(saved: Partial<NotificationPreferences> | null | undefined): NotificationPreferences {
+  return { ...DEFAULT_PREFS, ...saved, events: { ...DEFAULT_PREFS.events, ...(saved?.events ?? {}) } };
+}
+
 export function useWebNotifications() {
   const { user } = useAuth();
+  const prefs = useSyncExternalStore(subscribe, getSnapshot);
   const [permission, setPermission] = useState<NotificationPermission>(
     typeof Notification !== 'undefined' ? Notification.permission : 'default'
   );
-  const [prefs, setPrefsState] = useState<NotificationPreferences>(DEFAULT_PREFS);
-  const [loaded, setLoaded] = useState(false);
-  const badgeCountRef = useRef(0);
 
-  // Load from DB on mount
+  // Carrega do banco uma vez por usuário
   useEffect(() => {
-    if (!user?.id) return;
-    const load = async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('notification_prefs')
-        .eq('user_id', user.id)
-        .maybeSingle();
-      if (data?.notification_prefs) {
-        setPrefsState({ ...DEFAULT_PREFS, ...(data.notification_prefs as any) });
-      }
-      setLoaded(true);
-    };
-    load();
+    if (!user?.id || loadedForUser === user.id) return;
+    loadedForUser = user.id;
+    supabase
+      .from('profiles')
+      .select('notification_prefs')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (error) { log.error('Erro ao carregar preferências de notificação:', error); loadedForUser = null; return; }
+        publish(mergePrefs(data?.notification_prefs as Partial<NotificationPreferences> | null));
+      });
   }, [user?.id]);
 
-  const persistPrefs = useCallback(async (next: NotificationPreferences) => {
+  const persist = useCallback(async (next: NotificationPreferences) => {
     if (!user?.id) return;
-    await supabase
+    const { error } = await supabase
       .from('profiles')
-      .update({ notification_prefs: next as any })
+      .update({ notification_prefs: next as unknown as Json })
       .eq('user_id', user.id);
+    if (error) log.error('Erro ao salvar preferências de notificação:', error);
   }, [user?.id]);
 
   const setPrefs = useCallback((update: Partial<NotificationPreferences>) => {
-    setPrefsState(prev => {
-      const next = { ...prev, ...update };
-      persistPrefs(next);
-      return next;
-    });
-  }, [persistPrefs]);
+    const next: NotificationPreferences = { ...sharedPrefs, ...update, events: update.events ?? sharedPrefs.events };
+    // Religar o som com o tipo salvo em "Sem som" deixava tudo mudo: volta ao som padrão
+    if (update.sound === true && next.soundType === 'none') next.soundType = 'default';
+    publish(next);
+    void persist(next);
+  }, [persist]);
 
   const setEventEnabled = useCallback((event: NotificationEventType, enabled: boolean) => {
-    setPrefsState(prev => {
-      const next = { ...prev, events: { ...prev.events, [event]: enabled } };
-      persistPrefs(next);
-      return next;
-    });
-  }, [persistPrefs]);
+    const next: NotificationPreferences = { ...sharedPrefs, events: { ...sharedPrefs.events, [event]: enabled } };
+    publish(next);
+    void persist(next);
+  }, [persist]);
 
   const requestPermission = useCallback(async () => {
     if (typeof Notification === 'undefined') return;
-    const result = await Notification.requestPermission();
-    setPermission(result);
+    setPermission(await Notification.requestPermission());
   }, []);
 
-  const updateBadge = useCallback((count: number) => {
-    badgeCountRef.current = count;
-    setFaviconBadge(count);
-  }, []);
+  const updateBadge = useCallback((count: number) => setFaviconBadge(count), []);
 
+  // Lê preferências e permissão no instante do disparo: não depende de cópia capturada antes
   const notify = useCallback((eventType: NotificationEventType, title: string, body: string, options?: { link?: string }) => {
-    if (!prefs.enabled || !prefs.events[eventType]) return;
-    if (prefs.sound) playNotificationSound(prefs.soundType);
-    if (permission === 'granted') {
+    if (!isNotificationEnabled(eventType)) return;
+    if (sharedPrefs.sound) playNotificationSound(sharedPrefs.soundType);
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
       const n = new Notification(title, { body, icon: '/favicon.png', tag: eventType });
       if (options?.link) {
         n.onclick = () => { window.focus(); window.location.hash = options.link!; };
       }
     }
-  }, [permission, prefs]);
+  }, []);
 
   const notifyNewOrder = useCallback((orderNumber: string, customerName: string, total?: number) => {
     const body = total
@@ -198,23 +127,7 @@ export function useWebNotifications() {
     notify('new_order', '🛒 Novo pedido!', body, { link: '/sales' });
   }, [notify]);
 
-  useEffect(() => {
-    return () => {
-      if (originalFavicon) {
-        const link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
-        if (link) link.href = originalFavicon;
-      }
-    };
-  }, []);
+  useEffect(() => restoreFavicon, []);
 
-  return {
-    permission,
-    requestPermission,
-    notifyNewOrder,
-    notify,
-    prefs,
-    setPrefs,
-    setEventEnabled,
-    updateBadge,
-  };
+  return { permission, requestPermission, notifyNewOrder, notify, prefs, setPrefs, setEventEnabled, updateBadge };
 }

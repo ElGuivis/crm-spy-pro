@@ -87,7 +87,7 @@ export function NotificationSettings() {
           {prefs.sound && (
             <>
               <Select
-                value={prefs.soundType || 'default'}
+                value={!prefs.soundType || prefs.soundType === 'none' ? 'default' : prefs.soundType}
                 onValueChange={(v) => setPrefs({ soundType: v as NotificationSound })}
                 disabled={!prefs.enabled}
               >
@@ -104,7 +104,7 @@ export function NotificationSettings() {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8"
-                onClick={() => previewSound(prefs.soundType || 'default')}
+                onClick={() => previewSound(!prefs.soundType || prefs.soundType === 'none' ? 'default' : prefs.soundType)}
                 disabled={!prefs.enabled}
               >
                 <Play className="h-3.5 w-3.5" />

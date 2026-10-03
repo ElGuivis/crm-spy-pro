@@ -3,6 +3,17 @@ import type { ChangelogEntry } from './types';
 /** De maio a outubro de 2026. Mais recente primeiro. */
 export const RECENT_CHANGELOG: ChangelogEntry[] = [
   {
+    version: '4.0.1',
+    date: '03 Out 2026',
+    items: [
+      { type: 'fix', text: 'Aviso de novo pedido só aparece para pedidos realmente novos e com dados completos (acabou o "Pedido #N/A - Cliente")' },
+      { type: 'fix', text: 'Pedidos antigos trazidos pela sincronização não geram mais avisos, sons nem contador de pedidos novos' },
+      { type: 'fix', text: 'Configurações de notificação (avisos, som e eventos) passam a valer na hora, sem recarregar a página' },
+      { type: 'fix', text: 'O aviso na tela agora respeita as configurações de notificação' },
+      { type: 'fix', text: 'Ligar o som depois de escolher "Sem som" volta ao som padrão' },
+    ],
+  },
+  {
     version: '4.0.0',
     date: '03 Out 2026',
     items: [
