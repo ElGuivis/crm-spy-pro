@@ -143,9 +143,10 @@ serve(async (req) => {
       isLidContact,
       lidIdentifier,
       realPhoneFromAlt,
-      contact: null as any,
-      conversation: null as any,
-      message: null as any,
+      // Preenchidos pelos handlers (findOrCreateContact / findOrCreateConversation)
+      contact: null,
+      conversation: null,
+      message: null,
       isNewConversation: false,
       messageContent,
       contentType,

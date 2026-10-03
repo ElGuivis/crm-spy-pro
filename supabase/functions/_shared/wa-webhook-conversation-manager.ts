@@ -6,7 +6,7 @@ import { CONVERSATION_COLUMNS } from "./select-columns.ts";
 export async function findOrCreateConversation(ctx: WaCtx): Promise<Response | null> {
   const { supabase, log, corsHeaders, tenantId, integration, contact, messageContent, contentType, mediaUrl, payload, instanceName } = ctx;
 
-  let { data: conversation, error: conversationError } = await supabase
+  const { data: foundConversation, error: conversationError } = await supabase
     .from('conversations')
     .select(CONVERSATION_COLUMNS)
     .eq('tenant_id', tenantId)
@@ -17,6 +17,7 @@ export async function findOrCreateConversation(ctx: WaCtx): Promise<Response | n
     .limit(1)
     .single();
 
+  let conversation = foundConversation;
   let isNewConversation = false;
 
   if (conversationError && conversationError.code === 'PGRST116') {

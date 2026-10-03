@@ -378,11 +378,11 @@ export async function processOrderNotificationsInJob(
           const htmlBody = rule.email_body || `<p>${message}</p>`;
 
           // Process email template placeholders
-          let processedSubject = subject
+          const processedSubject = subject
             .replace(/\{\{numero_pedido\}\}/g, String(dbOrder.numero))
             .replace(/\{\{status\}\}/g, statusName);
 
-          let processedBody = htmlBody
+          const processedBody = htmlBody
             .replace(/\{\{cliente_primeiro_nome\}\}/g, firstName)
             .replace(/\{\{cliente_nome\}\}/g, customerName)
             .replace(/\{\{numero_pedido\}\}/g, String(dbOrder.numero))

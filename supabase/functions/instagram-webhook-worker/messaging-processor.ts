@@ -141,7 +141,8 @@ export async function processMessagingEvent(supabase: Supabase, channel: IgChann
     const providerMsgId = msg.mid;
     const { data: existingMsg } = await supabase.from("instagram_messages").select("id").eq("provider_message_id", providerMsgId).maybeSingle();
     if (!existingMsg) {
-      let messageType = "text", textBody = msg.text || null, mediaUrl: string | null = null, msgPayload: Record<string, unknown> | null = null;
+      const textBody = msg.text || null;
+      let messageType = "text", mediaUrl: string | null = null, msgPayload: Record<string, unknown> | null = null;
       if (msg.attachments && msg.attachments.length > 0) { const att = msg.attachments[0]; messageType = att.type || "attachment"; mediaUrl = att.payload?.url || null; msgPayload = { attachments: msg.attachments }; }
       if (msg.quick_reply) msgPayload = { ...(msgPayload || {}), quick_reply: msg.quick_reply };
       await supabase.from("instagram_messages").insert({ tenant_id: channel.tenant_id, thread_id: threadId, provider_message_id: providerMsgId, direction: isIncoming ? "inbound" : "outbound", message_type: messageType, text_body: textBody, media_url: mediaUrl, payload: msgPayload, delivery_status: isIncoming ? "delivered" : "sent" });

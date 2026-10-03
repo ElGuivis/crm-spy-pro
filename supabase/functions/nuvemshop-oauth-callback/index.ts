@@ -16,7 +16,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { PRIMARY_FRONTEND_URL, isAllowedRedirectUrl } from "../_shared/frontend-config.ts";
-import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
+import { getCorrelationId, createLogger, type Logger } from "../_shared/correlation.ts";
 import { nuvemshopApiBase, nuvemshopFetch } from "../_shared/nuvemshop-helpers.ts";
 
 const NUVEMSHOP_APP_ID = Deno.env.get("NUVEMSHOP_APP_ID")?.trim();
@@ -229,8 +229,7 @@ async function registerWebhooks(
   integrationId: string,
   storeId: number,
   accessToken: string,
-  // deno-lint-ignore no-explicit-any
-  log: any,
+  log: Logger,
 ): Promise<void> {
   const notifyUrlOperational = `${SUPABASE_URL}/functions/v1/nuvemshop-webhook`;
   const notifyUrlLgpd = `${SUPABASE_URL}/functions/v1/nuvemshop-webhook-lgpd`;
@@ -239,7 +238,7 @@ async function registerWebhooks(
   const errors: string[] = [];
 
   // Fetch existing webhooks to avoid duplicates
-  let existingByEvent = new Map<string, number>();
+  const existingByEvent = new Map<string, number>();
   try {
     const listRes = await nuvemshopFetch(`${base}/webhooks?per_page=200`, accessToken);
     if (listRes.ok) {

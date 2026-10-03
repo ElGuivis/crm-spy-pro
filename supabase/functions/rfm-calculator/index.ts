@@ -8,6 +8,8 @@ import { scoreRecency, scoreFrequency, scoreMonetary, determineSegment, determin
 import { runRfmBackground } from './rfm-background.ts'
 import type { CustomerMetrics } from './rfm-background.ts'
 
+declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void } | undefined
+
 Deno.serve(async (req) => {
   const corsHeaders = getRestrictedCorsHeaders(req);
   const cid = getCorrelationId(req);
@@ -67,7 +69,7 @@ Deno.serve(async (req) => {
       return allRows
     }
 
-    let customerMetrics: CustomerMetrics[] = []
+    const customerMetrics: CustomerMetrics[] = []
     let cachedLiOrders: Record<string, unknown>[] | null = null
     let cachedBlingPaidOrders: Record<string, unknown>[] | null = null
 
@@ -202,7 +204,7 @@ Deno.serve(async (req) => {
 
       let avgInterval: number | null = null
       let stdDevInterval: number | null = null
-      let intervals: number[] = []
+      const intervals: number[] = []
       if (c.order_dates.length > 1) {
         const sortedDates = c.order_dates.map(d => new Date(d).getTime()).sort((a, b) => a - b)
         for (let j = 1; j < sortedDates.length; j++) {
@@ -311,7 +313,6 @@ Deno.serve(async (req) => {
       records, segmentSummary, now, customerMetrics, cachedLiOrders, cachedBlingPaidOrders, log, batchDelete,
     })
 
-    // @ts-ignore - EdgeRuntime.waitUntil is available in Supabase Edge Functions
     if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
       EdgeRuntime.waitUntil(backgroundWork())
     } else {

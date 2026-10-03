@@ -6,10 +6,13 @@ import { RECEPTIONIST_CONFIG_COLUMNS } from "./select-columns.ts";
 
 type MenuOption = { id: string; label: string; action_type: string; target_column_id?: string; response_message?: string };
 
+/** Colunas de `receptionist_configs` usadas por este handler (RECEPTIONIST_CONFIG_COLUMNS). */
+type ReceptionistConfig = { human_handoff_message?: string | null; [k: string]: unknown };
+
 async function executeReceptionistAction(
   ctx: WaCtx,
   selectedOption: MenuOption,
-  receptionistConfig: any,
+  receptionistConfig: ReceptionistConfig,
   logPrefix: string,
 ): Promise<Response | null> {
   const { supabase, log, corsHeaders, tenantId, contact, conversation, phone, whatsAppConfig, supabaseUrl, supabaseServiceKey, integration } = ctx;

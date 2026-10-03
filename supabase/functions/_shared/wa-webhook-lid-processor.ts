@@ -1,4 +1,5 @@
-import type { IntegrationMetadata } from "./wa-webhook-types.ts";
+import type { IntegrationMetadata, EvolutionMessagePayload } from "./wa-webhook-types.ts";
+import type { Logger } from "./correlation.ts";
 
 interface LidPhoneResult {
   phone: string;
@@ -11,12 +12,13 @@ interface LidPhoneResult {
  *  For LID (@lid) contacts, tries multiple sources and filters out the
  *  instance's own number. Returns plain phone for normal contacts. */
 export async function resolveLidPhone(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- cliente sem tipos do schema (ver WaCtx)
   supabase: any,
-  payload: any,
+  payload: EvolutionMessagePayload,
   integrationEarly: { id: string; metadata: IntegrationMetadata } | null,
   instanceName: string,
   instancePhoneNumber: string,
-  log: any,
+  log: Logger,
 ): Promise<LidPhoneResult> {
   const remoteJid: string = payload.data.key.remoteJid;
 

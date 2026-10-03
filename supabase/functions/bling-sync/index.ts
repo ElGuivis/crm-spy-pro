@@ -17,6 +17,8 @@ import { syncCustomersFromOrders } from "../_shared/bling-sync-customers.ts";
 import { syncProducts } from "../_shared/bling-sync-products.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
+declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
+
 async function ensureValidToken(supabase: ServiceClient, connection: BlingConnection): Promise<string> {
   return ensureBlingToken(supabase, connection, '[bling-sync]');
 }
@@ -268,7 +270,6 @@ Deno.serve(async (req) => {
       log.info(`[bling-sync] Sync finished: status=${hadError ? 'failed' : 'completed'}, records=${totalRecords}`);
     };
 
-    // @ts-ignore - EdgeRuntime is available in the edge runtime
     EdgeRuntime.waitUntil(backgroundTask());
 
     return new Response(
