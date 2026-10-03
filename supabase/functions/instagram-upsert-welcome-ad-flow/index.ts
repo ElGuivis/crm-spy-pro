@@ -35,9 +35,16 @@ Deno.serve(async (req) => {
         .from("instagram_ad_welcome_flows")
         .update({ name, campaign_id, adset_id, ad_id, flow_id, is_active })
         .eq("id", id)
+        .eq("tenant_id", authTenantId)
         .select("id, tenant_id, channel_id, name, campaign_id, adset_id, ad_id, flow_id, is_active, created_at, updated_at")
-        .single();
+        .maybeSingle();
       if (error) throw error;
+      if (!data) {
+        return new Response(JSON.stringify({ error: "Not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       return new Response(JSON.stringify({ ok: true, data }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -45,7 +52,7 @@ Deno.serve(async (req) => {
       // Insert
       const { data, error } = await supabase
         .from("instagram_ad_welcome_flows")
-        .insert({ tenant_id, channel_id, name, campaign_id, adset_id, ad_id, flow_id, is_active: is_active ?? true })
+        .insert({ tenant_id: authTenantId, channel_id, name, campaign_id, adset_id, ad_id, flow_id, is_active: is_active ?? true })
         .select("id, tenant_id, channel_id, name, campaign_id, adset_id, ad_id, flow_id, is_active, created_at, updated_at")
         .single();
       if (error) throw error;
