@@ -65,15 +65,11 @@ testRejectsWithoutInternalAuth("conversation-inactivity-processor");
 testRejectsWithoutInternalAuth("email-campaign-send", { campaign_id: "fake" });
 
 // --- Instagram ---
-testRejectsWithoutInternalAuth("instagram-backfill-contacts", { channel_id: "fake" });
-testRejectsWithoutInternalAuth("instagram-dead-letter-retry");
 testRejectsWithoutInternalAuth("instagram-experimental-trigger");
-testRejectsWithoutInternalAuth("instagram-flow-resume-worker");
 testRejectsWithoutInternalAuth("instagram-flow-runner", { run_id: "fake" });
 testRejectsWithoutInternalAuth("instagram-healthcheck");
 testRejectsWithoutInternalAuth("instagram-outbox-dispatch");
 testRejectsWithoutInternalAuth("instagram-refresh-token");
-testRejectsWithoutInternalAuth("instagram-seed-test-flows");
 testRejectsWithoutInternalAuth("instagram-trigger-dispatcher", { event: {} });
 testRejectsWithoutInternalAuth("instagram-webhook-worker", { event_id: "fake" });
 

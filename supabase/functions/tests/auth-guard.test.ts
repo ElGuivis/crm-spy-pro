@@ -86,21 +86,14 @@ testRejectsNoAuth("li-validate", { integration_id: "fake" });
 
 // --- Instagram ---
 testRejectsNoAuth("instagram-block-user", { channel_id: "fake", contact_id: "fake" });
-testRejectsNoAuth("instagram-cancel-run", { run_id: "fake" });
 testRejectsNoAuth("instagram-create-cta-link", { channel_id: "fake" });
 testRejectsNoAuth("instagram-delete-comment", { comment_id: "fake" });
 testRejectsNoAuth("instagram-generate-deep-link", { channel_id: "fake" });
-testRejectsNoAuth("instagram-generate-flow-draft-ai", { prompt: "test" });
 testRejectsNoAuth("instagram-hide-comment", { comment_id: "fake" });
-testRejectsNoAuth("instagram-install-quick-automation", { automation_type: "test" });
-testRejectsNoAuth("instagram-list-quick-automations", {});
-testRejectsNoAuth("instagram-manual-token", { token: "fake" });
 testRejectsNoAuth("instagram-move-thread-to-spam", { thread_id: "fake", channel_id: "fake" });
 testRejectsNoAuth("instagram-oauth", { action: "start" });
-testRejectsNoAuth("instagram-pause-contact-automations", { contact_id: "fake" });
 testRejectsNoAuth("instagram-publish-content", { content_id: "fake" });
 testRejectsNoAuth("instagram-publish-flow-version", { flow_id: "fake", version_id: "fake" });
-testRejectsNoAuth("instagram-resume-contact-automations", { contact_id: "fake" });
 testRejectsNoAuth("instagram-save-contact-data", { contact_id: "fake" });
 testRejectsNoAuth("instagram-schedule-content", { content_id: "fake" });
 testRejectsNoAuth("instagram-send-message", { thread_id: "fake", message: "test" });

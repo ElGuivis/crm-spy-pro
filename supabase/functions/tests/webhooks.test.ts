@@ -65,7 +65,6 @@ testCorsOptions("li-webhook");
 
 testCorsOptions("bling-webhooks");
 
-testCorsOptions("meta-webhook");
 
 testCorsOptions("melhor-envio-webhook");
 

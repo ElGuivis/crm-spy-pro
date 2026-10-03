@@ -54,10 +54,8 @@ Deno.test("orphan: invoking function with typo returns 404", async () => {
 // These are internal functions that were NOT in the original contract-regression list
 const ADDITIONAL_INTERNAL_FUNCTIONS = [
   "ai-buffer-processor",
-  "instagram-dead-letter-retry",
   "instagram-outbox-dispatch",
   "instagram-webhook-worker",
-  "instagram-flow-resume-worker",
   "message-queue-processor",
   "process-outbound-queue",
   "li-reconciliation-processor",

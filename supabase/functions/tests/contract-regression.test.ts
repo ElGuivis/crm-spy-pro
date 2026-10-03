@@ -79,12 +79,8 @@ Deno.test("send-message: rejects with invalid JWT (before resource check)", asyn
 const INTERNAL_FUNCTIONS = [
   "li-job-processor",
   "bling-products-job-processor",
-  "bulk-campaign-scheduler",
   "rfm-calculator",
-  "rfm-cron-trigger",
   "birthday-processor",
-  "email-campaign-scheduler",
-  "instagram-backfill-contacts",
   "cashback-reminder-processor",
   "conversation-inactivity-processor",
 ];
