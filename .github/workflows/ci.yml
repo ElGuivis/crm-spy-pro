@@ -6,30 +6,40 @@ on:
   push:
     branches: [main]
 
+# Token do workflow só com leitura (nenhum job precisa escrever no repositório)
+permissions:
+  contents: read
+
 jobs:
   quality:
-    name: Lint · Typecheck · Build
+    name: Lint · Typecheck · Build · Audit
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2
+      # Mesmo Node e mesmo gerenciador do Dockerfile (node:20 + npm ci)
+      - uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: 20
+          cache: npm
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: npm ci
 
       - name: Lint
-        run: bun run lint
+        run: npm run lint
 
+      # O tsconfig.json da raiz tem `files: []` (só referências): `tsc --noEmit` nele não checa nada.
       - name: Typecheck
-        run: bun x tsc --noEmit
+        run: npx tsc -p tsconfig.app.json --noEmit
 
       - name: Build
-        run: bun run build
+        run: npm run build
+
+      - name: Audit (production dependencies)
+        run: npm audit --omit=dev --audit-level=high
 
   env-secrets-check:
     name: Env Secrets Gate
