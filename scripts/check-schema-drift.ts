@@ -12,10 +12,26 @@
  * Exit code 1 = drift detected → blocks CI merge
  *
  * Run: deno run --allow-read scripts/check-schema-drift.ts
+ *
+ * Como atualizar depois de uma migration (as duas fontes saem do banco):
+ *   - types.ts:  supabase gen types typescript --project-id <ref> > src/integrations/supabase/types.ts
+ *                (em PowerShell 5.1 `>` grava UTF-16 — use Git Bash ou `cmd /c`)
+ *   - snapshot:  pg_dump -s -n public --no-owner --no-privileges --no-comments -f sql/FULL_MIGRATION.sql
+ *                (conexão em sessão: porta 5432 do pooler)
  */
 
 const TYPES_PATH = "src/integrations/supabase/types.ts";
 const SNAPSHOT_PATH = "sql/FULL_MIGRATION.sql";
+
+/** O types.ts do Supabase CLI traz outros schemas (ex.: graphql_public) antes do `public`;
+ *  os extratores olham só o schema `public`. */
+function publicSchemaOnly(content: string): string {
+  const start = content.search(/^ {2}public: \{$/m);
+  if (start < 0) return content; // formato antigo (só `public`)
+  const rest = content.slice(start + 1);
+  const next = rest.search(/^ {2}\w+: \{$/m); // próximo schema no mesmo nível
+  return next < 0 ? content.slice(start) : content.slice(start, start + 1 + next);
+}
 
 // ─── SQL reserved words (never treated as identifiers) ──────────────────────
 const SQL_RESERVED = new Set([
@@ -117,7 +133,8 @@ function extractSnapshotColumns(content: string, tableName: string): string[] {
   for (const line of lastMatch[1].split("\n")) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("--")) continue;
-    const wordMatch = trimmed.match(/^(\w+)/);
+    // pg_dump coloca nomes reservados entre aspas (ex.: "timestamp", "position")
+    const wordMatch = trimmed.match(/^"?(\w+)"?/);
     if (wordMatch && !constraints.has(wordMatch[1].toUpperCase())) {
       cols.push(wordMatch[1]);
     }
@@ -190,6 +207,9 @@ function extractSnapshotFunctionNames(content: string): string[] {
   const createRe = /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:public\.)?(\w+)\s*\(/gi;
   let m: RegExpExecArray | null;
   while ((m = createRe.exec(content)) !== null) {
+    // Funções de trigger (RETURNS trigger) não aparecem em Functions do types.ts: ignora
+    const header = content.slice(m.index, m.index + 600);
+    if (/\)\s*RETURNS\s+trigger\b/i.test(header)) continue;
     alive.add(m[1].toLowerCase());
   }
   // DROP FUNCTION
@@ -256,7 +276,7 @@ function printDrift(result: DriftResult): void {
     );
     result.inTypesOnly.forEach((t) => console.error(`   + ${t}`));
     console.error(
-      "   → Snapshot is stale. Regenerate: cat supabase/migrations/*.sql > sql/FULL_MIGRATION.sql\n"
+      "   → Snapshot is stale. Regenerate (porta 5432 do pooler): pg_dump -s -n public --no-owner --no-privileges --no-comments -f sql/FULL_MIGRATION.sql\n"
     );
   }
 
@@ -281,7 +301,7 @@ async function main() {
   // Read files
   let typesContent: string;
   try {
-    typesContent = await Deno.readTextFile(TYPES_PATH);
+    typesContent = publicSchemaOnly(await Deno.readTextFile(TYPES_PATH));
   } catch {
     console.error(`❌ Cannot read ${TYPES_PATH}`);
     Deno.exit(1);
@@ -337,7 +357,7 @@ async function main() {
     );
     columnDriftDetails.forEach((d) => console.error(d));
     console.error(
-      "\n   → Regenerate: cat supabase/migrations/*.sql > sql/FULL_MIGRATION.sql\n"
+      "\n   → Regenerate (porta 5432 do pooler): pg_dump -s -n public --no-owner --no-privileges --no-comments -f sql/FULL_MIGRATION.sql\n"
     );
     exitCode = 1;
   }
@@ -383,7 +403,7 @@ async function main() {
   } else {
     console.error("\n🚨 Schema drift detected! This blocks CI merge.");
     console.error("   Fix: regenerate snapshot from migrations:");
-    console.error("   cat supabase/migrations/*.sql > sql/FULL_MIGRATION.sql");
+    console.error("   pg_dump -s -n public --no-owner --no-privileges --no-comments -f sql/FULL_MIGRATION.sql");
     console.error("   See sql/SOURCE_OF_TRUTH.md for full guidance.");
   }
 

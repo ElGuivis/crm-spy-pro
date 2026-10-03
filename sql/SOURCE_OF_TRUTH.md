@@ -5,7 +5,7 @@
 ```
 1. supabase/migrations/     ← FONTE PRIMÁRIA (o que roda em produção)
 2. src/integrations/supabase/types.ts  ← GERADO AUTOMATICAMENTE (reflete o estado real)
-3. sql/FULL_MIGRATION.sql    ← SNAPSHOT (concatenação das migrations, usado no CI)
+3. sql/FULL_MIGRATION.sql    ← SNAPSHOT (`pg_dump -s -n public` do banco; usado no CI)
 4. sql/03_tables/*.sql       ← REFERÊNCIA LEGADA (não usar para deploys)
 ```
 
@@ -56,7 +56,7 @@ O script ignora funções que são triggers ou helpers internos e não aparecem 
 ### Passo 1 — Regenerar `sql/FULL_MIGRATION.sql`
 
 ```bash
-cat supabase/migrations/*.sql > sql/FULL_MIGRATION.sql
+pg_dump -s -n public --no-owner --no-privileges --no-comments -f sql/FULL_MIGRATION.sql   # conexão em sessão (porta 5432 do pooler)
 ```
 
 ### Passo 2 — Validar
@@ -77,9 +77,9 @@ O snapshot (`FULL_MIGRATION.sql`) deve ser commitado junto com a migration que c
 
 | Ação | Responsável |
 |------|-------------|
-| Criar migrations | Lovable (via migration tool) |
+| Regenerar `types.ts` | Quem aplica a migration: `supabase gen types typescript --project-id <ref>` (em Git Bash; o `>` do PowerShell 5.1 grava UTF-16) |
 | Regenerar `types.ts` | Lovable Cloud (automático após migration) |
-| Regenerar `FULL_MIGRATION.sql` | Lovable (após cada migration) |
+| Regenerar `FULL_MIGRATION.sql` (pg_dump) e `types.ts` (supabase gen types) | Quem aplica a migration, no mesmo commit |
 | Validar drift no CI | `scripts/check-schema-drift.ts` (gate bloqueante) |
 | Manter este documento atualizado | Atualizar sempre que `check-schema-drift.ts` mudar |
 
