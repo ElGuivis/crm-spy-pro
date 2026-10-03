@@ -1,0 +1,17 @@
+version: 2
+updates:
+  # Dependências do frontend (npm). Só patch/minor agrupados; majors chegam como PR separado.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  # Actions usadas no CI
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
