@@ -146,6 +146,9 @@ async function runJobProcessor(
         const lastLiId = lastOrder?.loja_integrada_order_id || 0;
         log.info(`[INCREMENTAL] Starting orders sync. Last order in DB: #${lastOrder?.order_number || 'none'} (li_id: ${lastLiId})`);
 
+        // supabaseUrl/supabaseKey só existiam no handler (fora deste escopo): lê do ambiente aqui
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
         const ordersResult = await syncNewOrders(supabase, authHeader, lastDataCriacao, lastLiId, supabaseUrl, supabaseKey, tenantId, intId);
         results.push({ type: 'incremental_orders', integrationId: intId, ...ordersResult });
         
