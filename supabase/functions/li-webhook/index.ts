@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 type ServiceClient = ReturnType<typeof createClient>;
 
 declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
+import { liAuthHeader } from "../_shared/li-auth.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
@@ -17,8 +18,6 @@ Deno.serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const appKey = Deno.env.get('LOJA_INTEGRADA_APP_KEY')!;
-
   const supabase = createClient(supabaseUrl, supabaseKey);
   const rawBody = await req.text();
 
@@ -73,7 +72,7 @@ Deno.serve(async (req) => {
 
   const integrationId = integration.id;
   const tenantId = integration.tenant_id;
-  const authHeader = `chave_api ${integration.api_key} aplicacao ${appKey}`;
+  const authHeader = liAuthHeader(integration.api_key as string);
 
   // Determine event type from LI payload format
   let eventType = 'unknown';

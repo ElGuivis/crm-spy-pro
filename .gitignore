@@ -51,3 +51,6 @@ edge-functions-export/
 
 # Estado local do Supabase CLI (muda a cada uso)
 supabase/.temp/
+
+# Gerado por 'deno check' local
+deno.lock

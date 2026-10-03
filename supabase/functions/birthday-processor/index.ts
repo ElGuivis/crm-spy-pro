@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { sendWhatsAppMessage, type WhatsAppConfig } from "../_shared/whatsapp-sender.ts";
 import { sendEmail, getEmailConfig } from "../_shared/email-sender.ts";
 import { requireInternalAuth } from "../_shared/auth-guard.ts";
+import { liAuthHeader } from "../_shared/li-auth.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { ensureAutomationConversation } from "../_shared/automation-conversation.ts";
@@ -62,7 +63,6 @@ Deno.serve(async (req) => {
     requireInternalAuth(req);
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const appKey = Deno.env.get('LOJA_INTEGRADA_APP_KEY')!;
     const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
     const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
 
@@ -203,7 +203,7 @@ Deno.serve(async (req) => {
 
         // Get LI API auth for coupon creation (only for LI stores)
         const apiKey = config.store_integration?.api_key;
-        const authHeader = apiKey ? `chave_api ${apiKey} aplicacao ${appKey}` : null;
+        const authHeader = apiKey ? liAuthHeader(apiKey) : null;
 
         for (const customer of birthdayCustomers) {
           const customerKey = `${customer.phone || ''}|${customer.email || ''}`;

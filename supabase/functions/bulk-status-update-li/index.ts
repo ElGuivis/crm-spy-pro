@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 type ServiceClient = ReturnType<typeof createClient>;
 import { requireInternalAuth } from "../_shared/auth-guard.ts";
+import { liAuthHeader } from "../_shared/li-auth.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
 const corsHeaders = {
@@ -43,13 +44,10 @@ async function processPair(
   dry_run: boolean,
   log: ReturnType<typeof createLogger>
 ) {
-  const appKey = Deno.env.get("LOJA_INTEGRADA_APP_KEY");
-  if (!appKey) throw new Error("LOJA_INTEGRADA_APP_KEY not configured");
-
   const mapping = statusMap[target_status];
   if (!mapping) throw new Error(`Invalid target_status: ${target_status}`);
 
-  const authHeaderLI = `chave_api ${liIntegration.api_key} aplicacao ${appKey}`;
+  const authHeaderLI = liAuthHeader(liIntegration.api_key);
   const effectiveLimit = Math.min(Number(limit) || ORDERS_PER_INVOCATION, 100);
   const allLiOrders: Record<string, unknown>[] = [];
   let offset = 0;

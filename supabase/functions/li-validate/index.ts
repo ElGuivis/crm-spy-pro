@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { requireUserAuth } from "../_shared/auth-guard.ts";
+import { liAuthHeader } from "../_shared/li-auth.ts";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
@@ -20,21 +21,7 @@ serve(async (req) => {
 
     const { apiKey, integrationId } = await req.json();
 
-    // Get the internal APP_KEY from secrets
-    const appKey = Deno.env.get('LOJA_INTEGRADA_APP_KEY');
-
-    if (!appKey) {
-      log.error('LOJA_INTEGRADA_APP_KEY not configured');
-      return new Response(JSON.stringify({
-        valid: false,
-        error: 'Configuração interna incompleta'
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Resolve the API key: either passed directly or fetched from DB by integrationId
+    // Resolve the personal token: either passed directly or fetched from DB by integrationId
     let resolvedApiKey = apiKey;
 
     if (!resolvedApiKey && integrationId) {
@@ -86,7 +73,7 @@ serve(async (req) => {
       });
     }
 
-    const authHeader = `chave_api ${resolvedApiKey} aplicacao ${appKey}`;
+    const authHeader = liAuthHeader(resolvedApiKey);
 
     log.info('Validating API key with Loja Integrada...');
 

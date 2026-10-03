@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { requireUserAuth } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
+import { liAuthHeader } from "../_shared/li-auth.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
@@ -19,8 +20,6 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const appKey = Deno.env.get('LOJA_INTEGRADA_APP_KEY')!;
-
     const supabase = createClient(supabaseUrl, supabaseKey);
     
     const { integrationId, action = 'full-sync' } = await req.json();
@@ -43,7 +42,7 @@ Deno.serve(async (req) => {
       "id, api_key, tenant_id"
     );
 
-    const authHeader = `chave_api ${integration.api_key} aplicacao ${appKey}`;
+    const authHeader = liAuthHeader(integration.api_key);
     const tenantId = integration.tenant_id;
 
     // Create sync log entry

@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 type ServiceClient = ReturnType<typeof createClient>;
 import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
+import { liAuthHeader } from "../_shared/li-auth.ts";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { SYNC_TIME_BUDGET_MS, getOrCreateSyncState, updateSyncState } from "./fetch-helpers.ts";
@@ -65,10 +66,9 @@ async function runFullSync(
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   try {
-    const appKey = Deno.env.get('LOJA_INTEGRADA_APP_KEY')!;
     const { data: intData } = await supabase.from('integrations').select('api_key, metadata').eq('id', integrationId).single();
     if (intData?.api_key) {
-      const authH = `chave_api ${intData.api_key} aplicacao ${appKey}`;
+      const authH = liAuthHeader(intData.api_key);
       const existingMeta = (intData.metadata && typeof intData.metadata === 'object') ? intData.metadata as Record<string, unknown> : {};
       if (!existingMeta.webhooks_registered_at) {
         log.info('[LI-SYNC] All data synced — registering LI webhooks for real-time updates...');
@@ -95,7 +95,6 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const appKey = Deno.env.get('LOJA_INTEGRADA_APP_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     let integration: Record<string, unknown> | null = null;
@@ -116,7 +115,7 @@ Deno.serve(async (req) => {
 
     const intId = integration.id;
     const tenantId = integration.tenant_id;
-    const authHeader = `chave_api ${integration.api_key} aplicacao ${appKey}`;
+    const authHeader = liAuthHeader(integration.api_key as string);
 
     if (action === 'register-webhook') {
       reqLog.info(`[LI-SYNC] Registering webhooks for integration ${intId}`);

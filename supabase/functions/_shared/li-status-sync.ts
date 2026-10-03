@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { createLogger } from "./correlation.ts";
+import { liAuthHeader } from "./li-auth.ts";
 const log = createLogger("li-status-sync", "shared");
 
 
@@ -67,12 +68,7 @@ export async function syncStatusToLojaIntegrada(
     return { success: false, error: "Integração LI não encontrada ou sem api_key" };
   }
 
-  const appKey = Deno.env.get("LOJA_INTEGRADA_APP_KEY");
-  if (!appKey) {
-    return { success: false, error: "LOJA_INTEGRADA_APP_KEY não configurada" };
-  }
-
-  const authHeader = `chave_api ${liIntegration.api_key} aplicacao ${appKey}`;
+  const authHeader = liAuthHeader(liIntegration.api_key);
 
   try {
     log.info(`[li-status-sync] Atualizando pedido ${liOrderNumero} para "${mapping.status_name}" na LI`);

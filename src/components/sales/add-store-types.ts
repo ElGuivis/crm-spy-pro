@@ -15,7 +15,7 @@ export const STORE_TYPES: StoreType[] = [
     logo: 'https://static.lojaintegrada.com.br/img/logo-li.svg',
     color: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
     fields: [
-      { name: 'api_key', label: 'API Key', placeholder: 'Sua chave de API', type: 'password' }
+      { name: 'api_key', label: 'Personal Token', placeholder: 'Personal Token da sua loja', type: 'password' }
     ]
   },
   {

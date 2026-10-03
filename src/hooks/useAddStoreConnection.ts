@@ -84,7 +84,7 @@ export function useAddStoreConnection(open: boolean, onSelectIntegration: (id: s
           body: { apiKey }
         });
         if (validationError || !validationResult?.valid) {
-          toast.error(validationResult?.error || 'API Key inválida');
+          toast.error(validationResult?.error || 'Personal Token inválido');
           setIsSaving(false);
           return;
         }

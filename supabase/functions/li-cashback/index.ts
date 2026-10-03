@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { requireInternalAuth } from "../_shared/auth-guard.ts";
+import { liAuthHeader } from "../_shared/li-auth.ts";
 
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger, type Logger } from "../_shared/correlation.ts";
@@ -56,7 +57,6 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const appKey = Deno.env.get('LOJA_INTEGRADA_APP_KEY')!;
     const evolutionUrl = Deno.env.get('EVOLUTION_API_URL');
     const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
 
@@ -164,7 +164,7 @@ Deno.serve(async (req) => {
       throw new Error('No connected Loja Integrada integration found');
     }
 
-    const authHeader = `chave_api ${integration.api_key} aplicacao ${appKey}`;
+    const authHeader = liAuthHeader(integration.api_key);
 
     // Calculate cashback amount
     let cashbackAmount = (payload.order_total * config.discount_percentage) / 100;

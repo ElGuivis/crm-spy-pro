@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 type ServiceClient = ReturnType<typeof createClient>;
 import { requireInternalAuth } from "../_shared/auth-guard.ts";
+import { liAuthHeader } from "../_shared/li-auth.ts";
 import { syncNewCustomers, updateExistingCustomers } from "../_shared/li-sync-customers.ts";
 import { updateProductInfo, syncNewProducts } from "../_shared/li-sync-products.ts";
 import { syncNewOrders, processOrder, updateOrderStatuses } from "../_shared/li-sync-orders.ts";
@@ -16,7 +17,6 @@ type Logger = ReturnType<typeof createLogger>;
 
 async function runJobProcessor(
   supabase: ServiceClient,
-  appKey: string,
   requestBody: Record<string, unknown>,
   log: Logger,
 ): Promise<void> {
@@ -122,7 +122,7 @@ async function runJobProcessor(
       if (!integration?.api_key) continue;
       
       const intId = integration.id;
-      const authHeader = `chave_api ${integration.api_key} aplicacao ${appKey}`;
+      const authHeader = liAuthHeader(integration.api_key);
       const tenantId = integration.tenant_id;
       
       log.info(`[JOB-PROCESSOR] Processing integration ${intId}, syncType: ${specifiedSyncType || 'all'}, manual: ${isManualRequest}`);
@@ -237,8 +237,6 @@ Deno.serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const appKey = Deno.env.get('LOJA_INTEGRADA_APP_KEY')!;
-
     let requestBody: Record<string, unknown> = {};
     try {
       const bodyText = await req.text();
@@ -250,7 +248,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     EdgeRuntime.waitUntil(
-      runJobProcessor(supabase, appKey, requestBody, log).catch((err: unknown) => {
+      runJobProcessor(supabase, requestBody, log).catch((err: unknown) => {
         log.error('[JOB-PROCESSOR] Background error:', err instanceof Error ? err.message : err);
       })
     );

@@ -32,7 +32,7 @@ const availableIntegrations = [
     description: "Sincronização automática de pedidos, produtos e clientes",
     icon: Store,
     fields: [
-      { name: "api_key", label: "API Key", placeholder: "Sua chave de API da Loja Integrada", type: "password" }
+      { name: "api_key", label: "Personal Token", placeholder: "Personal Token da sua loja na Loja Integrada", type: "password" }
     ]
   },
   {
@@ -190,19 +190,19 @@ export function AddIntegrationDialog({ open, onOpenChange, onSuccess, onSelectEv
     setIsLoading(true);
 
     try {
-      // Validate API key with edge function
-      toast.info("Validando API Key...");
+      // Validate personal token with edge function
+      toast.info("Validando Personal Token...");
       
       const { data: validationResult, error: validationError } = await supabase.functions.invoke('li-validate', {
         body: { apiKey: formData.api_key }
       });
 
       if (validationError) {
-        throw new Error('Erro ao validar API Key');
+        throw new Error('Erro ao validar o Personal Token');
       }
 
       if (!validationResult?.valid) {
-        toast.error(validationResult?.error || 'API Key inválida');
+        toast.error(validationResult?.error || 'Personal Token inválido');
         setIsLoading(false);
         return;
       }
@@ -308,7 +308,7 @@ export function AddIntegrationDialog({ open, onOpenChange, onSuccess, onSelectEv
                 </div>
               ))}
               <p className="text-xs text-muted-foreground">
-                A API Key pode ser encontrada no painel da Loja Integrada em Configurações → API.
+                O Personal Token é gerado no painel da Loja Integrada (Configurações → API). Use o token indicado para o cabeçalho Authorization: Basic.
               </p>
             </div>
             <DialogFooter className="gap-2 sm:gap-0">
