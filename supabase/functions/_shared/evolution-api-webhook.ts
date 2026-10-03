@@ -6,6 +6,7 @@
  */
 
 import type { ActionContext } from "./evolution-api-instance.ts";
+import { waWebhookUrl } from "./wa-webhook-token.ts";
 
 /** Instance shape from Evolution API */
 interface EvolutionInstance {
@@ -33,10 +34,13 @@ export async function handleReconfigureWebhook(ctx: ActionContext): Promise<Resp
   if (!ctx.instanceName) throw new Error('Instance name is required');
   ctx.log.info(`[reconfigure-webhook] For: ${ctx.instanceName}`);
 
+  // URL base (sem token) é o que fica no banco/resposta; a Evolution recebe a URL com o token da instância.
   const webhookUrl = `${ctx.supabaseUrl}/functions/v1/whatsapp-webhook`;
+  const webhookUrlWithToken = await waWebhookUrl(ctx.supabaseUrl, ctx.instanceName);
+  if (!webhookUrlWithToken) throw new Error('WA_WEBHOOK_SECRET não configurado');
   const webhookResponse = await fetch(`${ctx.baseUrl}/webhook/set/${ctx.instanceName}`, {
     method: 'POST', headers: { 'apikey': ctx.evolutionApiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ webhook: { enabled: true, url: webhookUrl, webhookByEvents: true, webhookBase64: true, events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE', 'SEND_MESSAGE'] } }),
+    body: JSON.stringify({ webhook: { enabled: true, url: webhookUrlWithToken, webhookByEvents: true, webhookBase64: true, events: ['MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'CONNECTION_UPDATE', 'SEND_MESSAGE'] } }),
   });
   if (!webhookResponse.ok) throw new Error(`Failed to configure webhook: ${await webhookResponse.text()}`);
 

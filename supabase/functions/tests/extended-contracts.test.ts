@@ -319,24 +319,20 @@ for (const fn of ["manage-smtp", "manage-credentials", "ai-provider-validate"]) 
 // 10. Webhook functions accept POST without auth (public contract)
 // ═══════════════════════════════════════════════════════════════════
 
-Deno.test("whatsapp-webhook: accepts POST without crashing (public)", async () => {
+Deno.test("whatsapp-webhook: rejects POST without instance token (401)", async () => {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-webhook`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "apikey": SUPABASE_ANON_KEY },
-    body: JSON.stringify({ event: "test", data: {} }),
+    body: JSON.stringify({ event: "test", instance: "fake", data: {} }),
   });
   const text = await res.text();
   if (res.status === 503) { console.warn("⏭️  not deployed — skipping"); return; }
 
-  // Webhooks are public but should respond gracefully (not 401)
+  // O webhook é aberto à rede, mas exige o token da instância no caminho da URL
+  // (HMAC do nome da instância com WA_WEBHOOK_SECRET). Sem token => 401.
   assert(
-    res.status !== 401,
-    `whatsapp-webhook should be public (no auth required), got 401: ${text}`
-  );
-  // Should be 200 (processed/skipped) or 400 (bad payload), not a crash
-  assert(
-    res.status < 500 || res.status === 500,
-    `Webhook should handle bad payload gracefully, got ${res.status}`
+    res.status === 401,
+    `whatsapp-webhook should reject requests without a valid instance token, got ${res.status}: ${text}`
   );
 });
 

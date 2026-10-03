@@ -18,6 +18,7 @@ import {
 import { handleMenuTrigger } from "../_shared/wa-webhook-menu-trigger.ts";
 import { handleChatbotFlow } from "../_shared/wa-webhook-flow-handler.ts";
 import { routeToAI } from "../_shared/wa-webhook-ai-routing.ts";
+import { verifyWaWebhookToken, waTokenFromUrl } from "../_shared/wa-webhook-token.ts";
 
 declare const EdgeRuntime: { waitUntil: (promise: Promise<void>) => void } | undefined;
 
@@ -36,7 +37,16 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const payload = await req.json();
-    log.info('📩 Webhook received:', JSON.stringify(payload, null, 2));
+
+    // Autenticação: o token (HMAC do nome da instância) vem no caminho da URL cadastrada na Evolution.
+    // A Evolution não envia o header `apikey`, então a validação por chave não funciona.
+    if (!(await verifyWaWebhookToken(payload?.instance, waTokenFromUrl(req.url)))) {
+      log.warn('[whatsapp-webhook] Unauthorized: token ausente ou inválido');
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    log.info(`📩 Webhook received: event=${payload.event} instance=${payload.instance}`);
 
     // Handle message status updates (delivered, read)
     if (payload.event === 'messages.update' && (payload.data as unknown as EvolutionStatusUpdate)?.status) {
