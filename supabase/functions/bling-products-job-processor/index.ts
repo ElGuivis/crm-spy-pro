@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts";
-import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
+import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { acquireLock, releaseLock } from './job-helpers.ts';
 import { processProductJob } from './product-job.ts';
@@ -9,10 +9,11 @@ import { processEnrichmentJob } from './enrichment-job.ts';
 Deno.serve(async (req) => {
   const cid = getCorrelationId(req);
   const log = createLogger("bling-products-job-processor", cid);
+  const corsHeaders = getRestrictedCorsHeaders(req);
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    await requireUserOrInternalAuth(req);
+    const auth = await requireUserOrInternalAuth(req);
 
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const results: Record<string, unknown>[] = [];
@@ -24,6 +25,11 @@ Deno.serve(async (req) => {
     } catch { /* ignore */ }
 
     const specificJobId = requestBody.jobId;
+
+    // Chamada de usuário: só retoma um job do próprio tenant (a varredura global é só do cron).
+    if (!auth.isInternal && !specificJobId) {
+      return new Response(JSON.stringify({ success: false, error: 'jobId required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     let jobsQuery = supabase
       .from('bling_sync_jobs')
@@ -40,6 +46,7 @@ Deno.serve(async (req) => {
         .eq('id', specificJobId)
         .in('status', ['pending', 'running'])
         .limit(1);
+      if (!auth.isInternal) jobsQuery = jobsQuery.eq('tenant_id', auth.tenantId!);
     }
 
     const { data: jobs, error: jobsError } = await jobsQuery;

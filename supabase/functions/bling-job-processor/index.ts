@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts";
-import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
+import { requireResource } from "../_shared/resource-guard.ts";
+import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { ensureValidToken } from "./job-helpers.ts";
 import { syncNewProducts } from "./product-sync.ts";
@@ -11,6 +12,7 @@ import { syncNewOrders } from "./order-sync.ts";
 Deno.serve(async (req) => {
   const cid = getCorrelationId(req);
   const log = createLogger("bling-job-processor", cid);
+  const corsHeaders = getRestrictedCorsHeaders(req);
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
@@ -29,12 +31,21 @@ Deno.serve(async (req) => {
     const specifiedSyncType = requestBody.syncType as string || null;
     const isManualRequest = !!specifiedIntegrationId || !!specifiedSyncType;
 
+    // Chamada de usuário: só opera sobre uma integração do próprio tenant (o modo global é só do cron).
+    if (!auth.isInternal) {
+      if (!specifiedIntegrationId) {
+        return new Response(JSON.stringify({ success: false, error: 'integrationId required' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      await requireResource(supabase, "integrations", specifiedIntegrationId, auth.tenantId!, req);
+    }
+
     const { data: connectedConnections } = await supabase.from('bling_connections').select('tenant_id').eq('status', 'connected');
     const connectedTenantIds = (connectedConnections || []).map(c => c.tenant_id);
 
     let integrationQuery = supabase.from('integrations').select(`id, tenant_id, bling_store_ids, auto_sync_orders, auto_sync_orders_interval, last_sync_orders_at, auto_sync_products, auto_sync_products_interval, last_sync_products_at, auto_sync_customers, auto_sync_customers_interval, last_sync_customers_at, initial_sync_completed`).eq('type', 'bling');
     if (specifiedIntegrationId) {
       integrationQuery = integrationQuery.eq('id', specifiedIntegrationId);
+      if (!auth.isInternal) integrationQuery = integrationQuery.eq('tenant_id', auth.tenantId!);
     } else {
       integrationQuery = integrationQuery.eq('initial_sync_completed', true).or('auto_sync_orders.eq.true,auto_sync_products.eq.true,auto_sync_customers.eq.true').in('tenant_id', connectedTenantIds.length > 0 ? connectedTenantIds : ['none']);
     }
