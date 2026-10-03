@@ -2,85 +2,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { syncStatusToLojaIntegrada } from "../_shared/li-status-sync.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
+import { verifyMeWebhookToken } from "../_shared/me-webhook-token.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-me-signature, x-me-timestamp, x-melhor-envio-signature, x-melhor-envio-timestamp",
-};
+// Webhook servidor-a-servidor: sem CORS de navegador.
+const jsonHeaders = { "Content-Type": "application/json" };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const MELHOR_ENVIO_WEBHOOK_SECRET = Deno.env.get("MELHOR_ENVIO_WEBHOOK_SECRET");
-
-// Timing-safe string comparison to prevent timing attacks
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
-  let result = 0;
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return result === 0;
-}
-
-// Verify webhook signature using HMAC-SHA256
-async function verifyWebhookSignature(
-  rawBody: string,
-  signature: string | null,
-  timestamp: string | null,
-  secret: string
-): Promise<boolean> {
-  if (!signature || !secret) {
-    log.info("[melhor-envio-webhook] Missing signature or secret");
-    return false;
-  }
-
-  // Validate timestamp to prevent replay attacks (5 minute window)
-  if (timestamp) {
-    const webhookTime = parseInt(timestamp, 10) * 1000;
-    const now = Date.now();
-    const fiveMinutes = 5 * 60 * 1000;
-    if (Math.abs(now - webhookTime) > fiveMinutes) {
-      log.info("[melhor-envio-webhook] Timestamp outside valid window");
-      return false;
-    }
-  }
-
-  try {
-    // Create the signed payload (timestamp + body if timestamp provided, otherwise just body)
-    const signedPayload = timestamp ? `${timestamp}.${rawBody}` : rawBody;
-    
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      "raw",
-      encoder.encode(secret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"]
-    );
-    
-    const signatureBytes = await crypto.subtle.sign(
-      "HMAC",
-      key,
-      encoder.encode(signedPayload)
-    );
-    
-    const expectedSignature = Array.from(new Uint8Array(signatureBytes))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-    
-    // Handle signature with or without prefix
-    const cleanSignature = signature.startsWith('sha256=') 
-      ? signature.slice(7) 
-      : signature;
-    
-    return timingSafeEqual(expectedSignature.toLowerCase(), cleanSignature.toLowerCase());
-  } catch (error) {
-    log.error("[melhor-envio-webhook] Signature verification error:", error);
-    return false;
-  }
-}
 
 // Mapear status do Melhor Envio para nosso sistema
 function mapStatus(meStatus: string): string {
@@ -116,30 +44,26 @@ function statusFromEvent(eventName: string): string | null {
 serve(async (req) => {
   const cid = getCorrelationId(req);
   const log = createLogger("melhor-envio-webhook", cid);
-  // CORS preflight
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { status: 204 });
 
   log.info(`[melhor-envio-webhook] Webhook recebido`);
 
-  // Read raw body for signature verification
+  // Autenticação: ?tenant=<id>&token=<HMAC(tenant_id)> (o ME não assina de forma documentada)
+  const reqUrl = new URL(req.url);
+  const authTenantId = reqUrl.searchParams.get("tenant");
+  if (!(await verifyMeWebhookToken(authTenantId, reqUrl.searchParams.get("token")))) {
+    log.warn("[melhor-envio-webhook] Token ausente ou inválido");
+    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: jsonHeaders });
+  }
+
   const rawBody = await req.text();
 
   try {
-    // Log headers for debugging signature format
-    const signature = req.headers.get("x-me-signature") || req.headers.get("x-melhor-envio-signature");
-    const timestamp = req.headers.get("x-me-timestamp") || req.headers.get("x-melhor-envio-timestamp");
-    log.info(`[melhor-envio-webhook] Signature header: ${signature ? 'present' : 'absent'}, Timestamp: ${timestamp ? 'present' : 'absent'}`);
-    
-    // Signature verification disabled - Melhor Envio does not document signature headers
-    log.info("[melhor-envio-webhook] Processing webhook (signature verification disabled)");
-
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // Parse webhook payload from raw body
     const payload = JSON.parse(rawBody);
-    log.info(`[melhor-envio-webhook] Payload:`, JSON.stringify(payload, null, 2));
+    log.info(`[melhor-envio-webhook] Payload recebido (${Array.isArray(payload) ? payload.length : 1} evento(s))`);
 
     // Formato do webhook do Melhor Envio (conforme docs oficiais):
     // { event: "order.posted", data: { id: "uuid", protocol: "...", status: "posted", tracking: "...", ... } }
@@ -178,6 +102,7 @@ serve(async (req) => {
         .from("me_shipments")
         .select("id, tenant_id, status")
         .eq("me_id", meId)
+        .eq("tenant_id", authTenantId!)
         .maybeSingle();
 
       if (!shipment) {
@@ -311,22 +236,14 @@ serve(async (req) => {
         success: true, 
         message: `${processedCount} eventos processados` 
       }),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      }
+      { status: 200, headers: jsonHeaders }
     );
 
   } catch (error: unknown) {
     log.error("[melhor-envio-webhook] Erro:", error);
-    const errorMessage = error instanceof Error ? error.message : "Erro interno";
-    
     return new Response(
-      JSON.stringify({ success: false, error: errorMessage }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, "Content-Type": "application/json" } 
-      }
+      JSON.stringify({ success: false, error: "Erro interno" }),
+      { status: 500, headers: jsonHeaders }
     );
   }
 });

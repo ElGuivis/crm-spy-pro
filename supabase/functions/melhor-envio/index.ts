@@ -8,6 +8,7 @@ import { handleRedirectCallback, handleAuthorize } from "../_shared/melhor-envio
 import { handleSyncShipments } from "../_shared/melhor-envio-sync-shipments.ts";
 import { handleSyncTracking, handleSyncSingle } from "../_shared/melhor-envio-tracking.ts";
 import { handleCronSync } from "../_shared/melhor-envio-cron.ts";
+import { meWebhookToken } from "../_shared/me-webhook-token.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -200,8 +201,16 @@ serve(async (req) => {
         return handleCronSync({ supabase, corsHeaders, log });
 
       case "register_webhook": {
-        const webhookUrl = `${SUPABASE_URL}/functions/v1/melhor-envio-webhook`;
-        log.info(`[melhor-envio] Webhook URL para cadastro manual: ${webhookUrl}`);
+        // A URL carrega o token do tenant (HMAC); não logar a URL completa.
+        const webhookToken = await meWebhookToken(tenantId);
+        if (!webhookToken) {
+          return new Response(
+            JSON.stringify({ success: false, error: "Webhook do Melhor Envio não configurado no servidor" }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+          );
+        }
+        const webhookUrl = `${SUPABASE_URL}/functions/v1/melhor-envio-webhook?tenant=${tenantId}&token=${webhookToken}`;
+        log.info(`[melhor-envio] Gerada URL de webhook para o tenant ${tenantId}`);
 
         const { data: tokenRecord } = await supabase
           .from("melhor_envio_tokens")
