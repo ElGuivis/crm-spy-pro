@@ -1,5 +1,5 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts";
+import { requireInternalAuth } from "../_shared/auth-guard.ts";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -215,24 +215,27 @@ async function runFlow(
   };
 }
 
+const JSON_HEADERS = { "Content-Type": "application/json" };
+
+// Função interna: chamada só pelo whatsapp-webhook com a service role (sem uso no navegador, sem CORS).
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type" } });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { status: 204 });
   try {
-    requireUserOrInternalAuth(req);
-  } catch (err) {
-    if (err instanceof Response) return err;
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
-  }
-  try {
-    const { flowId, session, userInput } = await req.json();
-    if (!flowId) return new Response(JSON.stringify({ error: "flowId required" }), { status: 400 });
+    requireInternalAuth(req);
+    let body: { flowId?: string; session?: FlowSession; userInput?: string | null };
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers: JSON_HEADERS });
+    }
+    const { flowId, session, userInput } = body;
+    if (!flowId) return new Response(JSON.stringify({ error: "flowId required" }), { status: 400, headers: JSON_HEADERS });
     const emptySession: FlowSession = { currentNodeId: null, pendingNodeId: null, waitingForInput: false, variables: {} };
     const result = await runFlow(flowId, session ?? emptySession, userInput ?? null);
-    return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
-  } catch (err) {
+    return new Response(JSON.stringify(result), { headers: JSON_HEADERS });
+  } catch (err: unknown) {
+    if (err instanceof Response) return err;
     console.error("flow-runner error:", err);
-    return new Response(JSON.stringify({ error: String(err) }), { status: 500 });
+    return new Response(JSON.stringify({ error: "Internal error" }), { status: 500, headers: JSON_HEADERS });
   }
 });
