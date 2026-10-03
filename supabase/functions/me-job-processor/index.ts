@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
 import { readMelhorEnvioTokens } from "../_shared/credential-helpers.ts";
-import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
+import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { checkNewShipments } from "./check-new.ts";
 import { updateTracking } from "./update-tracking.ts";
@@ -13,6 +13,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 serve(async (req) => {
+  const corsHeaders = getRestrictedCorsHeaders(req);
   const cid = getCorrelationId(req);
   const log = createLogger("me-job-processor", cid);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });

@@ -1,11 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { requireUserAuth } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
-import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
+import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { resolveNuvemshopConnection, nuvemshopApiBase, nuvemshopFetch, NUVEMSHOP_PAGE_SIZE } from "../_shared/nuvemshop-helpers.ts";
 
 Deno.serve(async (req) => {
+  const corsHeaders = getRestrictedCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const cid = getCorrelationId(req);

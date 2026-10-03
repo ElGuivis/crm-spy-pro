@@ -5,12 +5,13 @@ import { generateEmailHtml } from "../_shared/email-html-generator.ts";
 import { replaceVariables } from "../_shared/email-variable-replacer.ts";
 import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
-import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
+import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { safeParseAudienceReference, resolveRecipients } from "./audience-resolvers.ts";
 import { injectTracking, getSuppressedEmailSet } from "./send-helpers.ts";
 
 serve(async (req) => {
+  const corsHeaders = getRestrictedCorsHeaders(req);
   const cid = getCorrelationId(req);
   const log = createLogger("email-campaign-send", cid);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });

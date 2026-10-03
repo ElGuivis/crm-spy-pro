@@ -3,7 +3,7 @@ type ServiceClient = ReturnType<typeof createClient>;
 import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
 import { liAuthHeader } from "../_shared/li-auth.ts";
-import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
+import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
 // Module-level logger (overridden per-request with correlation ID)
@@ -36,6 +36,7 @@ async function rateLimitedFetch(url: string, authHeader: string): Promise<Respon
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = getRestrictedCorsHeaders(req);
 
   const cid = getCorrelationId(req);
   log = createLogger("li-reconciliation-processor", cid);

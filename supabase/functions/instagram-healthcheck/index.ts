@@ -2,10 +2,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { resolveInstagramAccessToken } from "../_shared/ig-token-resolver.ts";
 import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts";
-import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
+import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
 serve(async (req) => {
+  const corsHeaders = getRestrictedCorsHeaders(req);
 
   const cid = getCorrelationId(req);
   const log = createLogger("instagram-healthcheck", cid);

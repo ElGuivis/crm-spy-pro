@@ -1,12 +1,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { requireUserAuth } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
-import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
+import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { BLING_API_BASE, RATE_LIMIT_DELAY } from "../_shared/bling-sync-helpers.ts";
 import { ensureBlingToken } from "../_shared/bling-token-refresh.ts";
 
 Deno.serve(async (req) => {
+  const corsHeaders = getRestrictedCorsHeaders(req);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   const cid = getCorrelationId(req);

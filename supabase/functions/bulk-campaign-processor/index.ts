@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
-import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
+import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
 const TOKENS_PER_MESSAGE = 2;
@@ -54,6 +54,7 @@ function isWithinSendingWindow(
 }
 
 serve(async (req) => {
+  const corsHeaders = getRestrictedCorsHeaders(req);
 
   const cid = getCorrelationId(req);
   const log = createLogger("bulk-campaign-processor", cid);

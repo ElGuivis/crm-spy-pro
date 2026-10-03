@@ -2,12 +2,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { requireUserAuth } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
 import { liAuthHeader } from "../_shared/li-auth.ts";
-import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
+import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
 const LI_API_BASE = 'https://api.awsli.com.br/v1';
 
 Deno.serve(async (req) => {
+  const corsHeaders = getRestrictedCorsHeaders(req);
 
   const cid = getCorrelationId(req);
   const log = createLogger("li-coupon-create", cid);

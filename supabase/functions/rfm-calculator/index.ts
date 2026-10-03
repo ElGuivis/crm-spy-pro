@@ -2,13 +2,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4'
 type ServiceClient = ReturnType<typeof createClient>;
 import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts"
 import { requireResource } from "../_shared/resource-guard.ts"
-import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
+import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { scoreRecency, scoreFrequency, scoreMonetary, determineSegment, determineChurnRisk } from './rfm-scoring.ts'
 import { runRfmBackground } from './rfm-background.ts'
 import type { CustomerMetrics } from './rfm-background.ts'
 
 Deno.serve(async (req) => {
+  const corsHeaders = getRestrictedCorsHeaders(req);
   const cid = getCorrelationId(req);
   const log = createLogger("rfm-calculator", cid);
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders })
