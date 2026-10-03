@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict Xzu7uCYilvjZA4MDaSTfCcGAuBNSLqdrV97U6ZgzbbVc8BmiTGN3DZoTOQSA7iI
+\restrict GcOQKafRM8Pzon1OrW0Ler1WKvBidZxLt6C6EsRgJS4clq4hYc7AsSDvoU1yjXw
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -575,9 +575,6 @@ BEGIN
     FROM public.generated_coupons WHERE integration_id = p_integration_id;
 
   -- NULL out secondary FK references on config tables
-  UPDATE public.abandoned_cart_configs
-    SET whatsapp_integration_id = NULL
-    WHERE whatsapp_integration_id = p_integration_id;
 
   UPDATE public.birthday_configs
     SET email_integration_id = NULL
@@ -609,25 +606,21 @@ BEGIN
 
   -- Second-level: LI
   IF v_li_customer_ids IS NOT NULL THEN
-    DELETE FROM public.li_cashback_executions WHERE li_customer_id = ANY(v_li_customer_ids);
-    DELETE FROM public.cashback_executions     WHERE li_customer_id = ANY(v_li_customer_ids);
   END IF;
 
   IF v_li_order_ids IS NOT NULL THEN
-    DELETE FROM public.li_order_items WHERE li_order_id = ANY(v_li_order_ids);
+    DELETE FROM public.li_order_items WHERE order_id = ANY(v_li_order_ids);
   END IF;
 
   -- Second-level: Bling
   IF v_bling_order_ids IS NOT NULL THEN
-    DELETE FROM public.bling_order_items WHERE bling_order_id = ANY(v_bling_order_ids);
+    DELETE FROM public.bling_order_items WHERE order_id = ANY(v_bling_order_ids);
   END IF;
 
   -- Second-level: Conversations
   IF v_conv_ids IS NOT NULL THEN
     DELETE FROM public.messages           WHERE conversation_id = ANY(v_conv_ids);
     DELETE FROM public.conversation_tags  WHERE conversation_id = ANY(v_conv_ids);
-    DELETE FROM public.conversation_notes WHERE conversation_id = ANY(v_conv_ids);
-    DELETE FROM public.message_reactions  WHERE conversation_id = ANY(v_conv_ids);
   END IF;
 
   -- Second-level: RFM audiences
@@ -697,8 +690,6 @@ BEGIN
   DELETE FROM public.email_integration_senders WHERE integration_id         = p_integration_id;
 
   -- Configs
-  DELETE FROM public.abandoned_cart_configs     WHERE integration_id = p_integration_id;
-  DELETE FROM public.abandoned_carts            WHERE integration_id = p_integration_id;
   DELETE FROM public.ai_agents                  WHERE store_integration_id = p_integration_id;
   DELETE FROM public.birthday_configs           WHERE integration_id = p_integration_id;
   DELETE FROM public.order_notification_configs WHERE integration_id = p_integration_id;
@@ -16512,5 +16503,5 @@ ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Xzu7uCYilvjZA4MDaSTfCcGAuBNSLqdrV97U6ZgzbbVc8BmiTGN3DZoTOQSA7iI
+\unrestrict GcOQKafRM8Pzon1OrW0Ler1WKvBidZxLt6C6EsRgJS4clq4hYc7AsSDvoU1yjXw
 
