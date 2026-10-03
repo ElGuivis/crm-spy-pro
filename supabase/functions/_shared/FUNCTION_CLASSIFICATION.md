@@ -13,27 +13,25 @@ All resource lookups MUST include `.eq('tenant_id', authTenantId)`.
 | ai-default-provider | User manages AI default provider |
 | ai-provider-validate | User validates AI key |
 | bling-stores | User lists stores |
+| bling-coupon-create | User creates coupon (Bling) |
+| bling-coupon-sync | User syncs coupons (Bling) |
+| nuvemshop-coupon-create | User creates coupon (Nuvemshop) |
+| nuvemshop-coupon-sync | User syncs coupons (Nuvemshop) |
+| nuvemshop-oauth | User initiates Nuvemshop OAuth |
 | create-team-member | Admin creates invite |
 | delete-account | User deletes own account |
 | email-campaign-send-test | User sends test email |
 | evolution-api | User manages WhatsApp instances |
 | get-store-statuses | User checks store status |
 | instagram-block-user | User action |
-| instagram-cancel-run | User action |
 | instagram-create-cta-link | User action |
 | instagram-delete-comment | User action |
 | instagram-generate-deep-link | User action |
-| instagram-generate-flow-draft-ai | User action |
 | instagram-hide-comment | User action |
-| instagram-install-quick-automation | User action |
-| instagram-list-quick-automations | User action |
-| instagram-manual-token | User action |
+| instagram-list-media | User lists channel media |
 | instagram-move-thread-to-spam | User action |
 | instagram-oauth | User initiates OAuth |
-| instagram-pause-contact-automations | User action |
 | instagram-publish-flow-version | User action |
-| instagram-resume-contact-automations | User action |
-| instagram-seed-test-flows | User-facing test/debug tool |
 | instagram-unblock-user | User action |
 | instagram-upsert-ice-breakers | User action |
 | instagram-upsert-persistent-menu | User action |
@@ -87,6 +85,7 @@ Internal callers use `Authorization: Bearer <service_role_key>` or `x-cron-secre
 | li-reconciliation-processor | `ClientsContent`, `ProductsContent` | cron (service_role) |
 | li-sync | `InitialSyncProgress`, `ProductsContent`, `AddStoreConnectionDialog` | `li-job-processor` (service_role) |
 | me-job-processor | `useMelhorEnvioAutoSync.ts` | cron (service_role) |
+| nuvemshop-sync | `NuvemshopProductsContent` | `nuvemshop-job-processor` / cron (service_role) |
 | rfm-calculator | `useRFMData.ts` | `trigger_rfm_calculations()` Postgres fn (cron #32) |
 
 #### HYBRID (OAuth) — state-based fallback for OAuth callbacks
@@ -152,10 +151,7 @@ These are called by pg_cron or other edge functions, never directly by users.
 | cashback-reminder-processor | Cron: cashback reminders |
 | conversation-inactivity-processor | Cron: inactivity timeouts |
 | flow-runner | Called only by `whatsapp-webhook` (service_role) via `_shared/wa-webhook-flow-handler.ts`; no frontend caller, no CORS |
-| instagram-backfill-contacts | Internal: backfill contacts |
-| instagram-dead-letter-retry | Cron: retry dead letters |
 | instagram-experimental-trigger | Internal testing |
-| instagram-flow-resume-worker | Cron: resume paused flows |
 | instagram-flow-runner | Called by trigger-dispatcher |
 | instagram-outbox-dispatch | Cron: dispatch outbox messages |
 | instagram-refresh-token | Cron: refresh expiring tokens |
@@ -169,6 +165,9 @@ These are called by pg_cron or other edge functions, never directly by users.
 | li-job-processor | Cron: process LI sync jobs |
 | message-queue-processor | Cron: process message queue |
 | process-outbound-queue | Cron: dispatch outbound messages |
+| instagram-message-requests-poller | Cron: poll Instagram message requests (every 2 min) |
+| nuvemshop-job-processor | Cron: Nuvemshop incremental sync |
+| reactivation-processor | Cron: reactivation automations |
 ## 🌐 PUBLIC (webhook/callback — no JWT, validates via signature/secret/state)
 Auth pattern: Signature verification (HMAC), token validation, or none (idempotent/safe).
 These MUST validate incoming data via other means (webhook signature, state token, etc.)

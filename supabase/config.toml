@@ -380,5 +380,17 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.flow-runner]
-# AUTHENTICATED — user or internal (requireUserOrInternalAuth)
+# INTERNAL — chamada só pelo whatsapp-webhook (requireInternalAuth)
+verify_jwt = false
+
+[functions.instagram-data-deletion]
+# PUBLIC — Meta data-deletion callback (signed_request HMAC)
+verify_jwt = false
+
+[functions.instagram-deauthorize]
+# PUBLIC — Meta deauthorize callback (signed_request HMAC)
+verify_jwt = false
+
+[functions.instagram-list-media]
+# AUTHENTICATED — user lists channel media (requireUserAuth)
 verify_jwt = false

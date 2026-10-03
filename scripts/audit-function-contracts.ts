@@ -14,7 +14,9 @@
 //   - HYBRID → must use requireUserOrInternalAuth. Never requireUserAuth-only or requireInternalAuth-only.
 //   - INTERNAL → must use requireInternalAuth. Never user or hybrid guard.
 //   - PUBLIC → must NOT use any auth guard (validates via signature/token/state).
-//   - verify_jwt: AUTHENTICATED → true; HYBRID/INTERNAL/PUBLIC → false.
+//   - verify_jwt: false for ALL classes. The project uses ES256 signing keys and the Supabase
+//     gateway only validates HS256, so verify_jwt = true returns 401 (see config.toml header and
+//     FUNCTION_CLASSIFICATION.md §ES256 Gateway Note). Auth is enforced in code instead.
 //
 // Exits with code 1 if any blocking violation is found.
 
@@ -145,8 +147,9 @@ const EXPECTED_GUARDS: Record<FnClass, GuardType[]> = {
 };
 
 const EXPECTED_JWT: Record<FnClass, boolean | null> = {
-  AUTHENTICATED: true,
-  HYBRID: null,  // HYBRID can be true (gateway-protected) or false (open-gateway)
+  // Todas `false`: o gateway só valida HS256 e o projeto usa ES256 (ver cabeçalho do config.toml).
+  AUTHENTICATED: false,
+  HYBRID: false,
   INTERNAL: false,
   PUBLIC: false,
 };
