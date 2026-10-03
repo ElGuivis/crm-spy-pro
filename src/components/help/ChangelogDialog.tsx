@@ -12,69 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-
-interface ChangelogEntry {
-  version: string;
-  date: string;
-  items: {
-    type: 'feature' | 'improvement' | 'fix';
-    text: string;
-  }[];
-}
-
-const CHANGELOG: ChangelogEntry[] = [
-  {
-    version: '2.6.0',
-    date: '08 Mar 2026',
-    items: [
-      { type: 'feature', text: 'Sons customizáveis para notificações (Padrão, Chime, Pop, Sino)' },
-      { type: 'feature', text: 'Tour de onboarding com dicas contextuais e navegação por teclado' },
-      { type: 'feature', text: 'Botão de atualizar no checklist de setup' },
-      { type: 'improvement', text: 'Animações de transição melhoradas no tour' },
-      { type: 'improvement', text: 'Busca no changelog para encontrar novidades rapidamente' },
-    ],
-  },
-  {
-    version: '2.5.0',
-    date: '08 Mar 2026',
-    items: [
-      { type: 'feature', text: 'Dashboard de Atendimento com P50/P90, SLA e volume por hora' },
-      { type: 'feature', text: 'Export PDF e CSV em todos os relatórios' },
-      { type: 'improvement', text: 'Gráficos Recharts nos relatórios de conversas' },
-      { type: 'improvement', text: 'Performance por atendente com tempo de resposta' },
-    ],
-  },
-  {
-    version: '2.4.0',
-    date: '07 Mar 2026',
-    items: [
-      { type: 'feature', text: 'Simulador de chatbot para teste de fluxos' },
-      { type: 'feature', text: 'Wizard de automação com templates prontos' },
-      { type: 'improvement', text: 'Preview de variáveis dinâmicas em automações' },
-    ],
-  },
-  {
-    version: '2.3.0',
-    date: '06 Mar 2026',
-    items: [
-      { type: 'feature', text: 'Busca global de conversas (Ctrl+K)' },
-      { type: 'feature', text: 'Filtros avançados por status, tag, agente e data' },
-      { type: 'feature', text: 'Notas internas fixadas no painel do contato' },
-      { type: 'improvement', text: 'Atalho Ctrl+Shift+N para notas rápidas' },
-    ],
-  },
-  {
-    version: '2.2.0',
-    date: '05 Mar 2026',
-    items: [
-      { type: 'feature', text: 'Transições com Framer Motion entre páginas' },
-      { type: 'feature', text: 'Skeleton loaders em todas as listagens' },
-      { type: 'improvement', text: 'Cache inteligente com React Query' },
-      { type: 'improvement', text: 'Lazy loading de rotas pesadas' },
-      { type: 'fix', text: 'Performance mobile otimizada' },
-    ],
-  },
-];
+import { CHANGELOG } from './changelog';
 
 const TYPE_CONFIG = {
   feature: { label: 'Novo', color: 'bg-primary/10 text-primary border-primary/20', icon: Star },
