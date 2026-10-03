@@ -71,7 +71,7 @@ export function useEmailIntegrationForm({ integration, open, onSuccess, onOpenCh
       setFormData(EMPTY_FORM);
       setSenders([]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [integration, open]);
 
   const loadSenders = async (integrationId: string) => {

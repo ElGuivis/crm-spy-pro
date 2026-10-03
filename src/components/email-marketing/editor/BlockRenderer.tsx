@@ -35,7 +35,7 @@ export function BlockRenderer({ block, isPreview = false }: BlockRendererProps) 
         </div>
       );
 
-    case 'heading':
+    case 'heading': {
       const HeadingTag = block.level as keyof JSX.IntrinsicElements;
       return (
         <div className={wrapperClass} style={getBaseStyles()}>
@@ -46,6 +46,7 @@ export function BlockRenderer({ block, isPreview = false }: BlockRendererProps) 
           </div>
         </div>
       );
+    }
 
     case 'text':
       return (
@@ -63,12 +64,12 @@ export function BlockRenderer({ block, isPreview = false }: BlockRendererProps) 
         </div>
       );
 
-    case 'image':
+    case 'image': {
       const imgElement = (
-        <img 
-          src={block.url || 'https://via.placeholder.com/600x300'} 
-          alt={block.alt || 'Imagem'} 
-          style={{ width: block.width || '100%', maxWidth: '100%', display: 'block' }} 
+        <img
+          src={block.url || 'https://via.placeholder.com/600x300'}
+          alt={block.alt || 'Imagem'}
+          style={{ width: block.width || '100%', maxWidth: '100%', display: 'block' }}
         />
       );
       return (
@@ -78,6 +79,7 @@ export function BlockRenderer({ block, isPreview = false }: BlockRendererProps) 
           </div>
         </div>
       );
+    }
 
     case 'button':
       return (
@@ -151,12 +153,12 @@ export function BlockRenderer({ block, isPreview = false }: BlockRendererProps) 
         </div>
       );
 
-    case 'banner':
+    case 'banner': {
       const bannerImg = (
-        <img 
-          src={block.imageUrl || 'https://via.placeholder.com/600x200'} 
-          alt={block.alt || 'Banner'} 
-          style={{ width: '100%', height: block.height || 'auto', display: 'block' }} 
+        <img
+          src={block.imageUrl || 'https://via.placeholder.com/600x200'}
+          alt={block.alt || 'Banner'}
+          style={{ width: '100%', height: block.height || 'auto', display: 'block' }}
         />
       );
       return (
@@ -164,6 +166,7 @@ export function BlockRenderer({ block, isPreview = false }: BlockRendererProps) 
           {block.linkUrl ? <a href={block.linkUrl}>{bannerImg}</a> : bannerImg}
         </div>
       );
+    }
 
     case 'product':
       return (

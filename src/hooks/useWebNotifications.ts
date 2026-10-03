@@ -112,7 +112,7 @@ function playNotificationSound(soundType: NotificationSound = 'default') {
       osc2.start(ctx.currentTime + config.duration * 0.3);
       osc2.stop(ctx.currentTime + config.duration * 1.5);
     }
-  } catch {}
+  } catch { /* áudio indisponível (autoplay bloqueado ou sem AudioContext): ignora */ }
 }
 
 export function previewSound(soundType: NotificationSound) {

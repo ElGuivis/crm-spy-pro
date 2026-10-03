@@ -57,12 +57,13 @@ export function AudienceSelector({ value, onChange, className }: AudienceSelecto
             email_contains: emailContains || undefined,
           },
         };
-      case "manual":
+      case "manual": {
         const emails = manualEmails
           .split(/[\n,;]/)
           .map((e) => e.trim().toLowerCase())
           .filter((e) => e && e.includes("@"));
         return { emails };
+      }
       case "all":
       default:
         return {};

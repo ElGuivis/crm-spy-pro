@@ -26,7 +26,7 @@ export function useRFMCohort(integrationId: string, sourceType: string) {
         const paidStatuses = ['Pedido Pago', 'Pedido Enviado', 'Pedido Entregue'];
         
         // Fetch in pages to avoid 1000-row limit
-        let allOrders: any[] = [];
+        const allOrders: any[] = [];
         let from = 0;
         const pageSize = 1000;
         while (true) {
@@ -52,7 +52,7 @@ export function useRFMCohort(integrationId: string, sourceType: string) {
       } else if (sourceType === 'bling') {
         const paidKeywords = ['pago', 'faturado', 'enviado', 'entregue', 'atendido', 'completo'];
         
-        let allOrders: any[] = [];
+        const allOrders: any[] = [];
         let from = 0;
         const pageSize = 1000;
         while (true) {

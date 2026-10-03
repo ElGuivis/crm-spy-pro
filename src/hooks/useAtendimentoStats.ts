@@ -101,7 +101,7 @@ export function useAtendimentoStats(period: StatsPeriod = '7d') {
       });
 
       const agentIds = Object.keys(agentMap);
-      let nameMap: Record<string, string> = {};
+      const nameMap: Record<string, string> = {};
       if (agentIds.length > 0) {
         const { data: profiles } = await supabase.from('profiles').select('user_id, owner_name').in('user_id', agentIds);
         (profiles || []).forEach((p) => { nameMap[p.user_id] = p.owner_name || p.user_id.slice(0, 8); });

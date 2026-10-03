@@ -48,7 +48,7 @@ export function useTenantWebhooks() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: key }); toast.success("Webhook criado!"); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const toggleWebhook = useMutation({
@@ -57,7 +57,7 @@ export function useTenantWebhooks() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const deleteWebhook = useMutation({
@@ -66,7 +66,7 @@ export function useTenantWebhooks() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: key }); toast.success("Webhook removido!"); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   return { webhooks, isLoading, createWebhook, toggleWebhook, deleteWebhook };
