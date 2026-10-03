@@ -54,7 +54,10 @@ Called from frontend with user JWT, from cron/workers with service_role, or from
 callbacks with state-based validation.
 
 **Trust boundary rules for HYBRID functions:**
-- User calls: tenant_id resolved from JWT, never trusted from body
+- User calls: tenant_id resolved from JWT, never trusted from body. A user call must name the resource it
+  operates on (`integrationId` / `jobId`) and that resource must belong to the user's tenant; the "global"
+  sweep mode (all tenants) is for internal/cron callers only (see `bling-job-processor`,
+  `bling-products-job-processor`)
 - Internal calls: tenant_id from payload (caller already verified)
 - State-based calls (OAuth exchange): tenant_id from DB-validated state record
 
@@ -148,6 +151,7 @@ These are called by pg_cron or other edge functions, never directly by users.
 | bulk-status-update-li | Cron: update LI statuses |
 | cashback-reminder-processor | Cron: cashback reminders |
 | conversation-inactivity-processor | Cron: inactivity timeouts |
+| flow-runner | Called only by `whatsapp-webhook` (service_role) via `_shared/wa-webhook-flow-handler.ts`; no frontend caller, no CORS |
 | instagram-backfill-contacts | Internal: backfill contacts |
 | instagram-dead-letter-retry | Cron: retry dead letters |
 | instagram-experimental-trigger | Internal testing |
@@ -171,15 +175,23 @@ These MUST validate incoming data via other means (webhook signature, state toke
 
 | Function | Validation |
 |----------|-----------|
-| accept-team-invite | Validates invite token from DB |
-| bling-webhooks | Bling webhook (event processing) |
-| email-unsubscribe | Validates campaign_id + email params |
-| instagram-oauth-callback | Validates oauth_state from DB |
-| instagram-webhook-ingest | HMAC-SHA256 signature from Meta |
-| li-webhook | LI webhook signature |
-| melhor-envio-webhook | ME webhook |
+| accept-team-invite | Validates invite token (SHA-256 hash) from DB |
+| bling-webhooks | HMAC-SHA256 signature from Bling (Client Secret) |
+| csat-submit | Unguessable `csat_token` stored in `conversations` |
+| email-track-click | Token (`email_unsubscribe_tokens.id`); redirect URL validated (no open redirect) |
+| email-track-open | Token (`email_unsubscribe_tokens.id`); returns a 1x1 pixel |
+| email-unsubscribe | Token (`email_unsubscribe_tokens.id`) |
+| instagram-data-deletion | Meta `signed_request` (HMAC-SHA256 with app secret) |
+| instagram-deauthorize | Meta `signed_request` (HMAC-SHA256 with app secret) |
+| instagram-oauth-callback | Validates oauth_state from DB; `frontend_url` checked against allowlist |
+| instagram-webhook-ingest | HMAC-SHA256 signature from Meta (`x-hub-signature-256`) |
+| li-webhook | Per-integration `webhook_token` (constant-time compare). **Note:** Loja Integrada webhooks cannot be registered with a merchant Personal Token (401) — only integrator credentials — so this path is currently unused; sync relies on polling |
+| melhor-envio-webhook | Per-tenant token in URL: `?tenant=<id>&token=HMAC-SHA256(MELHOR_ENVIO_WEBHOOK_SECRET, tenant_id)`; only updates that tenant's shipments |
+| nuvemshop-oauth-callback | Validates oauth_state from DB; `frontend_url` checked against allowlist |
+| nuvemshop-webhook | HMAC-SHA256 in `x-linkedstore-hmac-sha256` (Nuvemshop Client Secret) |
+| nuvemshop-webhook-lgpd | HMAC-SHA256 in `x-linkedstore-hmac-sha256`; invalid events are logged and **not processed** |
 | validate-team-invite | Validates invite token (read-only) |
-| whatsapp-webhook | Evolution API webhook |
+| whatsapp-webhook | Per-instance token in the URL **path**: `/whatsapp-webhook/<HMAC-SHA256(WA_WEBHOOK_SECRET, instanceName)>` checked against `payload.instance` (Evolution does not send an `apikey` header). Registered by `evolution-api` (`handleStatus`, `reconfigure-webhook`) |
 
 ---
 
