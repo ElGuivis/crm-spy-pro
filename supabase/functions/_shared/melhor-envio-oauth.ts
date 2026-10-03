@@ -1,6 +1,6 @@
 import type { ServiceClient } from "./supabase-types.ts";
 import { createLogger } from "./correlation.ts";
-import { PRIMARY_FRONTEND_URL } from "./frontend-config.ts";
+import { PRIMARY_FRONTEND_URL, isAllowedRedirectUrl } from "./frontend-config.ts";
 import { writeMelhorEnvioTokens } from "./credential-helpers.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -50,7 +50,8 @@ export async function handleRedirectCallback(opts: RedirectCallbackOpts): Promis
       await supabase.from("oauth_states").delete().eq("state", state);
     } else {
       tenantId = oauthState.tenant_id;
-      frontendUrl = oauthState.frontend_url || frontendUrl;
+      // Revalida: o estado pode ter sido gravado antes da validação existir
+      if (oauthState.frontend_url && isAllowedRedirectUrl(oauthState.frontend_url)) frontendUrl = oauthState.frontend_url;
       await supabase.from("oauth_states").delete().eq("state", state);
       log.info(`[melhor-envio] Validated state - tenant: ${tenantId}, frontend: ${frontendUrl}`);
     }
@@ -197,9 +198,11 @@ export interface AuthorizeOpts {
 export async function handleAuthorize(opts: AuthorizeOpts): Promise<Response> {
   const { supabase, tenantId, userId, url, bodyData, corsHeaders, log } = opts;
 
-  const frontendUrl = typeof bodyData.frontend_url === "string"
+  const requestedFrontendUrl = typeof bodyData.frontend_url === "string"
     ? bodyData.frontend_url
     : (url.searchParams.get("frontend_url") || `${url.origin}`);
+  // Só origens da allowlist: evita open redirect no callback do OAuth
+  const frontendUrl = isAllowedRedirectUrl(requestedFrontendUrl) ? requestedFrontendUrl : PRIMARY_FRONTEND_URL;
 
   const stateValue = crypto.randomUUID();
 
