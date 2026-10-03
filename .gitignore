@@ -27,6 +27,14 @@ dist-ssr
 .env
 .env.local
 
+# Credenciais locais — NUNCA commitar
+chaves*.txt
+credenciais*
+*credentials*.csv
+*credentials*.json
+*.pem
+*.key
+
 # Migration artifacts — grandes e desnecessários no repo
 Lovable-to-IDE-main/
 edge-functions-export/
