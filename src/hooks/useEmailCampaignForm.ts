@@ -11,6 +11,7 @@ import { useEmailCampaign, useEmailTemplate } from "@/hooks/useEmailSingle";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { EmailContent } from "@/components/email-marketing/editor/types";
 import { campaignSchema, CampaignFormData, UseEmailCampaignFormProps, buildEditableContentFromHtml, type AudienceType, type AudienceReference } from "./emailCampaignSchema";
 
@@ -139,6 +140,11 @@ export function useEmailCampaignForm({ open, onOpenChange, campaignId, defaultVa
   };
 
   const onSubmit = async (data: CampaignFormData) => {
+    if (audienceType === "manual" && !(audienceReference.emails?.length)) {
+      toast.error("A lista manual está vazia. Digite pelo menos um e-mail na Audiência.");
+      setActiveTab("details");
+      return;
+    }
     try {
       const payload = { internal_name: data.internal_name, subject: data.subject, preheader: data.preheader, sender_name: data.sender_name, sender_email: data.sender_email, reply_to: data.reply_to || undefined, campaign_type: data.campaign_type, template_id: data.template_id || undefined, audience_type: audienceType, audience_reference: JSON.stringify(audienceReference), scheduled_at: data.scheduled_at || undefined, content_json: emailContent, content_html: emailHTML, email_integration_id: data.email_integration_id, coupon_codes: data.coupon_codes ?? [], attribution_window_days: data.attribution_window_days ?? 7 };
       if (campaignId) { await updateMutation.mutateAsync({ id: campaignId, updates: payload }); }

@@ -55,6 +55,7 @@ export function EmailCampaignFormDialog({ open, onOpenChange, campaignId, defaul
 
             <TabsContent value="details" className="flex-1 overflow-y-auto mt-4 pr-1">
               <EmailCampaignDetailsTab
+                key={editorKey}
                 form={form} templates={templates} emailIntegrations={emailIntegrations}
                 totalSenders={totalSenders} watchedIntegrationId={watchedIntegrationId}
                 setWatchedIntegrationId={setWatchedIntegrationId}

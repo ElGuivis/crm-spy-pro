@@ -48,7 +48,7 @@ serve(async (req) => {
       .from("email_campaigns")
       .update({ status: "sending", started_at: new Date().toISOString(), error_message: null })
       .eq("id", campaignId).eq("tenant_id", tenantId).in("status", ["draft", "scheduled", "paused", "error"])
-      .select("id, tenant_id, name, status, subject, body_html, body_text, content_html, content_json, preheader, sender_name, sender_email, reply_to, email_integration_id, audience_type, audience_reference, total_recipients, total_sent, total_failed, total_opened, total_clicked, total_unsubscribed, total_bounced, total_complained, utm_source, utm_medium, utm_campaign, utm_content, tracking_enabled, unsubscribe_enabled, test_recipients, scheduled_at, started_at, completed_at, error_message, ab_test_id, ab_variant, ab_split_pct, ab_offset_pct")
+      .select("id, tenant_id, status, subject, content_html, content_json, preheader, sender_name, sender_email, reply_to, email_integration_id, audience_type, audience_reference, total_recipients, total_sent, total_opened, total_clicked, total_unsubscribed, total_bounced, total_complained, scheduled_at, started_at, completed_at, error_message, ab_test_id, ab_variant, ab_split_pct, ab_offset_pct")
       .maybeSingle();
 
     if (claimError) throw claimError;
@@ -91,8 +91,10 @@ serve(async (req) => {
     const recipients = await resolveRecipients(supabase, tenantId, audienceType, audienceReference);
 
     if (!recipients.length) {
-      await supabase.from("email_campaigns").update({ status: "sent", completed_at: new Date().toISOString(), sent_at: new Date().toISOString(), total_recipients: 0, total_sent: 0, total_delivered: 0 }).eq("id", campaignId).eq("tenant_id", tenantId);
-      return new Response(JSON.stringify({ success: true, sent: 0, delivered: 0, failed: 0, suppressed: 0, total: 0 }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      // Audiência vazia não é um envio concluído: volta para "erro" (reenviável) em vez de marcar como enviada com 0 destinatários
+      const emptyMsg = "Nenhum destinatário na audiência. Confira a lista ou o segmento escolhido e tente de novo.";
+      await supabase.from("email_campaigns").update({ status: "error", completed_at: new Date().toISOString(), error_message: emptyMsg, total_recipients: 0 }).eq("id", campaignId).eq("tenant_id", tenantId);
+      return new Response(JSON.stringify({ success: false, error: emptyMsg }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const suppressedSet = await getSuppressedEmailSet(supabase, tenantId, recipients.map((r) => r.email));
