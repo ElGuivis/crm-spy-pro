@@ -9,7 +9,7 @@ export function useEmailCampaign(id: string | undefined) {
 
       const { data, error } = await supabase
         .from('email_campaigns')
-        .select('id, tenant_id, internal_name, subject, sender_name, sender_email, reply_to, preheader, campaign_type, status, content_html, content_json, template_id, email_integration_id, audience_type, audience_reference, has_unsubscribe_link, compliance_checked_at, scheduled_at, started_at, sent_at, completed_at, error_message, total_recipients, total_sent, total_delivered, total_opened, total_clicked, total_bounced, total_complained, total_unsubscribed, is_archived, created_at, updated_at, ab_test_id, ab_variant, ab_split_pct, ab_offset_pct')
+        .select('id, tenant_id, internal_name, subject, sender_name, sender_email, reply_to, preheader, campaign_type, status, content_html, content_json, template_id, email_integration_id, audience_type, audience_reference, has_unsubscribe_link, compliance_checked_at, scheduled_at, started_at, sent_at, completed_at, error_message, total_recipients, total_sent, total_delivered, total_opened, total_clicked, total_bounced, total_complained, total_unsubscribed, is_archived, created_at, updated_at, ab_test_id, ab_variant, ab_split_pct, ab_offset_pct, coupon_codes, attribution_window_days')
         .eq('id', id)
         .single();
 

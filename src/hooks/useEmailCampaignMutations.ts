@@ -79,13 +79,13 @@ export function useCreateABTest() {
   return useMutation({
     mutationFn: async ({ campaignId, subjectB, splitPct = 50 }: { campaignId: string; subjectB: string; splitPct?: number }) => {
       if (!tenantId) throw new Error('Tenant não encontrado');
-      const { data: original, error: fetchErr } = await supabase.from('email_campaigns').select('internal_name, subject, preheader, sender_name, sender_email, reply_to, campaign_type, template_id, content_html, content_json, audience_type, audience_reference, email_integration_id').eq('id', campaignId).single();
+      const { data: original, error: fetchErr } = await supabase.from('email_campaigns').select('internal_name, subject, preheader, sender_name, sender_email, reply_to, campaign_type, template_id, content_html, content_json, audience_type, audience_reference, email_integration_id, coupon_codes, attribution_window_days').eq('id', campaignId).single();
       if (fetchErr) throw fetchErr;
       const abTestId = crypto.randomUUID();
       const offsetB = splitPct;
       const { error: updateA } = await supabase.from('email_campaigns').update({ ab_test_id: abTestId, ab_variant: 'A', ab_split_pct: splitPct, ab_offset_pct: 0 }).eq('id', campaignId);
       if (updateA) throw updateA;
-      const { data: variantB, error: insertErr } = await supabase.from('email_campaigns').insert({ tenant_id: tenantId, internal_name: `${original.internal_name} — Variante B`, subject: subjectB, preheader: original.preheader, sender_name: original.sender_name, sender_email: original.sender_email, reply_to: original.reply_to, campaign_type: original.campaign_type, template_id: original.template_id, content_html: original.content_html, content_json: original.content_json, audience_type: original.audience_type, audience_reference: original.audience_reference, email_integration_id: original.email_integration_id, status: 'draft', ab_test_id: abTestId, ab_variant: 'B', ab_split_pct: 100 - splitPct, ab_offset_pct: offsetB }).select().single();
+      const { data: variantB, error: insertErr } = await supabase.from('email_campaigns').insert({ tenant_id: tenantId, internal_name: `${original.internal_name} — Variante B`, subject: subjectB, preheader: original.preheader, sender_name: original.sender_name, sender_email: original.sender_email, reply_to: original.reply_to, campaign_type: original.campaign_type, template_id: original.template_id, content_html: original.content_html, content_json: original.content_json, audience_type: original.audience_type, audience_reference: original.audience_reference, email_integration_id: original.email_integration_id, coupon_codes: original.coupon_codes, attribution_window_days: original.attribution_window_days, status: 'draft', ab_test_id: abTestId, ab_variant: 'B', ab_split_pct: 100 - splitPct, ab_offset_pct: offsetB }).select().single();
       if (insertErr) throw insertErr;
       return variantB;
     },

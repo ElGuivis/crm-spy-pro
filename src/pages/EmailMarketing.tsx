@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Mail, Plus, FileText, Calendar, CheckCircle2, AlertCircle, Loader2, UserX } from "lucide-react";
+import { Mail, Plus, FileText, Calendar, CheckCircle2, AlertCircle, Loader2, UserX, BarChart3 } from "lucide-react";
+import { EmailPerformanceOverview } from "@/components/email-marketing/EmailPerformanceOverview";
 import { PageHeader } from "@/components/common/PageHeader";
 import { PageTransition } from "@/components/common/PageTransition";
 import { EmailCampaignList } from "@/components/email-marketing/EmailCampaignList";
@@ -155,6 +156,10 @@ export default function EmailMarketing() {
                   </Badge>
                 )}
               </TabsTrigger>
+              <TabsTrigger value="performance" className="gap-2">
+                <BarChart3 className="h-4 w-4" />
+                Desempenho
+              </TabsTrigger>
               <TabsTrigger value="templates">Templates</TabsTrigger>
               <TabsTrigger value="suppression" className="gap-2">
                 <UserX className="h-4 w-4" />
@@ -189,6 +194,10 @@ export default function EmailMarketing() {
 
           <TabsContent value="campaigns" className="space-y-4">
             <EmailCampaignList onEdit={handleEditCampaign} />
+          </TabsContent>
+
+          <TabsContent value="performance" className="space-y-4">
+            <EmailPerformanceOverview />
           </TabsContent>
 
           <TabsContent value="templates" className="space-y-4">

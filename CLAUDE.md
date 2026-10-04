@@ -7,7 +7,7 @@ CRM/ERP multi-tenant em produção (https://spypro.com.br) com integrações de 
 ## Stack
 
 - **Frontend**: Vite 5 + React 18 + TypeScript + shadcn/ui (Radix) + Tailwind + React Router 7 + TanStack Query 5. Build: `vite build`. Dev: `npm run dev`.
-- **Backend**: Supabase auto-hospedado (Postgres 17 + Auth + REST + Realtime + Storage + Edge Functions Deno). 96 edge functions, 152 tabelas com RLS, 387 policies, 30 cron jobs.
+- **Backend**: Supabase auto-hospedado (Postgres 17 + Auth + REST + Realtime + Storage + Edge Functions Deno). 96 edge functions, 153 tabelas com RLS, 388 policies, 31 cron jobs.
 - **Deploy**: frontend via EasyPanel (Dockerfile + nginx, rebuild manual, Build Args `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`). Edge functions: `powershell scripts/deploy-functions-vps.ps1 [-Only <nome>]` (copia para a VPS e reinicia o runtime; `supabase functions deploy` NÃO se aplica ao servidor novo).
 - **Owner / login dev**: `usechronic@gmail.com` (único usuário; cadastros bloqueados por trigger + `DISABLE_SIGNUP`).
 
@@ -145,7 +145,7 @@ Migrações: `20260509000001_li_sync_watchdog.sql`, `20260509000002_me_sync_watc
 
 ## Cron jobs e auth
 
-30 jobs ativos. Padrão correto: `headers := public.get_internal_headers()` no `net.http_post`. Para crons que demoram >5s, adicionar `timeout_milliseconds := 90000`.
+31 jobs ativos. Padrão correto: `headers := public.get_internal_headers()` no `net.http_post`. Para crons que demoram >5s, adicionar `timeout_milliseconds := 90000`.
 
 Funções cron-driven que requerem `requireInternalAuth` aceitam o header `x-cron-secret` que `get_internal_headers()` envia.
 
@@ -210,3 +210,4 @@ ssh -i ~/.ssh/spypro_vps root@37.148.134.55 "cd /opt/supabase && sh run.sh statu
 - `20261003000002`: repara textos padrão com dupla codificação (UTF-8 lido como cp1252)
 - `20261003000003`: cron diário de limpeza do histórico dos crons
 - `20261003000004`: `public.functions_base_url()` — URL das funções deixa de ficar fixa em crons/funções SQL
+- `20261004000001`: métricas de e-mail marketing: `email_campaign_conversions`, `refresh_email_campaign_attribution(tenant)` (cron a cada 15 min), `get_email_campaign_performance/_conversions/_top_links`. Compra atribuída a UMA campanha: cupom > clique > abertura (janela `attribution_window_days`, padrão 7); pedidos cancelados/devolvidos não contam; só recalcula campanhas ativas (janela+7 dias) porque `email_events` é apagado aos 90 dias

@@ -14,6 +14,8 @@ export const campaignSchema = z.object({
   template_id: z.string().optional(),
   scheduled_at: z.string().optional(),
   email_integration_id: z.string().uuid("Selecione uma integração SMTP"),
+  coupon_codes: z.array(z.string()).optional(),
+  attribution_window_days: z.number().int().min(1).max(30).optional(),
 });
 
 export type CampaignFormData = z.infer<typeof campaignSchema>;

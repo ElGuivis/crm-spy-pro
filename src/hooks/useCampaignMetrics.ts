@@ -57,7 +57,7 @@ export function useCampaignMetrics(campaignId: string | undefined) {
       // Fetch campaign data for totals
       const { data: campaign, error: campaignError } = await supabase
         .from("email_campaigns")
-        .select("total_sent, total_delivered, total_opened, total_clicked, total_bounced, total_complained, total_unsubscribed")
+        .select("total_sent, total_delivered, total_opened, total_clicked, total_bounced, total_complained, total_unsubscribed, unique_opens, unique_clicks, attribution_refreshed_at")
         .eq("id", campaignId)
         .single();
 
@@ -89,8 +89,10 @@ export function useCampaignMetrics(campaignId: string | undefined) {
       // Calculate metrics
       const totalSent = campaign?.total_sent || 0;
       const totalDelivered = campaign?.total_delivered || 0;
-      const totalOpened = campaign?.total_opened || 0;
-      const totalClicked = campaign?.total_clicked || 0;
+      // Pessoas únicas, não eventos: o mesmo leitor abrindo 5 vezes conta uma vez (senão a taxa passa de 100%)
+      const hasUnique = !!campaign?.attribution_refreshed_at;
+      const totalOpened = (hasUnique ? campaign?.unique_opens : campaign?.total_opened) || 0;
+      const totalClicked = (hasUnique ? campaign?.unique_clicks : campaign?.total_clicked) || 0;
       const totalBounced = campaign?.total_bounced || 0;
       const totalComplained = campaign?.total_complained || 0;
       const totalUnsubscribed = campaign?.total_unsubscribed || 0;

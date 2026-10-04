@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,7 @@ import { useEmailCampaign } from "@/hooks/useEmailSingle";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { CampaignSummaryTab } from "./campaign-details/CampaignSummaryTab";
+import { CampaignResultsTab } from "./campaign-details/CampaignResultsTab";
 import { CampaignTimelineTab } from "./campaign-details/CampaignTimelineTab";
 import { CampaignLogsTab } from "./campaign-details/CampaignLogsTab";
 import { CampaignPreviewTab } from "./campaign-details/CampaignPreviewTab";
@@ -19,10 +20,12 @@ interface Props {
   campaignId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialTab?: string;
 }
 
-export function CampaignDetailsDialog({ campaignId, open, onOpenChange }: Props) {
-  const [activeTab, setActiveTab] = useState<string>("resumo");
+export function CampaignDetailsDialog({ campaignId, open, onOpenChange, initialTab = "resumo" }: Props) {
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
+  useEffect(() => { if (open) setActiveTab(initialTab); }, [open, initialTab]);
   const { data: campaign, isLoading: loadingCampaign } = useEmailCampaign(campaignId);
   const { data: metrics, isLoading: loadingMetrics } = useCampaignMetrics(open ? campaignId : undefined);
   const isLoading = loadingCampaign || loadingMetrics;
@@ -66,6 +69,7 @@ export function CampaignDetailsDialog({ campaignId, open, onOpenChange }: Props)
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
           <TabsList className="shrink-0">
             <TabsTrigger value="resumo">Resumo</TabsTrigger>
+            <TabsTrigger value="resultados">Resultados</TabsTrigger>
             <TabsTrigger value="timeline">Timeline</TabsTrigger>
             <TabsTrigger value="logs">Logs</TabsTrigger>
             <TabsTrigger value="preview">Preview</TabsTrigger>
@@ -84,6 +88,7 @@ export function CampaignDetailsDialog({ campaignId, open, onOpenChange }: Props)
           </TabsList>
 
           <CampaignSummaryTab isLoading={isLoading} metrics={metrics} campaign={campaign} />
+          {activeTab === "resultados" && <CampaignResultsTab campaignId={campaignId} />}
           <CampaignTimelineTab isLoading={isLoading} events={metrics?.events} />
           <CampaignLogsTab isLoading={isLoading} logs={metrics?.logs} />
           <CampaignPreviewTab isLoading={loadingCampaign} contentHtml={campaign?.content_html} />

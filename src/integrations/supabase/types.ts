@@ -3394,6 +3394,9 @@ export type Database = {
           audience_reference: string | null
           audience_type: string | null
           campaign_type: Database["public"]["Enums"]["email_campaign_type"]
+          attribution_refreshed_at: string | null
+          attribution_window_days: number
+          coupon_codes: string[]
           completed_at: string | null
           compliance_checked_at: string | null
           content_html: string | null
@@ -3424,6 +3427,8 @@ export type Database = {
           total_recipients: number | null
           total_sent: number | null
           total_unsubscribed: number | null
+          unique_clicks: number
+          unique_opens: number
           updated_at: string
         }
         Insert: {
@@ -3434,6 +3439,9 @@ export type Database = {
           audience_reference?: string | null
           audience_type?: string | null
           campaign_type: Database["public"]["Enums"]["email_campaign_type"]
+          attribution_refreshed_at?: string | null
+          attribution_window_days?: number
+          coupon_codes?: string[]
           completed_at?: string | null
           compliance_checked_at?: string | null
           content_html?: string | null
@@ -3464,6 +3472,8 @@ export type Database = {
           total_recipients?: number | null
           total_sent?: number | null
           total_unsubscribed?: number | null
+          unique_clicks?: number
+          unique_opens?: number
           updated_at?: string
         }
         Update: {
@@ -3474,6 +3484,9 @@ export type Database = {
           audience_reference?: string | null
           audience_type?: string | null
           campaign_type?: Database["public"]["Enums"]["email_campaign_type"]
+          attribution_refreshed_at?: string | null
+          attribution_window_days?: number
+          coupon_codes?: string[]
           completed_at?: string | null
           compliance_checked_at?: string | null
           content_html?: string | null
@@ -3504,6 +3517,8 @@ export type Database = {
           total_recipients?: number | null
           total_sent?: number | null
           total_unsubscribed?: number | null
+          unique_clicks?: number
+          unique_opens?: number
           updated_at?: string
         }
         Relationships: [
@@ -10133,6 +10148,57 @@ export type Database = {
           start_time: string
           status: string
         }[]
+      }
+      get_email_campaign_conversions: {
+        Args: { p_campaign_id: string; p_tenant_id: string }
+        Returns: {
+          attribution_type: string
+          coupon_code: string
+          customer_email: string
+          order_id: string
+          order_number: string
+          order_total: number
+          ordered_at: string
+          platform: string
+          touch_at: string
+        }[]
+      }
+      get_email_campaign_performance: {
+        Args: { p_campaign_id?: string; p_tenant_id: string }
+        Returns: {
+          campaign_id: string
+          coupon_codes: string[]
+          internal_name: string
+          orders: number
+          orders_click: number
+          orders_coupon: number
+          orders_open: number
+          refreshed_at: string
+          revenue: number
+          revenue_click: number
+          revenue_coupon: number
+          revenue_open: number
+          sent_at: string
+          status: string
+          subject: string
+          total_delivered: number
+          total_sent: number
+          unique_clicks: number
+          unique_opens: number
+          window_days: number
+        }[]
+      }
+      get_email_campaign_top_links: {
+        Args: { p_campaign_id: string; p_tenant_id: string }
+        Returns: {
+          clicks: number
+          link_url: string
+          unique_clickers: number
+        }[]
+      }
+      refresh_email_campaign_attribution: {
+        Args: { p_tenant_id: string }
+        Returns: number
       }
       get_revenue_attribution: {
         Args: { p_lookback_days?: number; p_tenant_id: string }

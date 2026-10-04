@@ -137,7 +137,7 @@ const handler = async (req: Request): Promise<Response> => {
     // Auth guard throws Response objects — pass them through
     if (error instanceof Response) return error;
     const errMsg = error instanceof Error ? error.message : String(error);
-    log.error("Erro ao enviar email:", error);
+    log.error("Erro ao enviar email:", errMsg);
     return new Response(
       JSON.stringify({
         status: "erro",

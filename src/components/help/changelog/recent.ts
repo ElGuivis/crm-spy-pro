@@ -3,6 +3,19 @@ import type { ChangelogEntry } from './types';
 /** De maio a outubro de 2026. Mais recente primeiro. */
 export const RECENT_CHANGELOG: ChangelogEntry[] = [
   {
+    version: '4.1.0',
+    date: '04 Out 2026',
+    items: [
+      { type: 'feature', text: 'E-mail Marketing: resultados reais por campanha, com quantas pessoas abriram, clicaram e compraram' },
+      { type: 'feature', text: 'Compras atribuídas à campanha por cupom, clique ou abertura (janela de 1 a 30 dias, padrão 7), sem contar o mesmo pedido duas vezes' },
+      { type: 'feature', text: 'Nova aba "Desempenho" comparando todas as campanhas: pedidos, receita, ticket médio e conversão' },
+      { type: 'feature', text: 'Cupons da campanha e janela de atribuição configuráveis ao criar ou editar a campanha' },
+      { type: 'feature', text: 'Aba "Resultados" em cada campanha, com a origem de cada compra, os links mais clicados e a lista de pedidos' },
+      { type: 'improvement', text: 'Aberturas e cliques agora contam pessoas, não eventos (a taxa não passa mais de 100%)' },
+      { type: 'improvement', text: 'Variante B de um teste A/B herda os cupons e a janela da campanha original' },
+    ],
+  },
+  {
     version: '4.0.1',
     date: '03 Out 2026',
     items: [
