@@ -3,6 +3,7 @@ import { Plus, ChevronUp, ChevronDown, Copy, Trash2 } from "lucide-react";
 import { BlockRenderer } from "./BlockRenderer";
 import { EmailColumnSlot } from "./EmailColumnSlot";
 import { getBaseInlineStyles } from "@/hooks/useEmailEditor";
+import { columnWidths } from "./htmlBlockGenerators";
 import type { EmailBlock, EmailContent, Columns2Block, Columns3Block } from "./types";
 import type { ColumnTarget, ColumnPath } from "@/hooks/useEmailEditor";
 
@@ -44,8 +45,11 @@ export function EmailEditorCanvas({
   );
 
   return (
-    <div className="p-8" onClick={onClearSelection}>
-      <div className="max-w-3xl mx-auto bg-white rounded-lg shadow-sm border min-h-[600px]">
+    <div className="p-8" style={{ backgroundColor: content.globalStyles?.bodyBackground || "#f4f4f4" }} onClick={onClearSelection}>
+      <div
+        className="mx-auto shadow-sm border min-h-[600px]"
+        style={{ maxWidth: content.globalStyles?.contentWidth || "600px", backgroundColor: content.globalStyles?.contentBackground || "#ffffff", fontFamily: content.globalStyles?.fontFamily || "Arial, sans-serif" }}
+      >
         {content.blocks.length === 0 ? (
           <div className="flex items-center justify-center h-[600px] text-center p-8">
             <div>
@@ -67,15 +71,15 @@ export function EmailEditorCanvas({
                 onClick={(e) => { e.stopPropagation(); onSelectBlock(index); if (!isColumnBlock(block)) { /* clear column target handled in hook */ } }}
               >
                 {block.type === "columns-2" ? (
-                  <div style={{ ...getBaseInlineStyles(block), display: "flex", gap: (block as Columns2Block).columnGap || "20px", padding: block.padding || "20px" }}>
-                    <div style={{ flex: 1 }}>{renderColumn(index, "column1", (block as Columns2Block).column1 || [])}</div>
-                    <div style={{ flex: 1 }}>{renderColumn(index, "column2", (block as Columns2Block).column2 || [])}</div>
+                  <div style={{ ...getBaseInlineStyles(block), display: "flex", alignItems: (block as Columns2Block).verticalAlign === "middle" ? "center" : "flex-start", gap: (block as Columns2Block).columnGap || "20px", padding: block.padding || "20px" }}>
+                    <div style={{ flex: columnWidths((block as Columns2Block).ratio)[0], minWidth: 0 }}>{renderColumn(index, "column1", (block as Columns2Block).column1 || [])}</div>
+                    <div style={{ flex: columnWidths((block as Columns2Block).ratio)[1], minWidth: 0 }}>{renderColumn(index, "column2", (block as Columns2Block).column2 || [])}</div>
                   </div>
                 ) : block.type === "columns-3" ? (
-                  <div style={{ ...getBaseInlineStyles(block), display: "flex", gap: (block as Columns3Block).columnGap || "15px", padding: block.padding || "20px" }}>
-                    <div style={{ flex: 1 }}>{renderColumn(index, "column1", (block as Columns3Block).column1 || [])}</div>
-                    <div style={{ flex: 1 }}>{renderColumn(index, "column2", (block as Columns3Block).column2 || [])}</div>
-                    <div style={{ flex: 1 }}>{renderColumn(index, "column3", (block as Columns3Block).column3 || [])}</div>
+                  <div style={{ ...getBaseInlineStyles(block), display: "flex", alignItems: (block as Columns3Block).verticalAlign === "middle" ? "center" : "flex-start", gap: (block as Columns3Block).columnGap || "15px", padding: block.padding || "20px" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>{renderColumn(index, "column1", (block as Columns3Block).column1 || [])}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>{renderColumn(index, "column2", (block as Columns3Block).column2 || [])}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>{renderColumn(index, "column3", (block as Columns3Block).column3 || [])}</div>
                   </div>
                 ) : (
                   <BlockRenderer block={block} />

@@ -171,6 +171,14 @@ export function useEmailEditor({ initialContent, onChange }: Options) {
     }
   };
 
+  const handleGlobalStylesChange = (updates: Partial<NonNullable<EmailContent["globalStyles"]>>) => {
+    const cleaned = { ...(content.globalStyles ?? {}), ...updates };
+    (Object.keys(cleaned) as Array<keyof typeof cleaned>).forEach((k) => { if (cleaned[k] === undefined) delete cleaned[k]; });
+    const updatedContent = { ...content, globalStyles: cleaned };
+    setContent(updatedContent);
+    notifyChange(updatedContent);
+  };
+
   const handlePropertiesClose = () => {
     setSelectedBlockIndex(null);
     setSelectedColumnPath(null);
@@ -190,7 +198,7 @@ export function useEmailEditor({ initialContent, onChange }: Options) {
     handleAddBlock, handleMoveBlock, handleMoveColumnChild,
     handleDeleteBlock, handleDeleteColumnChild, handleDuplicateBlock,
     getSelectedBlock, handlePropertiesUpdate, handlePropertiesClose,
-    clearSelection,
+    handleGlobalStylesChange, clearSelection,
   };
 }
 

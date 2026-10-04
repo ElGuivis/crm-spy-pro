@@ -10,10 +10,13 @@ export type BlockType =
   | 'columns-3'
   | 'banner'
   | 'product'
+  | 'coupon'
   | 'social'
   | 'footer'
   | 'legal'
   | 'unsubscribe';
+
+export type Alignment = 'left' | 'center' | 'right';
 
 export interface BaseBlockProps {
   backgroundColor?: string;
@@ -34,17 +37,20 @@ export interface HeadingBlock extends BaseBlockProps {
   type: 'heading';
   text: string;
   level: 'h1' | 'h2' | 'h3';
-  alignment?: 'left' | 'center' | 'right';
+  alignment?: Alignment;
   color?: string;
   fontSize?: string;
+  fontWeight?: 'normal' | 'bold';
 }
 
 export interface TextBlock extends BaseBlockProps {
   type: 'text';
   content: string;
-  alignment?: 'left' | 'center' | 'right';
+  alignment?: Alignment;
   color?: string;
   fontSize?: string;
+  fontWeight?: 'normal' | 'bold';
+  lineHeight?: string;
 }
 
 export interface ImageBlock extends BaseBlockProps {
@@ -52,7 +58,7 @@ export interface ImageBlock extends BaseBlockProps {
   url: string;
   alt: string;
   width?: string;
-  alignment?: 'left' | 'center' | 'right';
+  alignment?: Alignment;
   linkUrl?: string;
 }
 
@@ -64,6 +70,8 @@ export interface ButtonBlock extends BaseBlockProps {
   buttonColor?: string;
   textColor?: string;
   buttonPadding?: string;
+  fontSize?: string;
+  fullWidth?: boolean;
 }
 
 export interface DividerBlock extends BaseBlockProps {
@@ -83,6 +91,9 @@ export interface Columns2Block extends BaseBlockProps {
   column1: EmailBlock[];
   column2: EmailBlock[];
   columnGap?: string;
+  /** proporção das colunas (esquerda-direita, em %) */
+  ratio?: '50-50' | '33-67' | '67-33' | '25-75' | '75-25';
+  verticalAlign?: 'top' | 'middle';
 }
 
 export interface Columns3Block extends BaseBlockProps {
@@ -91,6 +102,7 @@ export interface Columns3Block extends BaseBlockProps {
   column2: EmailBlock[];
   column3: EmailBlock[];
   columnGap?: string;
+  verticalAlign?: 'top' | 'middle';
 }
 
 export interface BannerBlock extends BaseBlockProps {
@@ -109,6 +121,40 @@ export interface ProductBlock extends BaseBlockProps {
   price?: string;
   buttonText?: string;
   buttonUrl?: string;
+  /** alinhamento do conteúdo todo (imagem, textos e botão) */
+  alignment?: Alignment;
+  imageWidth?: string;
+  imageRadius?: string;
+  /** título e imagem levam ao link do botão (padrão: sim) */
+  linkImage?: boolean;
+  nameColor?: string;
+  nameSize?: string;
+  nameWeight?: 'normal' | 'bold';
+  descriptionColor?: string;
+  descriptionSize?: string;
+  priceColor?: string;
+  priceSize?: string;
+  /** preço "de" (riscado) antes do preço atual */
+  oldPrice?: string;
+  oldPriceColor?: string;
+  buttonColor?: string;
+  buttonTextColor?: string;
+  buttonRadius?: string;
+  buttonSize?: string;
+  buttonFullWidth?: boolean;
+}
+
+export interface CouponBlock extends BaseBlockProps {
+  type: 'coupon';
+  title?: string;
+  code: string;
+  description?: string;
+  alignment?: Alignment;
+  titleColor?: string;
+  codeColor?: string;
+  codeBackground?: string;
+  borderColor?: string;
+  descriptionColor?: string;
 }
 
 export interface SocialBlock extends BaseBlockProps {
@@ -157,6 +203,7 @@ export type EmailBlock =
   | Columns3Block
   | BannerBlock
   | ProductBlock
+  | CouponBlock
   | SocialBlock
   | FooterBlock
   | LegalBlock
@@ -168,5 +215,7 @@ export interface EmailContent {
     bodyBackground?: string;
     contentWidth?: string;
     fontFamily?: string;
+    contentBackground?: string;
+    linkColor?: string;
   };
 }

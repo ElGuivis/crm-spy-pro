@@ -8,6 +8,8 @@ export function generateEmailHTML(content: EmailContent, preheader?: string): st
     bodyBackground = '#f4f4f4',
     contentWidth = '600px',
     fontFamily = 'Arial, sans-serif',
+    contentBackground = '#ffffff',
+    linkColor = '#0066cc',
   } = globalStyles;
 
   const blocksHTML = blocks.map(block => generateBlockHTML(block).trim()).join('\n');
@@ -44,7 +46,7 @@ export function generateEmailHTML(content: EmailContent, preheader?: string): st
       -ms-interpolation-mode: bicubic;
     }
     a {
-      color: #0066cc;
+      color: ${linkColor};
       text-decoration: none;
     }
     @media only screen and (max-width: 600px) {
@@ -60,6 +62,7 @@ export function generateEmailHTML(content: EmailContent, preheader?: string): st
       .mobile-column {
         display: block !important;
         width: 100% !important;
+        padding-right: 0 !important;
       }
     }
   </style>
@@ -69,7 +72,7 @@ export function generateEmailHTML(content: EmailContent, preheader?: string): st
   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 0; padding: 0;">
     <tr>
       <td style="padding: 20px 0;">
-        <table role="presentation" cellspacing="0" cellpadding="0" border="0" class="email-container" style="margin: 0 auto; width: ${contentWidth}; max-width: 600px; background-color: #ffffff;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" class="email-container" style="margin: 0 auto; width: ${contentWidth}; max-width: ${contentWidth}; background-color: ${contentBackground}; font-family: ${fontFamily};">
           ${blocksHTML}
         </table>
       </td>

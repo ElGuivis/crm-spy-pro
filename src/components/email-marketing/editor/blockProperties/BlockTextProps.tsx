@@ -3,24 +3,27 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { VariablesPicker } from "../../VariablesPicker";
+import { AlignField, ColorField, PxField, SwitchField } from "./fields";
 import type { EmailBlock } from "../types";
 
 interface Props {
   block: EmailBlock;
-  onChange: (field: string, value: any) => void;
+  onChange: (field: string, value: unknown) => void;
 }
+
+const FORMAT_HINT = "Dica: **negrito**, [texto do link](https://...) e Enter para pular linha.";
 
 export function BlockTextProps({ block, onChange }: Props) {
   if (block.type === "heading") {
     return (
       <>
         <div className="space-y-2">
-          <Label>Texto</Label>
+          <Label className="text-xs">Texto</Label>
           <Input value={block.text || ""} onChange={(e) => onChange("text", e.target.value)} />
           <VariablesPicker onSelect={(variable) => onChange("text", (block.text || "") + variable)} />
         </div>
-        <div className="space-y-2">
-          <Label>Nível</Label>
+        <div className="space-y-1.5">
+          <Label className="text-xs">Nível</Label>
           <Select value={block.level} onValueChange={(v) => onChange("level", v)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -30,14 +33,10 @@ export function BlockTextProps({ block, onChange }: Props) {
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-2">
-          <Label>Cor do Texto</Label>
-          <Input type="color" value={block.color || "#333333"} onChange={(e) => onChange("color", e.target.value)} />
-        </div>
-        <div className="space-y-2">
-          <Label>Tamanho da Fonte</Label>
-          <Input value={block.fontSize || ""} onChange={(e) => onChange("fontSize", e.target.value)} placeholder="32px" />
-        </div>
+        <AlignField value={block.alignment} fallback="left" onChange={(v) => onChange("alignment", v)} />
+        <ColorField label="Cor do texto" value={block.color} fallback="#333333" onChange={(v) => onChange("color", v)} />
+        <PxField label="Tamanho da fonte" value={block.fontSize} placeholder="32" onChange={(v) => onChange("fontSize", v)} />
+        <SwitchField label="Negrito" checked={block.fontWeight !== "normal"} onChange={(v) => onChange("fontWeight", v ? "bold" : "normal")} />
       </>
     );
   }
@@ -46,17 +45,25 @@ export function BlockTextProps({ block, onChange }: Props) {
     return (
       <>
         <div className="space-y-2">
-          <Label>Conteúdo</Label>
+          <Label className="text-xs">Conteúdo</Label>
           <Textarea value={block.content || ""} onChange={(e) => onChange("content", e.target.value)} rows={6} />
+          <p className="text-[11px] text-muted-foreground">{FORMAT_HINT}</p>
           <VariablesPicker onSelect={(variable) => onChange("content", (block.content || "") + variable)} />
         </div>
-        <div className="space-y-2">
-          <Label>Cor do Texto</Label>
-          <Input type="color" value={block.color || "#666666"} onChange={(e) => onChange("color", e.target.value)} />
-        </div>
-        <div className="space-y-2">
-          <Label>Tamanho da Fonte</Label>
-          <Input value={block.fontSize || ""} onChange={(e) => onChange("fontSize", e.target.value)} placeholder="16px" />
+        <AlignField value={block.alignment} fallback="left" onChange={(v) => onChange("alignment", v)} />
+        <ColorField label="Cor do texto" value={block.color} fallback="#666666" onChange={(v) => onChange("color", v)} />
+        <PxField label="Tamanho da fonte" value={block.fontSize} placeholder="16" onChange={(v) => onChange("fontSize", v)} />
+        <SwitchField label="Negrito" checked={block.fontWeight === "bold"} onChange={(v) => onChange("fontWeight", v ? "bold" : "normal")} />
+        <div className="space-y-1.5">
+          <Label className="text-xs">Espaço entre linhas</Label>
+          <Select value={block.lineHeight || "1.6"} onValueChange={(v) => onChange("lineHeight", v)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1.3">Compacto</SelectItem>
+              <SelectItem value="1.6">Normal</SelectItem>
+              <SelectItem value="2">Espaçado</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </>
     );
@@ -66,24 +73,12 @@ export function BlockTextProps({ block, onChange }: Props) {
     return (
       <>
         <div className="space-y-2">
-          <Label>Conteúdo (HTML)</Label>
+          <Label className="text-xs">Conteúdo (HTML)</Label>
           <Textarea value={block.content || ""} onChange={(e) => onChange("content", e.target.value)} rows={4} />
         </div>
-        <div className="space-y-2">
-          <Label>Alinhamento</Label>
-          <Select value={block.alignment || "center"} onValueChange={(v) => onChange("alignment", v)}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="left">Esquerda</SelectItem>
-              <SelectItem value="center">Centro</SelectItem>
-              <SelectItem value="right">Direita</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label>Cor do Texto</Label>
-          <Input type="color" value={block.color || "#999999"} onChange={(e) => onChange("color", e.target.value)} />
-        </div>
+        <AlignField value={block.alignment} fallback="center" onChange={(v) => onChange("alignment", v)} />
+        <ColorField label="Cor do texto" value={block.color} fallback="#999999" onChange={(v) => onChange("color", v)} />
+        <PxField label="Tamanho da fonte" value={block.fontSize} placeholder="14" onChange={(v) => onChange("fontSize", v)} />
       </>
     );
   }
@@ -92,13 +87,11 @@ export function BlockTextProps({ block, onChange }: Props) {
     return (
       <>
         <div className="space-y-2">
-          <Label>Conteúdo</Label>
+          <Label className="text-xs">Conteúdo</Label>
           <Textarea value={block.content || ""} onChange={(e) => onChange("content", e.target.value)} rows={4} />
         </div>
-        <div className="space-y-2">
-          <Label>Cor do Texto</Label>
-          <Input type="color" value={block.color || "#999999"} onChange={(e) => onChange("color", e.target.value)} />
-        </div>
+        <ColorField label="Cor do texto" value={block.color} fallback="#999999" onChange={(v) => onChange("color", v)} />
+        <PxField label="Tamanho da fonte" value={block.fontSize} placeholder="11" onChange={(v) => onChange("fontSize", v)} />
       </>
     );
   }

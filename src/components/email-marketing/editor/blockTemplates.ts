@@ -85,6 +85,15 @@ export const blockTemplates: Record<string, EmailBlock> = {
     price: 'R$ 99,00',
     buttonText: 'Comprar Agora',
     buttonUrl: 'https://example.com',
+    alignment: 'center',
+    padding: '20px',
+  },
+  coupon: {
+    type: 'coupon',
+    title: 'Use o cupom',
+    code: 'CUPOM10',
+    description: '10% de desconto na sua compra',
+    alignment: 'center',
     padding: '20px',
   },
   social: {
@@ -132,7 +141,7 @@ export const blockCategories = [
   },
   {
     name: 'Conteúdo',
-    blocks: ['image', 'button', 'banner', 'product'],
+    blocks: ['image', 'button', 'banner', 'product', 'coupon'],
   },
   {
     name: 'Layout',
@@ -156,6 +165,7 @@ export const blockLabels: Record<string, string> = {
   'columns-3': '3 Colunas',
   banner: 'Banner',
   product: 'Produto',
+  coupon: 'Cupom',
   social: 'Redes Sociais',
   footer: 'Rodapé',
   legal: 'Texto Legal',

@@ -1,14 +1,15 @@
 import { EmailBlock } from "./types";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { useEmailImageUpload } from "@/hooks/useEmailImageUpload";
+import { blockLabels } from "./blockTemplates";
 import { BlockMediaProps } from "./blockProperties/BlockMediaProps";
 import { BlockTextProps } from "./blockProperties/BlockTextProps";
 import { BlockInteractiveProps } from "./blockProperties/BlockInteractiveProps";
 import { BlockLayoutProps } from "./blockProperties/BlockLayoutProps";
 import { BlockProductProps } from "./blockProperties/BlockProductProps";
+import { BlockCouponProps } from "./blockProperties/BlockCouponProps";
+import { ColorField, PxField, SpacingField } from "./blockProperties/fields";
 
 interface BlockPropertiesPanelProps {
   block: EmailBlock | null;
@@ -21,6 +22,13 @@ const TEXT_TYPES = ["heading", "text", "footer", "legal"];
 const INTERACTIVE_TYPES = ["button", "unsubscribe", "social"];
 const LAYOUT_TYPES = ["divider", "spacer", "columns-2", "columns-3"];
 
+// Arredondamento: no botão e na imagem vale para o próprio elemento; no produto há campos próprios
+const RADIUS_LABEL: Record<string, string | null> = {
+  button: "Arredondamento do botão",
+  image: "Arredondamento da imagem",
+  product: null, spacer: null, divider: null, banner: null,
+};
+
 export function BlockPropertiesPanel({ block, onUpdate, onClose }: BlockPropertiesPanelProps) {
   const { uploading, upload } = useEmailImageUpload((publicUrl, field) => {
     onUpdate({ [field]: publicUrl } as Partial<EmailBlock>);
@@ -28,43 +36,40 @@ export function BlockPropertiesPanel({ block, onUpdate, onClose }: BlockProperti
 
   if (!block) return null;
 
-  const handleChange = (field: string, value: any) => onUpdate({ [field]: value });
+  const handleChange = (field: string, value: unknown) => onUpdate({ [field]: value } as Partial<EmailBlock>);
+  const radiusLabel = block.type in RADIUS_LABEL ? RADIUS_LABEL[block.type] : "Arredondamento do bloco";
 
   return (
-    <div className="w-80 border-l bg-background p-6 overflow-y-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-lg font-semibold">Propriedades do Bloco</h3>
+    <div className="w-80 shrink-0 border-l bg-background p-5 overflow-y-auto">
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="text-base font-semibold">{blockLabels[block.type] ?? "Bloco"}</h3>
         <Button variant="ghost" size="icon" onClick={onClose}>
           <X className="h-4 w-4" />
         </Button>
       </div>
 
       <div className="space-y-4">
-        <div className="space-y-2">
-          <Label>Padding</Label>
-          <Input value={block.padding || ""} onChange={(e) => handleChange("padding", e.target.value)} placeholder="Ex: 20px" />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Cor de Fundo</Label>
-          <Input type="color" value={block.backgroundColor || "#ffffff"} onChange={(e) => handleChange("backgroundColor", e.target.value)} />
-        </div>
-
         {MEDIA_TYPES.includes(block.type) && (
           <BlockMediaProps block={block} onChange={handleChange} uploading={uploading} onUpload={upload} />
         )}
-        {TEXT_TYPES.includes(block.type) && (
-          <BlockTextProps block={block} onChange={handleChange} />
+        {TEXT_TYPES.includes(block.type) && <BlockTextProps block={block} onChange={handleChange} />}
+        {INTERACTIVE_TYPES.includes(block.type) && <BlockInteractiveProps block={block} onChange={handleChange} />}
+        {LAYOUT_TYPES.includes(block.type) && <BlockLayoutProps block={block} onChange={handleChange} />}
+        {block.type === "product" && <BlockProductProps block={block} onChange={handleChange} onUpdate={onUpdate} />}
+        {block.type === "coupon" && <BlockCouponProps block={block} onChange={handleChange} />}
+
+        {block.type !== "spacer" && (
+          <div className="space-y-4 border-t pt-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Aparência do bloco</p>
+            {block.type !== "banner" && block.type !== "divider" && (
+              <SpacingField value={block.padding} onChange={(v) => handleChange("padding", v)} />
+            )}
+            {radiusLabel && (
+              <PxField label={radiusLabel} value={block.borderRadius} placeholder="0" max={200} onChange={(v) => handleChange("borderRadius", v)} />
+            )}
+          </div>
         )}
-        {INTERACTIVE_TYPES.includes(block.type) && (
-          <BlockInteractiveProps block={block} onChange={handleChange} />
-        )}
-        {LAYOUT_TYPES.includes(block.type) && (
-          <BlockLayoutProps block={block} onChange={handleChange} />
-        )}
-        {block.type === "product" && (
-          <BlockProductProps block={block} onChange={handleChange} onUpdate={onUpdate} />
-        )}
+        <ColorField label="Cor de fundo do bloco" value={block.backgroundColor} fallback="#ffffff" onChange={(v) => handleChange("backgroundColor", v)} />
       </div>
     </div>
   );

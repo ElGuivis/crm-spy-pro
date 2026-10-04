@@ -1,7 +1,7 @@
 import { EmailContent } from "./types";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
-import { BlockRenderer } from "./BlockRenderer";
+import { EmailPreviewFrame } from "./EmailPreviewFrame";
 import { BlockPropertiesPanel } from "./BlockPropertiesPanel";
 import { generateEmailHTML } from "./htmlGenerator";
 import { useEmailEditor } from "@/hooks/useEmailEditor";
@@ -32,6 +32,8 @@ export function EmailEditor({ initialContent, onChange }: EmailEditorProps) {
           previewMode={editor.previewMode}
           onViewModeChange={editor.setViewMode}
           onPreviewModeChange={editor.setPreviewMode}
+          globalStyles={editor.content.globalStyles ?? {}}
+          onGlobalStylesChange={editor.handleGlobalStylesChange}
         />
 
         <ScrollArea className="flex-1">
@@ -62,13 +64,7 @@ export function EmailEditor({ initialContent, onChange }: EmailEditorProps) {
           )}
 
           {editor.viewMode === "preview" && (
-            <div className="p-8 bg-muted/30">
-              <div className={`mx-auto bg-white rounded-lg shadow-sm transition-all ${editor.previewMode === "desktop" ? "max-w-3xl" : "max-w-sm"}`}>
-                {editor.content.blocks.map((block, index) => (
-                  <BlockRenderer key={index} block={block} isPreview />
-                ))}
-              </div>
-            </div>
+            <EmailPreviewFrame content={editor.content} mode={editor.previewMode} />
           )}
 
           {editor.viewMode === "code" && (
