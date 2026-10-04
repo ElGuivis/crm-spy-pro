@@ -118,7 +118,22 @@ export async function resolveRecipients(supabase: Supabase, tenantId: string, au
     const emails = Array.isArray(audienceReference.emails) ? audienceReference.emails : [];
     const deduped = new Set<string>();
     for (const email of emails) { const normalized = normalizeEmail(String(email)); if (normalized) deduped.add(normalized); }
-    return Array.from(deduped).map((email) => ({ email, name: null, phone: null }));
+    const list = Array.from(deduped);
+
+    // Nomes: primeiro os da planilha importada; para o resto, o cadastro de clientes (assim {{first_name}} funciona em lista manual)
+    const names = new Map<string, string>();
+    const given = (audienceReference.names ?? {}) as Record<string, unknown>;
+    for (const [email, name] of Object.entries(given)) { const n = String(name ?? "").trim(); if (n) names.set(normalizeEmail(email), n); }
+    const missing = list.filter((e) => !names.has(e));
+    for (const chunk of chunkArray(missing, 200)) {
+      const { data } = await supabase.from("li_customers").select("email, name").eq("tenant_id", tenantId).in("email", chunk);
+      for (const row of data ?? []) {
+        const email = normalizeEmail((row as Record<string, unknown>).email as string);
+        const name = String((row as Record<string, unknown>).name ?? "").trim();
+        if (email && name && !names.has(email)) names.set(email, name);
+      }
+    }
+    return list.map((email) => ({ email, name: names.get(email) ?? null, phone: null }));
   }
   if (audienceType === "rfm") {
     const audienceId = String(audienceReference.rfm_audience_id || "").trim();

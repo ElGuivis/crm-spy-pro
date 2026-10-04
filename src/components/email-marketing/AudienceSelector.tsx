@@ -1,4 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { parseContactsFile } from "@/lib/contacts-import";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -11,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users, UserCheck, UserX, Loader2, AlertCircle, Filter, List, Layers, TrendingUp } from "lucide-react";
+import { Users, UserCheck, UserX, Loader2, AlertCircle, Filter, List, Layers, TrendingUp, FileSpreadsheet } from "lucide-react";
 import { useAudienceEstimate, AudienceReference } from "@/hooks/useAudienceEstimate";
 import { useCrmSegments } from "@/hooks/useCrmSegments";
 import { useTags } from "@/hooks/useTags";
@@ -41,6 +44,8 @@ export function AudienceSelector({ value, onChange, className }: AudienceSelecto
   const [nameContains, setNameContains] = useState(value.reference?.filters?.name_contains || "");
   const [emailContains, setEmailContains] = useState(value.reference?.filters?.email_contains || "");
   const [manualEmails, setManualEmails] = useState<string>(value.reference?.emails?.join("\n") || "");
+  const [manualNames, setManualNames] = useState<Record<string, string>>(value.reference?.names ?? {});
+  const fileInput = useRef<HTMLInputElement>(null);
 
   // Build reference object based on type
   const audienceReference = useMemo((): AudienceReference => {
@@ -62,13 +67,14 @@ export function AudienceSelector({ value, onChange, className }: AudienceSelecto
           .split(/[\n,;]/)
           .map((e) => e.trim().toLowerCase())
           .filter((e) => e && e.includes("@"));
-        return { emails };
+        const names = Object.fromEntries(emails.filter((e) => manualNames[e]).map((e) => [e, manualNames[e]]));
+        return Object.keys(names).length ? { emails, names } : { emails };
       }
       case "all":
       default:
         return {};
     }
-  }, [value.type, selectedSegmentId, selectedRfmAudienceId, selectedTagIds, nameContains, emailContains, manualEmails]);
+  }, [value.type, selectedSegmentId, selectedRfmAudienceId, selectedTagIds, nameContains, emailContains, manualEmails, manualNames]);
 
   // Estimate audience
   const { data: estimate, isLoading: loadingEstimate, error: estimateError } = useAudienceEstimate(
@@ -97,6 +103,28 @@ export function AudienceSelector({ value, onChange, className }: AudienceSelecto
     setNameContains("");
     setEmailContains("");
     setManualEmails("");
+    setManualNames({});
+  };
+
+  // Planilha (CSV/TXT): junta os e-mails encontrados à lista, sem repetir, e guarda os nomes quando houver coluna de nome
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      const current = manualEmails.split(/[\n,;]/).map((x) => x.trim().toLowerCase()).filter((x) => x.includes("@"));
+      const result = parseContactsFile(await file.text(), current);
+      if (result.contacts.length === 0) {
+        toast.error("Nenhum e-mail novo encontrado na planilha. Salve como CSV e confira se há uma coluna de e-mail.");
+        return;
+      }
+      setManualEmails([...current, ...result.contacts.map((c) => c.email)].join("\n"));
+      setManualNames((prev) => ({ ...prev, ...Object.fromEntries(result.contacts.filter((c) => c.name).map((c) => [c.email, c.name as string])) }));
+      const extras = [result.duplicates ? `${result.duplicates} repetido(s)` : "", result.invalid ? `${result.invalid} inválido(s)` : ""].filter(Boolean).join(", ");
+      toast.success(`${result.contacts.length} e-mail(s) importado(s)${extras ? ` (ignorados: ${extras})` : ""}`);
+    } catch {
+      toast.error("Não foi possível ler a planilha. Use um arquivo .csv ou .txt.");
+    }
   };
 
   const modeOptions = [
@@ -255,6 +283,13 @@ export function AudienceSelector({ value, onChange, className }: AudienceSelecto
               rows={5}
               className="font-mono text-sm"
             />
+            <div className="flex flex-wrap items-center gap-2">
+              <input ref={fileInput} type="file" accept=".csv,.txt,text/csv,text/plain" className="hidden" onChange={handleImportFile} />
+              <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => fileInput.current?.click()}>
+                <FileSpreadsheet className="h-4 w-4" />Importar planilha (CSV)
+              </Button>
+              <span className="text-xs text-muted-foreground">Excel: Arquivo → Salvar como → CSV. Pode ter coluna de nome.</span>
+            </div>
             <p className="text-xs text-muted-foreground">
               {manualEmails.split(/[\n,;]/).filter((e) => e.trim() && e.includes("@")).length} e-mails detectados
             </p>

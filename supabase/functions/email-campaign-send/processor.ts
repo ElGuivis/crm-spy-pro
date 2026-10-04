@@ -23,6 +23,9 @@ const DEFAULT_SENDS_PER_SECOND = 10; // sem limite configurado na integração (
 
 const inSeconds = (s: number) => new Date(Date.now() + s * 1000).toISOString();
 
+/** "MARIA" / "maria" -> "Maria" (cadastros em maiúsculas ou minúsculas ficariam gritando ou desleixados no e-mail). */
+const titleCase = (s: string) => s.toLowerCase().replace(/(^|[\s'-])(\p{L})/gu, (_m, sep: string, ch: string) => sep + ch.toUpperCase());
+
 /** Processa a fila da campanha em lotes até acabar ou esgotar o tempo da chamada (aí chama a si mesma de novo). */
 export async function processCampaign(supabase: Supabase, supabaseUrl: string, campaignId: string, log: Log): Promise<void> {
   // trava: só um processador por campanha (o watchdog e a continuação automática não podem rodar juntos)
@@ -82,8 +85,8 @@ export async function processCampaign(supabase: Supabase, supabaseUrl: string, c
           const tokenId = tokenIds.get(row.id)!;
           const unsubscribeUrl = `${supabaseUrl}/functions/v1/email-unsubscribe?token=${tokenId}`;
           const data = {
-            first_name: row.recipient_name?.split(" ")[0] || "",
-            last_name: row.recipient_name?.split(" ").slice(1).join(" ") || "",
+            first_name: titleCase(row.recipient_name?.trim().split(/\s+/)[0] || ""),
+            last_name: titleCase(row.recipient_name?.trim().split(/\s+/).slice(1).join(" ") || ""),
             email: row.recipient_email, phone: row.recipient_phone || "", company: "",
             coupon_code: coupon, unsubscribe_url: unsubscribeUrl,
           };
