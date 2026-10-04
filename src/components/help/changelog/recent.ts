@@ -14,6 +14,9 @@ export const RECENT_CHANGELOG: ChangelogEntry[] = [
       { type: 'feature', text: 'Exportar a lista de e-mails de cada campanha em CSV ou copiar: quem abriu, clicou, comprou, não abriu, descadastrou ou teve falha de entrega' },
       { type: 'improvement', text: 'Aberturas e cliques agora contam pessoas, não eventos (a taxa não passa mais de 100%)' },
       { type: 'improvement', text: 'Variante B de um teste A/B herda os cupons e a janela da campanha original' },
+      { type: 'improvement', text: 'Editor de e-mail: o seletor de produtos mostra só o produto principal (sem tamanho e cor) e o botão do produto já sai com o link da loja' },
+      { type: 'fix', text: 'E-mails enviados não mostram mais "=20" no meio do texto, e acentos e assuntos longos não se corrompem' },
+      { type: 'fix', text: 'Envio de campanha corrigido (falhava ao iniciar) e lista manual não se perde mais ao editar ou duplicar a campanha' },
     ],
   },
   {

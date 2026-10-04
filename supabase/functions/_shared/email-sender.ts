@@ -6,6 +6,7 @@
 import { SMTPClient } from "https://deno.land/x/denomailer@1.4.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { createLogger } from "./correlation.ts";
+import { buildSafeMailOptions } from "./mime-safe.ts";
 const log = createLogger("email-sender", "shared");
 
 
@@ -71,19 +72,17 @@ export async function sendEmail(
         ? `${config.senderName} <${config.senderEmail}>`
         : `${config.senderName} <${config.smtpUser}>`;
 
-      const sendOptions: Record<string, string | undefined> = {
+      // corpo e assunto codificados aqui: o quoted-printable do denomailer gera "=20" e corrompe acentos
+      const sendOptions = buildSafeMailOptions({
         from: fromAddress,
         to: message.to,
         subject: message.subject,
-        content: message.text,
-        html: message.html || undefined,
-      };
+        text: message.text,
+        html: message.html,
+        replyTo: config.replyTo,
+      });
 
-      if (config.replyTo) {
-        sendOptions.replyTo = config.replyTo;
-      }
-
-      await client.send(sendOptions);
+      await client.send(sendOptions as never);
       await client.close();
 
       log.info(`[EMAIL-SENDER] ✅ Email sent successfully to ${message.to}`);

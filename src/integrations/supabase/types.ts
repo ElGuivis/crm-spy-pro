@@ -10217,6 +10217,21 @@ export type Database = {
         Args: { p_tenant_id: string }
         Returns: number
       }
+      get_li_parent_products: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          image_large: string
+          image_path: string
+          image_url: string
+          name: string
+          price: number
+          promotional_price: number
+          sku: string
+          url: string
+          variant_count: number
+        }[]
+      }
       get_revenue_attribution: {
         Args: { p_lookback_days?: number; p_tenant_id: string }
         Returns: {

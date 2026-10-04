@@ -11,7 +11,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
-import { Search, Package, Loader2, ImageOff } from 'lucide-react';
+import { Search, Package, Loader2, Link2 } from 'lucide-react';
+import { useStoreBaseUrl, buildProductUrl, normalizeStoreUrl } from '@/hooks/useStoreBaseUrl';
+import { toast } from 'sonner';
 
 import { createLogger } from '@/lib/logger';
 const log = createLogger('ProductPickerDialog');
@@ -39,6 +41,8 @@ interface RawProduct {
   price?: number | null;
   promotional_price?: number | null;
   sku?: string | null;
+  /** caminho ("/camiseta-x") ou link completo do produto na loja; vazio quando a plataforma não informa */
+  url?: string | null;
   source: 'loja_integrada' | 'bling';
 }
 
@@ -47,6 +51,8 @@ export function ProductPickerDialog({ open, onOpenChange, onSelect }: ProductPic
   const [products, setProducts] = useState<RawProduct[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('all');
+  const { baseUrl, save: saveBaseUrl } = useStoreBaseUrl();
+  const [storeInput, setStoreInput] = useState('');
 
   useEffect(() => {
     if (open) {
@@ -58,13 +64,8 @@ export function ProductPickerDialog({ open, onOpenChange, onSelect }: ProductPic
     setLoading(true);
     try {
       const [liRes, blingRes] = await Promise.all([
-        supabase
-          .from('li_products')
-          .select('id, name, image_url, price, promotional_price, sku, raw_json')
-          .eq('active', true)
-          .not('image_url', 'is', null)
-          .order('name')
-          .limit(500),
+        // Só o produto principal (pai) de cada item: tamanho e cor são variações do mesmo produto
+        supabase.rpc('get_li_parent_products'),
         supabase
           .from('bling_products')
           .select('id, nome, descricao_curta, imagem_url, imagens, preco, codigo, estoque_atual, produto_pai_id, bling_id')
@@ -72,14 +73,10 @@ export function ProductPickerDialog({ open, onOpenChange, onSelect }: ProductPic
           .limit(500),
       ]);
 
-      // Helper: get best LI image (original full-res via caminho > grande > stored image_url)
-      const getBestLiImage = (p: any): string | null => {
-        const raw = p.raw_json;
-        if (raw?.imagem_principal?.caminho) {
-          return `https://cdn.awsli.com.br/${raw.imagem_principal.caminho}`;
-        }
-        if (raw?.imagem_principal?.grande) return raw.imagem_principal.grande;
-        return p.image_url || null;
+      // Helper: melhor imagem da LI (original em alta via caminho > grande > imagem salva)
+      const getBestLiImage = (p: { image_path: string | null; image_large: string | null; image_url: string | null }): string | null => {
+        if (p.image_path) return `https://cdn.awsli.com.br/${p.image_path}`;
+        return p.image_large || p.image_url || null;
       };
 
       // Helper: get best Bling image (imagens[0].link > imagem_url)
@@ -90,9 +87,7 @@ export function ProductPickerDialog({ open, onOpenChange, onSelect }: ProductPic
         return p.imagem_url || null;
       };
 
-      // LI: show products with images (parent products)
-      // In LI, parent products have images while variants have stock but no images
-      // For email design, we show the parent products with their images
+      // LI: produtos pai que têm imagem (a variação de tamanho/cor não aparece)
       const liProducts: RawProduct[] = (liRes.data || [])
         .map((p) => ({
           id: p.id,
@@ -100,8 +95,10 @@ export function ProductPickerDialog({ open, onOpenChange, onSelect }: ProductPic
           image_url: getBestLiImage(p),
           price: p.promotional_price || p.price,
           sku: p.sku,
+          url: p.url,
           source: 'loja_integrada' as const,
-        }));
+        }))
+        .filter((p) => !!p.image_url);
 
       // Bling: separate parents/simple from children (variants)
       const allBling = blingRes.data || [];
@@ -168,10 +165,18 @@ export function ProductPickerDialog({ open, onOpenChange, onSelect }: ProductPic
       name: product.name,
       description: '',
       price: formatPrice(product.price),
-      buttonUrl: '',
+      buttonUrl: buildProductUrl(baseUrl, product.url),
     });
     onOpenChange(false);
   };
+
+  const handleSaveStoreUrl = async () => {
+    if (!normalizeStoreUrl(storeInput)) { toast.error('Endereço inválido. Ex.: https://www.minhaloja.com.br'); return; }
+    if (await saveBaseUrl(storeInput)) { toast.success('Endereço da loja salvo'); setStoreInput(''); }
+    else toast.error('Não foi possível salvar o endereço da loja');
+  };
+
+  const needsStoreUrl = !baseUrl && products.some((p) => p.source === 'loja_integrada' && p.url && !/^https?:\/\//i.test(p.url));
 
   const hasLI = products.some((p) => p.source === 'loja_integrada');
   const hasBling = products.some((p) => p.source === 'bling');
@@ -196,6 +201,17 @@ export function ProductPickerDialog({ open, onOpenChange, onSelect }: ProductPic
               className="pl-10"
             />
           </div>
+
+          {needsStoreUrl && (
+            <div className="rounded-lg border border-dashed p-3 space-y-2">
+              <p className="text-sm font-medium flex items-center gap-1.5"><Link2 className="h-4 w-4" />Endereço da sua loja</p>
+              <p className="text-xs text-muted-foreground">Informe uma vez para o botão do produto já sair com o link certo no e-mail.</p>
+              <div className="flex gap-2">
+                <Input placeholder="https://www.minhaloja.com.br" value={storeInput} onChange={(e) => setStoreInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleSaveStoreUrl(); }} />
+                <Button type="button" size="sm" onClick={handleSaveStoreUrl}>Salvar</Button>
+              </div>
+            </div>
+          )}
 
           {(hasLI || hasBling) && (
             <Tabs value={activeTab} onValueChange={setActiveTab}>

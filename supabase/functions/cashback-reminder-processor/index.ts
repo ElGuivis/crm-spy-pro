@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
+import { buildSafeMailOptions } from "../_shared/mime-safe.ts";
 import { requireInternalAuth } from "../_shared/auth-guard.ts";
 import { readSmtpPassword } from "../_shared/credential-helpers.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
@@ -30,10 +31,10 @@ async function sendEmail(
       const client = new SMTPClient({
         connection: { hostname: smtpHost, port: smtpPort, tls: smtpPort === 465, auth: { username: smtpUser, password: smtpPass } }
       });
-      await client.send({
+      await client.send(buildSafeMailOptions({
         from: senderEmail ? `${senderName} <${senderEmail}>` : `${senderName} <${smtpUser}>`,
-        to, subject, content: text, html: html || undefined
-      });
+        to, subject, text, html: html || undefined,
+      }) as never);
       await client.close();
       log.info(`[EMAIL] ✅ Sent to ${to}`);
       return { success: true };

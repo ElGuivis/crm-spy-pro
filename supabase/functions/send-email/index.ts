@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { SMTPClient } from "https://deno.land/x/denomailer@1.4.0/mod.ts";
+import { buildSafeMailOptions } from "../_shared/mime-safe.ts";
 import { requireUserAuth } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
 import { resolveSmtpPassword } from "../_shared/smtp-password-resolver.ts";
@@ -100,19 +101,16 @@ const handler = async (req: Request): Promise<Response> => {
 
     const senderName = remetente_nome || ei.sender_name || ei.name || "Sistema";
     const fromEmail = ei.sender_email || ei.smtp_user;
-    const sendOptions: Record<string, unknown> = {
+    const sendOptions = buildSafeMailOptions({
       from: `${senderName} <${fromEmail}>`,
       to: email_para,
       subject: assunto,
-      content: mensagem,
+      text: mensagem,
       html: mensagem_html || undefined,
-    };
+      replyTo: ei.reply_to || undefined,
+    });
 
-    if (ei.reply_to) {
-      sendOptions.replyTo = ei.reply_to;
-    }
-
-    await client.send(sendOptions);
+    await client.send(sendOptions as never);
     await client.close();
 
     log.info(`[${tenantId}] ✅ Email accepted by SMTP server for ${email_para}`);

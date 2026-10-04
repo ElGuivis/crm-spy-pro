@@ -55,7 +55,10 @@ export function BlockProductProps({ block, onChange, onUpdate }: Props) {
       </div>
       <div className="space-y-2">
         <Label>URL do Botão</Label>
-        <Input value={block.buttonUrl || ""} onChange={(e) => onChange("buttonUrl", e.target.value)} />
+        <Input value={block.buttonUrl || ""} onChange={(e) => onChange("buttonUrl", e.target.value)} placeholder="https://..." />
+        {block.buttonText && !block.buttonUrl && (
+          <p className="text-xs text-destructive">Sem link: o botão não leva a lugar nenhum. Informe a URL do produto.</p>
+        )}
       </div>
     </>
   );
