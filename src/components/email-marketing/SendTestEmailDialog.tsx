@@ -24,6 +24,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
+import { TestTrackingPanel } from './TestTrackingPanel';
 
 import { createLogger } from '@/lib/logger';
 const log = createLogger('SendTestEmailDialog');
@@ -53,6 +54,7 @@ export function SendTestEmailDialog({
   onOpenChange,
 }: SendTestEmailDialogProps) {
   const [sending, setSending] = useState(false);
+  const [sentAt, setSentAt] = useState<string | null>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -63,7 +65,8 @@ export function SendTestEmailDialog({
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setSending(true);
-    
+    const startedAt = new Date().toISOString();
+
     try {
       const emails = values.emails.split(',').map((e) => e.trim());
 
@@ -78,8 +81,7 @@ export function SendTestEmailDialog({
 
       if (data?.success) {
         toast.success(`Teste enviado para ${emails.length} endereço(s)`);
-        onOpenChange(false);
-        form.reset();
+        setSentAt(startedAt); // a tela fica aberta mostrando o rastreio do teste
       } else {
         throw new Error(data?.error || 'Erro ao enviar teste');
       }
@@ -92,7 +94,7 @@ export function SendTestEmailDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) { setSentAt(null); form.reset(); } onOpenChange(o); }}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Enviar E-mail de Teste</DialogTitle>
@@ -124,18 +126,20 @@ export function SendTestEmailDialog({
               )}
             />
 
+            {sentAt && <TestTrackingPanel campaignId={campaignId} since={sentAt} />}
+
             <DialogFooter>
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => onOpenChange(false)}
+                onClick={() => { setSentAt(null); form.reset(); onOpenChange(false); }}
                 disabled={sending}
               >
                 Cancelar
               </Button>
               <Button type="submit" disabled={sending}>
                 {sending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Enviar Teste
+                {sentAt ? 'Enviar de novo' : 'Enviar Teste'}
               </Button>
             </DialogFooter>
           </form>

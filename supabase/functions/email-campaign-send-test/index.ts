@@ -3,7 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { requireUserAuth } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
 import { sendEmail, getEmailConfig } from "../_shared/email-sender.ts";
-import { injectPreheader, htmlToText } from "../_shared/email-prepare.ts";
+import { injectPreheader, htmlToText, listUnsubscribeHeaders } from "../_shared/email-prepare.ts";
+import { injectTracking } from "../_shared/email-tracking.ts";
 import { replaceVariables } from "../_shared/email-variable-replacer.ts";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
@@ -99,10 +100,9 @@ serve(async (req) => {
       phone: "(11) 99999-9999",
       company: "Empresa Teste",
       coupon_code: "TESTE10",
-      unsubscribe_url: `${supabaseUrl}/functions/v1/email-unsubscribe?token=test-preview`,
+      unsubscribe_url: "",
     };
 
-    const finalHtml = replaceVariables(htmlContent, sampleData);
     const finalSubject = replaceVariables(campaign.subject, sampleData);
 
     // Send to each test email
@@ -113,11 +113,24 @@ serve(async (req) => {
 
       log.info(`[TEST] Sending to ${trimmedEmail}`);
 
+      // Token de TESTE por destinatário: o e-mail leva o mesmo rastreio do envio real (pixel e links), mas aberturas e cliques
+      // viram test_open/test_click (não entram nas métricas) e o link de descadastro não descadastra ninguém de verdade.
+      const testKey = `teste:${trimmedEmail}`;
+      await supabase.from("email_unsubscribe_tokens").upsert(
+        { tenant_id: tenantId, campaign_id: campaign.id, recipient_email: testKey, recipient_name: "Teste", is_test: true },
+        { onConflict: "campaign_id,recipient_email", ignoreDuplicates: true },
+      );
+      const { data: tokenRow } = await supabase.from("email_unsubscribe_tokens").select("id").eq("campaign_id", campaign.id).eq("recipient_email", testKey).eq("is_test", true).maybeSingle();
+      const unsubscribeUrl = tokenRow ? `${supabaseUrl}/functions/v1/email-unsubscribe?token=${tokenRow.id}` : "#";
+      const personalized = replaceVariables(htmlContent, { ...sampleData, unsubscribe_url: unsubscribeUrl });
+      const finalHtml = tokenRow ? injectTracking(personalized, supabaseUrl, tokenRow.id) : personalized;
+
       const result = await sendEmail(emailConfig, {
         to: trimmedEmail,
         subject: `[TESTE] ${finalSubject}`,
-        text: htmlToText(finalHtml) || finalSubject,
+        text: htmlToText(personalized) || finalSubject,
         html: finalHtml,
+        headers: listUnsubscribeHeaders(unsubscribeUrl),
       });
 
       results.push({

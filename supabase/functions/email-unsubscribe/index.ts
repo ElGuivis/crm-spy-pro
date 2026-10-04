@@ -46,12 +46,16 @@ serve(async (req) => {
 
     const { data: unsubscribeToken, error: tokenError } = await supabase
       .from("email_unsubscribe_tokens")
-      .select("id,tenant_id,campaign_id,recipient_email,recipient_name,used_at")
+      .select("id,tenant_id,campaign_id,recipient_email,recipient_name,used_at,is_test")
       .eq("id", token)
       .maybeSingle();
 
     if (tokenError || !unsubscribeToken) {
       return htmlResponse(404, "Link não encontrado", "Este link de descadastro não existe ou já expirou.");
+    }
+
+    if (unsubscribeToken.is_test) {
+      return htmlResponse(200, "E-mail de teste", "Este é o link de descadastro de um e-mail de teste. Nada foi alterado e ninguém foi descadastrado.");
     }
 
     if (req.method === "GET") return confirmPage(token);

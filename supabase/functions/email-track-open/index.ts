@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { classifyOpen, firstIp } from "../_shared/email-bot-filter.ts";
 
 // 1x1 transparent GIF
 const TRANSPARENT_GIF = new Uint8Array([
@@ -28,25 +29,30 @@ serve(async (req) => {
 
       const { data: token } = await supabase
         .from("email_unsubscribe_tokens")
-        .select("id, tenant_id, campaign_id, recipient_email")
+        .select("id, tenant_id, campaign_id, recipient_email, is_test")
         .eq("id", tokenId)
         .maybeSingle();
 
       if (token) {
+        const forwarded = req.headers.get("x-forwarded-for") ?? req.headers.get("cf-connecting-ip");
+        const userAgent = req.headers.get("user-agent");
+        const bot = classifyOpen(userAgent, forwarded);
+        // robô e teste não contam como abertura de cliente: tipo próprio, fora das métricas
+        const eventType = token.is_test ? "test_open" : bot ? "bot_open" : "open";
+
         await Promise.all([
           supabase.from("email_events").insert({
             tenant_id: token.tenant_id,
             campaign_id: token.campaign_id,
             recipient_email: token.recipient_email,
-            event_type: "open",
-            ip_address: req.headers.get("x-forwarded-for") ?? req.headers.get("cf-connecting-ip"),
-            user_agent: req.headers.get("user-agent"),
-            metadata: { source: "tracking_pixel" },
+            event_type: eventType,
+            ip_address: firstIp(forwarded) || null,
+            user_agent: userAgent,
+            metadata: { source: "tracking_pixel", ...(bot ? { bot_reason: bot } : {}) },
           }),
-          supabase
-            .from("email_unsubscribe_tokens")
-            .update({ last_opened_at: new Date().toISOString() })
-            .eq("id", tokenId),
+          eventType === "open"
+            ? supabase.from("email_unsubscribe_tokens").update({ last_opened_at: new Date().toISOString() }).eq("id", tokenId)
+            : Promise.resolve(),
         ]);
       }
     } catch {

@@ -14,6 +14,9 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
 import { Loader2, AlertTriangle, Send, Clock } from 'lucide-react';
+import { useEmailCampaign } from '@/hooks/useEmailSingle';
+import { runPreflight } from '@/lib/email-preflight';
+import { PreflightList } from './PreflightList';
 
 import { createLogger } from '@/lib/logger';
 const log = createLogger('ConfirmSendDialog');
@@ -52,6 +55,12 @@ export function ConfirmSendDialog({
   const [sending, setSending] = useState(false);
   const [estimatedRecipients, setEstimatedRecipients] = useState<number | null>(null);
   const [estimating, setEstimating] = useState(false);
+  const { data: campaign, isLoading: loadingCampaign } = useEmailCampaign(open ? campaignId : undefined);
+  const issues = runPreflight({
+    subject: campaign?.subject, preheader: campaign?.preheader, html: campaign?.content_html,
+    hasIntegration: !!campaign?.email_integration_id, recipients: estimating ? null : estimatedRecipients,
+  });
+  const blocked = loadingCampaign || issues.some((i) => i.level === 'error');
 
   useEffect(() => {
     if (!open || !audienceType) {
@@ -149,15 +158,11 @@ export function ConfirmSendDialog({
                 <Alert className="py-2 border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
                   <Clock className="h-4 w-4 text-amber-600" />
                   <AlertDescription className="text-xs text-amber-700 dark:text-amber-400">
-                    Lista com mais de 250 destinatários — o envio pode levar vários minutos e está sujeito a timeout. Considere dividir em lotes menores para maior confiabilidade.
+                    Lista grande: o envio roda em segundo plano, em lotes, e pode levar alguns minutos. Pode fechar esta tela. Acompanhe a barra de progresso em Resultados da campanha; dá para pausar e retomar.
                   </AlertDescription>
                 </Alert>
               )}
-              <Alert className="py-2">
-                <AlertDescription className="text-xs">
-                  Métricas de abertura e clique dependem da integração de eventos do provedor de e-mail. Até essa integração estar ativa, esses indicadores podem permanecer zerados sem representar falha no envio.
-                </AlertDescription>
-              </Alert>
+              <PreflightList issues={issues} loading={loadingCampaign} />
               <p className="text-xs text-muted-foreground">
                 Certifique-se de que revisou o conteúdo e testou a campanha antes de continuar.
               </p>
@@ -168,7 +173,7 @@ export function ConfirmSendDialog({
           <AlertDialogCancel disabled={sending}>Cancelar</AlertDialogCancel>
           <Button
             onClick={handleSend}
-            disabled={sending}
+            disabled={sending || blocked}
             className="gap-2 bg-primary text-primary-foreground"
           >
             {sending ? (
