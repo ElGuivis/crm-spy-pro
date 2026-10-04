@@ -3,7 +3,7 @@ import type {
   HeaderBlock, HeadingBlock, ImageBlock, LegalBlock, SocialBlock, SpacerBlock, TextBlock, UnsubscribeBlock,
 } from './types';
 import { alignOf, blockMargin, bulletproofButton, esc, getBaseStyles, inlineFormat, pxNumber, safeUrl } from './htmlHelpers';
-import { generateCouponHTML, generateProductHTML } from './htmlProductBlocks';
+import { generateCouponHTML, generateImageTextHTML, generateProductHTML } from './htmlProductBlocks';
 
 export { getBaseStyles } from './htmlHelpers';
 
@@ -21,6 +21,7 @@ export function generateBlockHTML(block: EmailBlock): string {
     case 'banner': return generateBannerHTML(block);
     case 'product': return generateProductHTML(block);
     case 'coupon': return generateCouponHTML(block);
+    case 'imagetext': return generateImageTextHTML(block);
     case 'social': return generateSocialHTML(block);
     case 'footer': return generateFooterHTML(block);
     case 'legal': return generateLegalHTML(block);

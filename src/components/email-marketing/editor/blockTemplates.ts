@@ -88,6 +88,20 @@ export const blockTemplates: Record<string, EmailBlock> = {
     alignment: 'center',
     padding: '20px',
   },
+  imagetext: {
+    type: 'imagetext',
+    imageUrl: 'https://via.placeholder.com/300x300',
+    alt: 'Imagem',
+    imagePosition: 'left',
+    imageWidthPct: '40',
+    verticalAlign: 'middle',
+    title: 'Título da seção',
+    text: 'Escreva aqui o texto que fica ao lado da imagem. Use **negrito** para destacar.',
+    alignment: 'left',
+    buttonText: 'Saiba mais',
+    buttonUrl: 'https://example.com',
+    padding: '20px',
+  },
   coupon: {
     type: 'coupon',
     title: 'Use o cupom',
@@ -141,7 +155,7 @@ export const blockCategories = [
   },
   {
     name: 'Conteúdo',
-    blocks: ['image', 'button', 'banner', 'product', 'coupon'],
+    blocks: ['image', 'imagetext', 'button', 'banner', 'product', 'coupon'],
   },
   {
     name: 'Layout',
@@ -166,6 +180,7 @@ export const blockLabels: Record<string, string> = {
   banner: 'Banner',
   product: 'Produto',
   coupon: 'Cupom',
+  imagetext: 'Imagem + Texto',
   social: 'Redes Sociais',
   footer: 'Rodapé',
   legal: 'Texto Legal',

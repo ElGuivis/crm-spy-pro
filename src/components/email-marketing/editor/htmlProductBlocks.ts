@@ -1,4 +1,4 @@
-import type { Alignment, CouponBlock, ProductBlock } from './types';
+import type { Alignment, CouponBlock, ImageTextBlock, ProductBlock } from './types';
 import { alignOf, blockMargin, bulletproofButton, esc, getBaseStyles, inlineFormat, pxNumber, safeUrl } from './htmlHelpers';
 
 /** Bloco de produto: tudo configurável (alinhamento, cores, tamanhos, botão) e com título/imagem levando ao link. */
@@ -60,6 +60,40 @@ export function generateCouponHTML(block: CouponBlock): string {
             <div style="font-size: 28px; font-weight: bold; letter-spacing: 3px; font-family: 'Courier New', monospace; color: ${block.codeColor || border};">${esc(block.code || 'CUPOM10')}</div>
             ${block.description ? `<div style="font-size: 13px; color: ${block.descriptionColor || '#777777'}; margin-top: 6px;">${inlineFormat(block.description)}</div>` : ''}
           </td>
+        </tr>
+      </table>
+    </td>
+  </tr>`;
+}
+
+/** Imagem de um lado, título + texto + botão do outro. No celular as duas partes empilham. */
+export function generateImageTextHTML(block: ImageTextBlock): string {
+  const align: Alignment = alignOf(block.alignment, 'left');
+  const pct = Number(block.imageWidthPct || '40');
+  const gap = 20;
+  const valign = block.verticalAlign === 'middle' ? 'middle' : 'top';
+  const img = `<img src="${esc(block.imageUrl || 'https://via.placeholder.com/300x300')}" alt="${esc(block.alt || '')}" width="100%" style="display: block; width: 100%; max-width: 100%; height: auto;${block.imageRadius ? ` border-radius: ${block.imageRadius};` : ''}">`;
+  const imageCell = `<td class="mobile-column" width="${pct}%" style="vertical-align: ${valign};${block.imagePosition === 'right' ? ` padding-left: ${gap}px;` : ` padding-right: ${gap}px;`}">${block.linkUrl ? `<a href="${safeUrl(block.linkUrl)}" style="display: block;">${img}</a>` : img}</td>`;
+
+  const button = block.buttonText
+    ? `<div style="margin-top: 14px;">${bulletproofButton({
+        text: block.buttonText, url: block.buttonUrl ?? '', align,
+        color: block.buttonColor || '#0066cc', textColor: block.buttonTextColor || '#ffffff',
+        radius: block.buttonRadius || '4px', fontSize: '15px', padding: '10px 24px',
+      })}</div>`
+    : '';
+  const textCell = `<td class="mobile-column" width="${100 - pct}%" style="vertical-align: ${valign}; text-align: ${align};">
+            ${block.title ? `<h3 style="margin: 0 0 8px; font-size: ${block.titleSize || '22px'}; color: ${block.titleColor || '#333333'}; line-height: 1.3;">${inlineFormat(block.title)}</h3>` : ''}
+            ${block.text ? `<div style="font-size: ${block.textSize || '15px'}; color: ${block.textColor || '#666666'}; line-height: 1.6;">${inlineFormat(block.text)}</div>` : ''}
+            ${button}
+          </td>`;
+
+  return `
+  <tr>
+    <td style="${getBaseStyles(block)}; padding: ${block.padding || '20px'};">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+          ${block.imagePosition === 'right' ? `${textCell}\n          ${imageCell}` : `${imageCell}\n          ${textCell}`}
         </tr>
       </table>
     </td>

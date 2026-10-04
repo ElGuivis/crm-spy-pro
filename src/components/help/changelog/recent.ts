@@ -18,6 +18,8 @@ export const RECENT_CHANGELOG: ChangelogEntry[] = [
       { type: 'feature', text: 'Editor de e-mail: produto totalmente personalizável (alinhamento, cores e tamanhos de nome, preço e descrição, botão com cor, texto e arredondamento, preço antigo riscado, largura da imagem)' },
       { type: 'feature', text: 'Editor de e-mail: alinhar à esquerda, ao centro ou à direita em botão, imagem, título, texto, produto e demais blocos' },
       { type: 'feature', text: 'Editor de e-mail: novo bloco de Cupom, "Estilo do e-mail" (fundo, fonte, largura e cor dos links), proporção das colunas e redes sociais editáveis' },
+      { type: 'feature', text: 'Editor de e-mail: barra de formatação no texto (negrito, itálico, sublinhado e link no trecho selecionado) e novo bloco Imagem + Texto, com botão opcional' },
+      { type: 'feature', text: 'Editor de e-mail: escolha a fonte de cada bloco, além da fonte geral do e-mail' },
       { type: 'improvement', text: 'Editor de e-mail: o que aparece no editor e na pré-visualização é exatamente o e-mail enviado; textos aceitam **negrito**, links e quebras de linha' },
       { type: 'improvement', text: 'Imagens de produto enviadas por WhatsApp e e-mail usam sempre o arquivo original da loja, na maior qualidade disponível' },
       { type: 'fix', text: 'E-mails enviados não mostram mais "=20" no meio do texto, e acentos e assuntos longos não se corrompem' },

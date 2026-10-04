@@ -29,6 +29,8 @@ export function inlineFormat(text: string | undefined | null): string {
     .replace(/&lt;a href=&quot;(https?:\/\/(?:(?!&quot;).)*)&quot;&gt;/gi, '<a href="$1">')
     .replace(/&lt;\/a&gt;/gi, '</a>')
     .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(?<![\w/])__(?!\s)([^_\n]+?)(?<!\s)__(?![\w/])/g, '<u>$1</u>')
+    .replace(/\*(?!\s)([^*\n]+?)(?<!\s)\*/g, '<em>$1</em>')
     .replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s"]+)\)/g, '<a href="$2" style="color: inherit; text-decoration: underline;">$1</a>')
     .replace(/\r?\n/g, '<br>');
   return out;
@@ -47,12 +49,13 @@ export function pxNumber(value: string | undefined): number | null {
   return m ? Number(m[1]) : null;
 }
 
-export function getBaseStyles(block: { backgroundColor?: string; padding?: string; margin?: string; borderRadius?: string }): string {
+export function getBaseStyles(block: { backgroundColor?: string; padding?: string; margin?: string; borderRadius?: string; fontFamily?: string }): string {
   const styles: string[] = [];
   if (block.backgroundColor) styles.push(`background-color: ${block.backgroundColor}`);
   if (block.padding) styles.push(`padding: ${block.padding}`);
   if (block.margin) styles.push(`margin: ${block.margin}`);
   if (block.borderRadius) styles.push(`border-radius: ${block.borderRadius}`);
+  if (block.fontFamily) styles.push(`font-family: ${block.fontFamily}`);
   return styles.join('; ');
 }
 

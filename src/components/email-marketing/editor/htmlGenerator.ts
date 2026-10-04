@@ -63,6 +63,8 @@ export function generateEmailHTML(content: EmailContent, preheader?: string): st
         display: block !important;
         width: 100% !important;
         padding-right: 0 !important;
+        padding-left: 0 !important;
+        padding-bottom: 12px !important;
       }
     }
   </style>

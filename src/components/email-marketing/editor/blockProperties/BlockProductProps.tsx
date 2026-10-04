@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Package } from "lucide-react";
 import { ProductPickerDialog } from "../ProductPickerDialog";
+import { FormattedTextarea } from "./FormattedTextarea";
 import { AlignField, ColorField, PxField, SwitchField, WidthField } from "./fields";
 import type { EmailBlock, ProductBlock } from "../types";
 
@@ -48,7 +48,7 @@ export function BlockProductProps({ block, onChange, onUpdate }: Props) {
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Descrição (deixe vazio para ocultar)</Label>
-            <Textarea value={block.description || ""} onChange={(e) => onChange("description", e.target.value)} rows={3} />
+            <FormattedTextarea value={block.description || ""} onChange={(v) => onChange("description", v)} rows={3} />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5">

@@ -3,6 +3,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { VariablesPicker } from "../../VariablesPicker";
+import { FormattedTextarea } from "./FormattedTextarea";
 import { AlignField, ColorField, PxField, SwitchField } from "./fields";
 import type { EmailBlock } from "../types";
 
@@ -11,7 +12,7 @@ interface Props {
   onChange: (field: string, value: unknown) => void;
 }
 
-const FORMAT_HINT = "Dica: **negrito**, [texto do link](https://...) e Enter para pular linha.";
+const FORMAT_HINT = "Selecione o trecho e use os botões. Enter pula linha.";
 
 export function BlockTextProps({ block, onChange }: Props) {
   if (block.type === "heading") {
@@ -46,7 +47,7 @@ export function BlockTextProps({ block, onChange }: Props) {
       <>
         <div className="space-y-2">
           <Label className="text-xs">Conteúdo</Label>
-          <Textarea value={block.content || ""} onChange={(e) => onChange("content", e.target.value)} rows={6} />
+          <FormattedTextarea value={block.content || ""} onChange={(v) => onChange("content", v)} rows={6} />
           <p className="text-[11px] text-muted-foreground">{FORMAT_HINT}</p>
           <VariablesPicker onSelect={(variable) => onChange("content", (block.content || "") + variable)} />
         </div>
@@ -88,7 +89,7 @@ export function BlockTextProps({ block, onChange }: Props) {
       <>
         <div className="space-y-2">
           <Label className="text-xs">Conteúdo</Label>
-          <Textarea value={block.content || ""} onChange={(e) => onChange("content", e.target.value)} rows={4} />
+          <FormattedTextarea value={block.content || ""} onChange={(v) => onChange("content", v)} rows={4} />
         </div>
         <ColorField label="Cor do texto" value={block.color} fallback="#999999" onChange={(v) => onChange("color", v)} />
         <PxField label="Tamanho da fonte" value={block.fontSize} placeholder="11" onChange={(v) => onChange("fontSize", v)} />

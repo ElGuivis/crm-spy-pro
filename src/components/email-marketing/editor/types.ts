@@ -11,6 +11,7 @@ export type BlockType =
   | 'banner'
   | 'product'
   | 'coupon'
+  | 'imagetext'
   | 'social'
   | 'footer'
   | 'legal'
@@ -23,6 +24,8 @@ export interface BaseBlockProps {
   padding?: string;
   margin?: string;
   borderRadius?: string;
+  /** fonte só deste bloco (vazio = a do e-mail) */
+  fontFamily?: string;
 }
 
 export interface HeaderBlock extends BaseBlockProps {
@@ -144,6 +147,31 @@ export interface ProductBlock extends BaseBlockProps {
   buttonFullWidth?: boolean;
 }
 
+/** Imagem de um lado e texto (com botão opcional) do outro. */
+export interface ImageTextBlock extends BaseBlockProps {
+  type: 'imagetext';
+  imageUrl: string;
+  alt?: string;
+  linkUrl?: string;
+  imagePosition?: 'left' | 'right';
+  /** largura da imagem em % da linha */
+  imageWidthPct?: '30' | '40' | '50';
+  imageRadius?: string;
+  verticalAlign?: 'top' | 'middle';
+  title?: string;
+  titleColor?: string;
+  titleSize?: string;
+  text?: string;
+  textColor?: string;
+  textSize?: string;
+  alignment?: Alignment;
+  buttonText?: string;
+  buttonUrl?: string;
+  buttonColor?: string;
+  buttonTextColor?: string;
+  buttonRadius?: string;
+}
+
 export interface CouponBlock extends BaseBlockProps {
   type: 'coupon';
   title?: string;
@@ -204,6 +232,7 @@ export type EmailBlock =
   | BannerBlock
   | ProductBlock
   | CouponBlock
+  | ImageTextBlock
   | SocialBlock
   | FooterBlock
   | LegalBlock

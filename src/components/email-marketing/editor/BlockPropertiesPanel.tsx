@@ -9,6 +9,10 @@ import { BlockInteractiveProps } from "./blockProperties/BlockInteractiveProps";
 import { BlockLayoutProps } from "./blockProperties/BlockLayoutProps";
 import { BlockProductProps } from "./blockProperties/BlockProductProps";
 import { BlockCouponProps } from "./blockProperties/BlockCouponProps";
+import { BlockImageTextProps } from "./blockProperties/BlockImageTextProps";
+import { FONTS } from "./fonts";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ColorField, PxField, SpacingField } from "./blockProperties/fields";
 
 interface BlockPropertiesPanelProps {
@@ -57,6 +61,7 @@ export function BlockPropertiesPanel({ block, onUpdate, onClose }: BlockProperti
         {LAYOUT_TYPES.includes(block.type) && <BlockLayoutProps block={block} onChange={handleChange} />}
         {block.type === "product" && <BlockProductProps block={block} onChange={handleChange} onUpdate={onUpdate} />}
         {block.type === "coupon" && <BlockCouponProps block={block} onChange={handleChange} />}
+        {block.type === "imagetext" && <BlockImageTextProps block={block} onChange={handleChange} uploading={uploading} onUpload={upload} />}
 
         {block.type !== "spacer" && (
           <div className="space-y-4 border-t pt-4">
@@ -64,6 +69,16 @@ export function BlockPropertiesPanel({ block, onUpdate, onClose }: BlockProperti
             {block.type !== "banner" && block.type !== "divider" && (
               <SpacingField value={block.padding} onChange={(v) => handleChange("padding", v)} />
             )}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Fonte do bloco</Label>
+              <Select value={block.fontFamily || "__default__"} onValueChange={(v) => handleChange("fontFamily", v === "__default__" ? undefined : v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__default__">Padrão do e-mail</SelectItem>
+                  {FONTS.map((f) => <SelectItem key={f.value} value={f.value} style={{ fontFamily: f.value }}>{f.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             {radiusLabel && (
               <PxField label={radiusLabel} value={block.borderRadius} placeholder="0" max={200} onChange={(v) => handleChange("borderRadius", v)} />
             )}
