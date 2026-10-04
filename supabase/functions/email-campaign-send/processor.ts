@@ -5,6 +5,7 @@ import { injectPreheader, htmlToText, listUnsubscribeHeaders } from "../_shared/
 import { replaceVariables } from "../_shared/email-variable-replacer.ts";
 import { injectTracking } from "./send-helpers.ts";
 import { queueProgress } from "./queue.ts";
+import { getLiAuth, issueCoupons, parseUniqueCoupon, type IssuedCoupon } from "./coupons.ts";
 
 type Supabase = ReturnType<typeof createClient>;
 type Log = { info: (...a: unknown[]) => void; error: (...a: unknown[]) => void };
@@ -33,7 +34,7 @@ export async function processCampaign(supabase: Supabase, supabaseUrl: string, c
     .update({ send_lease_until: inSeconds(LEASE_SECONDS) })
     .eq("id", campaignId).eq("status", "sending")
     .or(`send_lease_until.is.null,send_lease_until.lt.${new Date().toISOString()}`)
-    .select("id, tenant_id, internal_name, subject, content_html, preheader, coupon_codes, email_integration_id");
+    .select("id, tenant_id, internal_name, subject, content_html, preheader, coupon_codes, email_integration_id, unique_coupon");
   const campaign = leased?.[0];
   if (!campaign) return;
 
@@ -52,6 +53,9 @@ export async function processCampaign(supabase: Supabase, supabaseUrl: string, c
     const baseHtml = injectPreheader(campaign.content_html as string, campaign.preheader as string | null);
     const coupon = (campaign.coupon_codes as string[] | null)?.[0] || "";
     const tenantId = campaign.tenant_id as string;
+    const uniqueCfg = parseUniqueCoupon(campaign.unique_coupon);
+    const liAuth = uniqueCfg ? await getLiAuth(supabase, tenantId) : null;
+    if (uniqueCfg && !liAuth) throw new Error("Cupom único por pessoa precisa da Loja Integrada conectada. Conecte a loja em Integrações e retome a campanha.");
 
     while (Date.now() < deadline - SAFETY_MS && !abortMessage) {
       const { data: current } = await supabase.from("email_campaigns").select("status").eq("id", campaignId).single();
@@ -77,10 +81,26 @@ export async function processCampaign(supabase: Supabase, supabaseUrl: string, c
       const tokenByEmail = new Map((tokenRows ?? []).map((t) => [t.recipient_email as string, t.id as string]));
       const tokenIds = new Map(rows.map((r) => [r.id, tokenByEmail.get(r.recipient_email) ?? crypto.randomUUID()]));
 
+      // cupom único: cria um por destinatário do lote; quem ficou sem cupom não recebe (falha) e o resto segue
+      let sendRows = rows;
+      const coupons = new Map<string, IssuedCoupon>();
+      if (uniqueCfg && liAuth) {
+        const r = await issueCoupons(supabase, { tenantId, campaignId, campaignName: campaign.internal_name as string, cfg: uniqueCfg, auth: liAuth }, rows.map((x) => x.recipient_email));
+        for (const [email, c] of r.issued) coupons.set(email, c);
+        const unresolved = rows.filter((x) => !coupons.has(x.recipient_email));
+        for (const x of unresolved) {
+          const err = r.failed.get(x.recipient_email);
+          if (err) await supabase.from("email_send_queue").update({ status: "failed", error_message: err, processed_at: new Date().toISOString() }).eq("id", x.id);
+          else await supabase.from("email_send_queue").update({ status: "pending", attempts: Math.max(x.attempts - 1, 0), claimed_at: null }).eq("id", x.id);
+        }
+        if (r.authError) abortMessage = r.authError;
+        sendRows = rows.filter((x) => coupons.has(x.recipient_email));
+      }
+
       let next = 0;
       await Promise.all(sessions.map(async (session) => {
         while (!abortMessage) {
-          const row = rows[next++];
+          const row = sendRows[next++];
           if (!row) return;
           const tokenId = tokenIds.get(row.id)!;
           const unsubscribeUrl = `${supabaseUrl}/functions/v1/email-unsubscribe?token=${tokenId}`;
@@ -88,7 +108,7 @@ export async function processCampaign(supabase: Supabase, supabaseUrl: string, c
             first_name: titleCase(row.recipient_name?.trim().split(/\s+/)[0] || ""),
             last_name: titleCase(row.recipient_name?.trim().split(/\s+/).slice(1).join(" ") || ""),
             email: row.recipient_email, phone: row.recipient_phone || "", company: "",
-            coupon_code: coupon, unsubscribe_url: unsubscribeUrl,
+            coupon_code: coupons.get(row.recipient_email)?.code ?? coupon, coupon_value: coupons.get(row.recipient_email)?.discount ?? "", coupon_expires: coupons.get(row.recipient_email)?.expires ?? "", unsubscribe_url: unsubscribeUrl,
           };
           // 1) variáveis, 2) versão em texto (links reais), 3) rastreio só no HTML
           const personalizedBase = replaceVariables(baseHtml, data);

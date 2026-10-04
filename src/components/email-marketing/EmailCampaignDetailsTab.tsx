@@ -12,6 +12,7 @@ import { Loader2, Save, ChevronRight, Mail } from "lucide-react";
 import { VariablesPicker } from "./VariablesPicker";
 import { CampaignAttributionFields } from "./CampaignAttributionFields";
 import { CampaignSafetyFields } from "./CampaignSafetyFields";
+import { UniqueCouponFields } from "./UniqueCouponFields";
 import { AudienceSelector, AudienceType } from "./AudienceSelector";
 import { AudienceReference } from "@/hooks/useAudienceEstimate";
 import { CampaignFormData } from "@/hooks/useEmailCampaignForm";
@@ -196,6 +197,8 @@ export function EmailCampaignDetailsTab({
         </div>
 
         <CampaignAttributionFields form={form} />
+
+        <UniqueCouponFields form={form} />
 
         <CampaignSafetyFields form={form} />
 

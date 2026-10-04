@@ -7,7 +7,7 @@ CRM/ERP multi-tenant em produção (https://spypro.com.br) com integrações de 
 ## Stack
 
 - **Frontend**: Vite 5 + React 18 + TypeScript + shadcn/ui (Radix) + Tailwind + React Router 7 + TanStack Query 5. Build: `vite build`. Dev: `npm run dev`.
-- **Backend**: Supabase auto-hospedado (Postgres 17 + Auth + REST + Realtime + Storage + Edge Functions Deno). 96 edge functions, 153 tabelas com RLS, 388 policies, 32 cron jobs.
+- **Backend**: Supabase auto-hospedado (Postgres 17 + Auth + REST + Realtime + Storage + Edge Functions Deno). 96 edge functions, 153 tabelas com RLS, 388 policies, 33 cron jobs.
 - **Deploy**: frontend via EasyPanel (Dockerfile + nginx, rebuild manual, Build Args `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`). Edge functions: `powershell scripts/deploy-functions-vps.ps1 [-Only <nome>]` (copia para a VPS e reinicia o runtime; `supabase functions deploy` NÃO se aplica ao servidor novo).
 - **Owner / login dev**: `usechronic@gmail.com` (único usuário; cadastros bloqueados por trigger + `DISABLE_SIGNUP`).
 
@@ -216,3 +216,5 @@ ssh -i ~/.ssh/spypro_vps root@37.148.134.55 "cd /opt/supabase && sh run.sh statu
 - `20261004000006`: `get_li_showcase_products(modo, limite, dias)` — vitrine automática do editor de e-mail (mais vendidos por produto pai, lançamentos, promoção)
 - `20261004000007`: `email_campaigns.skip_recent_days` + `get_recent_email_recipients` (só service_role): a campanha pula quem recebeu e-mail nos últimos N dias
 - `20261004000008`: `get_email_health(tenant, dias)` — saúde do envio (falhas, descadastros, bounce/reclamação, campanhas travadas)
+- `20261004000009`: cupons — `generated_coupons` ganha `li_ativo/li_valor_minimo/li_quantidade_por_cliente/li_cumulativo` e índice único (integração, código); `email_campaigns.unique_coupon` + tabela `email_campaign_coupons` (cupom único por destinatário); a atribuição de compra reconhece esses códigos. Formato real da API de cupom da LI: `_shared/li-coupons.ts` (tipos porcentagem|fixo|frete_gratis, validade AAAA-MM-DD, quantidade, quantidade_por_cliente). A API recusa rajadas (HTTP 429): criar com poucas conexões
+- `20261004000010`: teste A/B com vencedor automático: colunas `ab_auto_winner/ab_winner_*`, `get_ab_winner_candidates()` e cron `email-ab-winner` (10 min, função `email-ab-winner`). A variante "W" (resto da lista) sai com o assunto de maior abertura e exclui quem recebeu A ou B

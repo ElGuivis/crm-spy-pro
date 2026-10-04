@@ -69,7 +69,7 @@ export function EmailCampaignFormDialog({ open, onOpenChange, campaignId, defaul
             </TabsContent>
 
             <TabsContent value="content" className="flex-1 overflow-hidden mt-4 flex flex-col">
-              <EmailEditor key={editorKey} draftKey={draftKey} initialContent={emailContent || undefined} onChange={handleEditorChange} />
+              <EmailEditor key={editorKey} draftKey={draftKey} onTemplateApplied={(sug) => { if (!form.getValues("subject")) form.setValue("subject", sug.subject, { shouldDirty: true }); if (!form.getValues("preheader")) form.setValue("preheader", sug.preheader, { shouldDirty: true }); }} initialContent={emailContent || undefined} onChange={handleEditorChange} />
               <div className="flex justify-between gap-3 mt-3 shrink-0 pt-3 border-t">
                 <Button type="button" variant="outline" onClick={() => setActiveTab("details")} disabled={isPending}>
                   <ChevronLeft className="h-4 w-4 mr-2" />Voltar

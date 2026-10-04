@@ -23,6 +23,20 @@ export async function buildQueue(supabase: Supabase, tenantId: string, campaignI
   return rows.length;
 }
 
+/** E-mails que já estão na fila das outras campanhas do mesmo teste A/B (o vencedor vai só para quem ficou de fora). */
+export async function siblingRecipients(supabase: Supabase, abTestId: string, exceptCampaignId: string): Promise<Set<string>> {
+  const { data: siblings } = await supabase.from("email_campaigns").select("id").eq("ab_test_id", abTestId).neq("id", exceptCampaignId);
+  const ids = (siblings ?? []).map((s) => s.id as string);
+  const emails = new Set<string>();
+  if (!ids.length) return emails;
+  for (let from = 0; ; from += 1000) {
+    const { data } = await supabase.from("email_send_queue").select("recipient_email").in("campaign_id", ids).range(from, from + 999);
+    for (const r of data ?? []) emails.add(String(r.recipient_email).toLowerCase());
+    if (!data || data.length < 1000) break;
+  }
+  return emails;
+}
+
 export async function queueCount(supabase: Supabase, campaignId: string): Promise<number> {
   const { count } = await supabase.from("email_send_queue").select("id", { count: "exact", head: true }).eq("campaign_id", campaignId);
   return count ?? 0;

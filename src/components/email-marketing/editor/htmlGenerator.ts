@@ -59,7 +59,17 @@ export function generateEmailHTML(content: EmailContent, preheader?: string): st
       .mobile-hide {
         display: none !important;
       }
+      .coupon-code { font-size: 22px !important; letter-spacing: 1px !important; }
+      .coupon-pad { padding: 14px 16px !important; }
+      .mobile-half {
+        display: inline-block !important;
+        width: 50% !important;
+        box-sizing: border-box !important;
+        padding: 0 4px 12px !important;
+        vertical-align: top !important;
+      }
       .mobile-column {
+        box-sizing: border-box !important;
         display: block !important;
         width: 100% !important;
         padding-right: 0 !important;

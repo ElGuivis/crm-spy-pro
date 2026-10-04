@@ -14,12 +14,15 @@ import { EmailEditorToolbar } from "./EmailEditorToolbar";
 import { EmailEditorCanvas } from "./EmailEditorCanvas";
 import { TemplatesGalleryDialog } from "./TemplatesGalleryDialog";
 import { ShowcaseDialog } from "./ShowcaseDialog";
+import type { EmailTemplateSuggestion } from "./templates";
 
 interface EmailEditorProps {
   initialContent?: EmailContent;
   onChange?: (content: EmailContent, html: string) => void;
   /** identifica o rascunho automático no navegador (inclua a versão salva, ex.: id + updated_at) */
   draftKey?: string;
+  /** assunto e pré-header sugeridos pelo modelo escolhido (o formulário preenche se estiverem vazios) */
+  onTemplateApplied?: (s: EmailTemplateSuggestion) => void;
 }
 
 const isTyping = (t: EventTarget | null) => {
@@ -27,7 +30,7 @@ const isTyping = (t: EventTarget | null) => {
   return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
 };
 
-export function EmailEditor({ initialContent, onChange, draftKey }: EmailEditorProps) {
+export function EmailEditor({ initialContent, onChange, draftKey, onTemplateApplied }: EmailEditorProps) {
   const draft = useEditorDraft(draftKey, initialContent);
   const handleChange = useCallback((c: EmailContent, html: string) => { onChange?.(c, html); draft.schedule(c); }, [onChange, draft.schedule]); // eslint-disable-line react-hooks/exhaustive-deps
   const editor = useEmailEditor({ initialContent, onChange: handleChange });
@@ -76,7 +79,7 @@ export function EmailEditor({ initialContent, onChange, draftKey }: EmailEditorP
           onRedo={editor.redo}
           canUndo={editor.canUndo}
           canRedo={editor.canRedo}
-          extra={<><ShowcaseDialog onInsert={(blocks) => editor.handleInsertBlocks(blocks)} /><TemplatesGalleryDialog hasContent={editor.content.blocks.length > 0} onApply={(t) => editor.handleInsertBlocks(t.content.blocks, true, t.content.globalStyles)} /></>}
+          extra={<><ShowcaseDialog onInsert={(blocks) => editor.handleInsertBlocks(blocks)} /><TemplatesGalleryDialog hasContent={editor.content.blocks.length > 0} onApply={(c, sug) => { editor.handleInsertBlocks(c.blocks, true, c.globalStyles); onTemplateApplied?.(sug); }} /></>}
         />
 
         <ScrollArea className="flex-1">

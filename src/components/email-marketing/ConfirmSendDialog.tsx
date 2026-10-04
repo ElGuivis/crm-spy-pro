@@ -58,7 +58,7 @@ export function ConfirmSendDialog({
   const { data: campaign, isLoading: loadingCampaign } = useEmailCampaign(open ? campaignId : undefined);
   const issues = runPreflight({
     subject: campaign?.subject, preheader: campaign?.preheader, html: campaign?.content_html,
-    hasIntegration: !!campaign?.email_integration_id, recipients: estimating ? null : estimatedRecipients,
+    hasIntegration: !!campaign?.email_integration_id, uniqueCoupon: !!campaign?.unique_coupon, recipients: estimating ? null : estimatedRecipients,
   });
   const blocked = loadingCampaign || issues.some((i) => i.level === 'error');
 

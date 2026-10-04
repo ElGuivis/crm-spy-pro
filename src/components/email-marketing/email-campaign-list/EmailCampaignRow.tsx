@@ -34,6 +34,8 @@ interface Props {
 }
 
 export function EmailCampaignRow({ campaign, isActing, pendingAction, actions }: Props) {
+  // a campanha "Vencedor" espera o resultado de A e B e sai sozinha: não se envia à mão
+  const waitingWinner = campaign.ab_variant === "W" && campaign.ab_auto_winner && campaign.status === "draft" && !campaign.ab_winner_decided_at;
   const sc = statusConfig[campaign.status] || { label: campaign.status, className: "bg-secondary text-secondary-foreground" };
 
   return (
@@ -43,7 +45,7 @@ export function EmailCampaignRow({ campaign, isActing, pendingAction, actions }:
           <span className="truncate">{campaign.internal_name}</span>
           {campaign.ab_test_id && (
             <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-purple-300 text-purple-700 bg-purple-50 dark:border-purple-700 dark:text-purple-400 dark:bg-purple-950/30 shrink-0">
-              {campaign.ab_variant ?? "A/B"}
+              {campaign.ab_variant === "W" ? (waitingWinner ? "Vencedor · aguardando" : `Vencedor: ${campaign.ab_winner_variant ?? ""}`) : (campaign.ab_variant ?? "A/B")}
             </Badge>
           )}
         </div>
@@ -85,7 +87,10 @@ export function EmailCampaignRow({ campaign, isActing, pendingAction, actions }:
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {["draft", "scheduled", "error"].includes(campaign.status) && (
+            {waitingWinner && (
+              <DropdownMenuItem disabled>Envia sozinha quando o teste terminar (~{campaign.ab_winner_hours ?? 4}h)</DropdownMenuItem>
+            )}
+            {!waitingWinner && ["draft", "scheduled", "error"].includes(campaign.status) && (
               <>
                 <DropdownMenuItem onClick={() => actions.onReview(campaign)}>
                   <Eye className="h-4 w-4 mr-2" />Revisar e Enviar

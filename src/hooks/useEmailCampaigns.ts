@@ -40,6 +40,10 @@ export interface EmailCampaign {
   ab_variant: string | null;
   ab_split_pct: number;
   ab_offset_pct: number;
+  ab_auto_winner: boolean;
+  ab_winner_hours: number | null;
+  ab_winner_variant: string | null;
+  ab_winner_decided_at: string | null;
 }
 
 export interface CreateEmailCampaignInput {
@@ -65,7 +69,7 @@ export function useEmailCampaigns(filters?: { status?: EmailCampaignStatus; sear
     queryKey: ['email-campaigns', tenantId, filters],
     queryFn: async () => {
       if (!tenantId) throw new Error('Tenant not found');
-      let query = supabase.from('email_campaigns').select('id, tenant_id, internal_name, subject, preheader, sender_name, sender_email, reply_to, campaign_type, template_id, content_html, content_json, audience_type, audience_reference, email_integration_id, status, scheduled_at, started_at, completed_at, sent_at, total_recipients, total_sent, total_delivered, total_opened, total_clicked, total_bounced, total_complained, error_message, is_archived, created_at, updated_at, ab_test_id, ab_variant, ab_split_pct, ab_offset_pct').eq('tenant_id', tenantId).order('created_at', { ascending: false });
+      let query = supabase.from('email_campaigns').select('id, tenant_id, internal_name, subject, preheader, sender_name, sender_email, reply_to, campaign_type, template_id, content_html, content_json, audience_type, audience_reference, email_integration_id, status, scheduled_at, started_at, completed_at, sent_at, total_recipients, total_sent, total_delivered, total_opened, total_clicked, total_bounced, total_complained, error_message, is_archived, created_at, updated_at, ab_test_id, ab_variant, ab_split_pct, ab_offset_pct, ab_auto_winner, ab_winner_hours, ab_winner_variant, ab_winner_decided_at').eq('tenant_id', tenantId).order('created_at', { ascending: false });
       if (filters?.status) query = query.eq('status', filters.status);
       if (!filters?.showArchived) query = query.eq('is_archived', false);
       if (filters?.search) query = query.or(`internal_name.ilike.%${filters.search}%,subject.ilike.%${filters.search}%`);

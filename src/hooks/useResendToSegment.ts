@@ -18,7 +18,7 @@ export function useResendToSegment() {
       if (rows.length === 0) throw new Error("Esse segmento está vazio, não há para quem reenviar.");
 
       const { data: o, error: fetchError } = await supabase.from("email_campaigns")
-        .select("internal_name, subject, preheader, sender_name, sender_email, reply_to, campaign_type, template_id, content_html, content_json, email_integration_id, coupon_codes, attribution_window_days, skip_recent_days")
+        .select("internal_name, subject, preheader, sender_name, sender_email, reply_to, campaign_type, template_id, content_html, content_json, email_integration_id, coupon_codes, attribution_window_days, skip_recent_days, unique_coupon")
         .eq("id", campaignId).single();
       if (fetchError) throw fetchError;
 
@@ -29,7 +29,7 @@ export function useResendToSegment() {
         tenant_id: tenantId, status: "draft", internal_name: `${o.internal_name} — Reenvio (${label})`,
         subject: o.subject, preheader: o.preheader, sender_name: o.sender_name, sender_email: o.sender_email, reply_to: o.reply_to,
         campaign_type: o.campaign_type, template_id: o.template_id, content_html: o.content_html, content_json: o.content_json,
-        email_integration_id: o.email_integration_id, coupon_codes: o.coupon_codes, attribution_window_days: o.attribution_window_days, skip_recent_days: o.skip_recent_days,
+        email_integration_id: o.email_integration_id, coupon_codes: o.coupon_codes, attribution_window_days: o.attribution_window_days, skip_recent_days: o.skip_recent_days, unique_coupon: o.unique_coupon,
         audience_type: "manual", audience_reference: JSON.stringify({ emails: rows.map((r) => r.email), names }),
       }).select().single();
       if (error) throw error;

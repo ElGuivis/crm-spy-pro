@@ -55,9 +55,9 @@ export function generateCouponHTML(block: CouponBlock): string {
     <td style="${getBaseStyles(block)}; padding: ${block.padding || '20px'}; text-align: ${align};">
       <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="${align}" style="margin: ${blockMargin(align)}; border: 2px dashed ${border}; border-radius: 8px; background-color: ${block.codeBackground || '#f5f9ff'};">
         <tr>
-          <td style="padding: 16px 32px; text-align: center;">
+          <td class="coupon-pad" style="padding: 16px 32px; text-align: center;">
             ${block.title ? `<div style="font-size: 14px; color: ${block.titleColor || '#555555'}; margin-bottom: 6px;">${inlineFormat(block.title)}</div>` : ''}
-            <div style="font-size: 28px; font-weight: bold; letter-spacing: 3px; font-family: 'Courier New', monospace; color: ${block.codeColor || border};">${esc(block.code || 'CUPOM10')}</div>
+            <div class="coupon-code" style="font-size: 28px; font-weight: bold; letter-spacing: 3px; overflow-wrap: anywhere; font-family: 'Courier New', monospace; color: ${block.codeColor || border};">${esc(block.code || 'CUPOM10')}</div>
             ${block.description ? `<div style="font-size: 13px; color: ${block.descriptionColor || '#777777'}; margin-top: 6px;">${inlineFormat(block.description)}</div>` : ''}
           </td>
         </tr>

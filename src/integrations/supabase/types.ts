@@ -3319,6 +3319,36 @@ export type Database = {
           },
         ]
       }
+      email_campaign_coupons: {
+        Row: {
+          campaign_id: string
+          code: string
+          created_at: string
+          id: string
+          li_coupon_id: number | null
+          recipient_email: string
+          tenant_id: string
+        }
+        Insert: {
+          campaign_id: string
+          code: string
+          created_at?: string
+          id?: string
+          li_coupon_id?: number | null
+          recipient_email: string
+          tenant_id: string
+        }
+        Update: {
+          campaign_id?: string
+          code?: string
+          created_at?: string
+          id?: string
+          li_coupon_id?: number | null
+          recipient_email?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       email_campaign_logs: {
         Row: {
           campaign_id: string
@@ -3397,6 +3427,12 @@ export type Database = {
           attribution_refreshed_at: string | null
           attribution_window_days: number
           skip_recent_days: number | null
+          unique_coupon: Json | null
+          ab_auto_winner: boolean
+          ab_winner_hours: number | null
+          ab_winner_variant: string | null
+          ab_winner_decided_at: string | null
+          ab_winner_detail: Json | null
           coupon_codes: string[]
           completed_at: string | null
           compliance_checked_at: string | null
@@ -3444,6 +3480,12 @@ export type Database = {
           attribution_refreshed_at?: string | null
           attribution_window_days?: number
           skip_recent_days?: number | null
+          unique_coupon?: Json | null
+          ab_auto_winner?: boolean
+          ab_winner_hours?: number | null
+          ab_winner_variant?: string | null
+          ab_winner_decided_at?: string | null
+          ab_winner_detail?: Json | null
           coupon_codes?: string[]
           completed_at?: string | null
           compliance_checked_at?: string | null
@@ -3491,6 +3533,12 @@ export type Database = {
           attribution_refreshed_at?: string | null
           attribution_window_days?: number
           skip_recent_days?: number | null
+          unique_coupon?: Json | null
+          ab_auto_winner?: boolean
+          ab_winner_hours?: number | null
+          ab_winner_variant?: string | null
+          ab_winner_decided_at?: string | null
+          ab_winner_detail?: Json | null
           coupon_codes?: string[]
           completed_at?: string | null
           compliance_checked_at?: string | null
@@ -3959,6 +4007,10 @@ export type Database = {
           li_data_fim: string | null
           li_data_inicio: string | null
           li_quantidade_usada: number | null
+          li_quantidade_por_cliente: number | null
+          li_valor_minimo: number | null
+          li_ativo: boolean | null
+          li_cumulativo: boolean | null
           li_quantidade_uso_maximo: number | null
           order_id: string | null
           source: string | null
@@ -3986,6 +4038,10 @@ export type Database = {
           li_data_fim?: string | null
           li_data_inicio?: string | null
           li_quantidade_usada?: number | null
+          li_quantidade_por_cliente?: number | null
+          li_valor_minimo?: number | null
+          li_ativo?: boolean | null
+          li_cumulativo?: boolean | null
           li_quantidade_uso_maximo?: number | null
           order_id?: string | null
           source?: string | null
@@ -4013,6 +4069,10 @@ export type Database = {
           li_data_fim?: string | null
           li_data_inicio?: string | null
           li_quantidade_usada?: number | null
+          li_quantidade_por_cliente?: number | null
+          li_valor_minimo?: number | null
+          li_ativo?: boolean | null
+          li_cumulativo?: boolean | null
           li_quantidade_uso_maximo?: number | null
           order_id?: string | null
           source?: string | null
@@ -10180,6 +10240,23 @@ export type Database = {
           sent: number
           stuck_campaigns: number
           unsubscribed: number
+        }[]
+      }
+      get_ab_winner_candidates: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          a_clicks: number
+          a_id: string
+          a_opens: number
+          a_sent: number
+          a_subject: string
+          b_clicks: number
+          b_id: string
+          b_opens: number
+          b_sent: number
+          b_subject: string
+          tenant_id: string
+          w_id: string
         }[]
       }
       get_email_campaign_performance: {

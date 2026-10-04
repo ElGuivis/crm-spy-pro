@@ -46,6 +46,18 @@ export function BlockLayoutProps({ block, onChange }: Props) {
             </Select>
           </div>
         )}
+        {(
+          <div className="space-y-1.5">
+            <Label className="text-xs">No celular</Label>
+            <Select value={String(block.mobileCols || 1)} onValueChange={(v) => onChange("mobileCols", Number(v))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1 por linha (empilhado)</SelectItem>
+                <SelectItem value="2">2 por linha</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <div className="space-y-1.5">
           <Label className="text-xs">Alinhamento vertical</Label>
           <Select value={block.verticalAlign || "top"} onValueChange={(v) => onChange("verticalAlign", v)}>

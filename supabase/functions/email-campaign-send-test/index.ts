@@ -100,6 +100,8 @@ serve(async (req) => {
       phone: "(11) 99999-9999",
       company: "Empresa Teste",
       coupon_code: "TESTE10",
+      coupon_value: "10%",
+      coupon_expires: "31/12/2026",
       unsubscribe_url: "",
     };
 

@@ -12,6 +12,25 @@ interface Props {
   onChange: (field: string, value: unknown) => void;
 }
 
+function TypographyExtras({ block, onChange }: { block: { uppercase?: boolean; letterSpacing?: string }; onChange: (field: string, value: unknown) => void }) {
+  return (
+    <>
+      <SwitchField label="MAIÚSCULAS" checked={!!block.uppercase} onChange={(v) => onChange("uppercase", v)} />
+      <div className="space-y-1.5">
+        <Label className="text-xs">Espaço entre letras</Label>
+        <Select value={block.letterSpacing || "normal"} onValueChange={(v) => onChange("letterSpacing", v === "normal" ? undefined : v)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="normal">Normal</SelectItem>
+            <SelectItem value="1px">Aberto</SelectItem>
+            <SelectItem value="3px">Bem aberto</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </>
+  );
+}
+
 const FORMAT_HINT = "Selecione o trecho e use os botões. Enter pula linha.";
 
 export function BlockTextProps({ block, onChange }: Props) {
@@ -38,6 +57,7 @@ export function BlockTextProps({ block, onChange }: Props) {
         <ColorField label="Cor do texto" value={block.color} fallback="#333333" onChange={(v) => onChange("color", v)} />
         <PxField label="Tamanho da fonte" value={block.fontSize} placeholder="32" onChange={(v) => onChange("fontSize", v)} />
         <SwitchField label="Negrito" checked={block.fontWeight !== "normal"} onChange={(v) => onChange("fontWeight", v ? "bold" : "normal")} />
+        <TypographyExtras block={block} onChange={onChange} />
       </>
     );
   }
@@ -55,6 +75,7 @@ export function BlockTextProps({ block, onChange }: Props) {
         <ColorField label="Cor do texto" value={block.color} fallback="#666666" onChange={(v) => onChange("color", v)} />
         <PxField label="Tamanho da fonte" value={block.fontSize} placeholder="16" onChange={(v) => onChange("fontSize", v)} />
         <SwitchField label="Negrito" checked={block.fontWeight === "bold"} onChange={(v) => onChange("fontWeight", v ? "bold" : "normal")} />
+        <TypographyExtras block={block} onChange={onChange} />
         <div className="space-y-1.5">
           <Label className="text-xs">Espaço entre linhas</Label>
           <Select value={block.lineHeight || "1.6"} onValueChange={(v) => onChange("lineHeight", v)}>

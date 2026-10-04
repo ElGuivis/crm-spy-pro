@@ -16,9 +16,11 @@ export interface PreflightInput {
   hasIntegration: boolean;
   /** estimativa de destinatários (null = ainda não calculada) */
   recipients?: number | null;
+  /** a campanha cria um cupom único por pessoa (o e-mail precisa usar {{coupon_code}}) */
+  uniqueCoupon?: boolean;
 }
 
-const KNOWN_VARIABLES = new Set(["first_name", "last_name", "email", "phone", "company", "coupon_code", "unsubscribe_url"]);
+const KNOWN_VARIABLES = new Set(["first_name", "last_name", "email", "phone", "company", "coupon_code", "coupon_value", "coupon_expires", "unsubscribe_url"]);
 const GMAIL_CLIP_BYTES = 102 * 1024;
 
 const countMatches = (s: string, re: RegExp) => (s.match(re) ?? []).length;
@@ -50,6 +52,7 @@ export function runPreflight(input: PreflightInput): PreflightIssue[] {
     error("placeholder_image", "Há imagens de exemplo (via.placeholder.com) no e-mail. Troque pela imagem real.");
   }
 
+  if (/Endereço da empresa/i.test(html)) warn("placeholder_address", "O rodapé ainda tem o endereço de exemplo (Endereço da empresa). Coloque o endereço real: ajuda na confiança e na entrega.");
   if (subject.length > 60) warn("long_subject", `Assunto longo (${subject.length} caracteres): no celular ele é cortado. O ideal é até 60.`);
   const letters = subject.replace(/[^A-Za-zÀ-ÿ]/g, "");
   if (letters.length >= 8 && letters.replace(/[^A-ZÀ-Ý]/g, "").length / letters.length > 0.7) {

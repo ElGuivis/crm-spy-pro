@@ -8,7 +8,8 @@ import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { safeParseAudienceReference, resolveRecipients, chunkArray } from "./audience-resolvers.ts";
 import { getSuppressedEmailSet } from "./send-helpers.ts";
-import { buildQueue, queueCount, type Sender } from "./queue.ts";
+import { buildQueue, queueCount, siblingRecipients, type Sender } from "./queue.ts";
+import { getLiAuth, parseUniqueCoupon } from "./coupons.ts";
 import { processCampaign } from "./processor.ts";
 
 declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
@@ -64,7 +65,7 @@ serve(async (req) => {
       .from("email_campaigns")
       .update({ status: "sending", started_at: new Date().toISOString(), error_message: null, completed_at: null, send_lease_until: null })
       .eq("id", campaignId).eq("tenant_id", tenantId).in("status", ["draft", "scheduled", "paused", "error"])
-      .select("id, tenant_id, status, subject, content_html, preheader, email_integration_id, audience_type, audience_reference, ab_test_id, ab_variant, ab_split_pct, ab_offset_pct, skip_recent_days")
+      .select("id, tenant_id, status, subject, content_html, preheader, email_integration_id, audience_type, audience_reference, ab_test_id, ab_variant, ab_split_pct, ab_offset_pct, skip_recent_days, unique_coupon")
       .maybeSingle();
     if (claimError) throw claimError;
     if (!campaign) return json({ success: false, error: "Campanha já foi enviada ou está em andamento" }, 409);
@@ -85,6 +86,11 @@ serve(async (req) => {
     await supabase.from("email_campaigns").update({ has_unsubscribe_link: hasUnsubscribeVariable, compliance_checked_at: new Date().toISOString() }).eq("id", campaignId).eq("tenant_id", tenantId);
     if (!hasUnsubscribeVariable) {
       return await fail("Envio bloqueado: inclua {{unsubscribe_url}} no conteúdo da campanha (bloco Descadastrar).");
+    }
+    if (campaign.unique_coupon) {
+      if (!parseUniqueCoupon(campaign.unique_coupon)) return await fail("A configuração do cupom único por pessoa está inválida. Abra a campanha e confira tipo, valor e validade.");
+      if (!baseHtml.includes("{{coupon_code}}")) return await fail("A campanha tem cupom único por pessoa, mas o e-mail não usa {{coupon_code}}. Coloque a variável no bloco de cupom.");
+      if (!(await getLiAuth(supabase, tenantId))) return await fail("Cupom único por pessoa precisa da Loja Integrada conectada. Conecte a loja em Integrações e tente de novo.");
     }
     if (!campaign.email_integration_id) {
       return await fail("Esta campanha não tem integração de e-mail configurada. Edite a campanha em Email Marketing e selecione uma integração SMTP antes de enviar.");
@@ -123,15 +129,24 @@ serve(async (req) => {
       if (!eligible.length) return await fail(`Todos os destinatários já receberam e-mail nos últimos ${campaign.skip_recent_days} dias. Reduza o intervalo ou desligue a proteção.`);
     }
 
+    // Vencedor do A/B (variante W): todo mundo que não recebeu A nem B
+    if (campaign.ab_test_id && campaign.ab_variant === "W") {
+      const already = await siblingRecipients(supabase, campaign.ab_test_id, campaignId);
+      eligible = eligible.filter((r) => !already.has(r.email));
+      log.info(`[A/B] vencedor: ${eligible.length} destinatários restantes (${already.size} já receberam A ou B)`);
+    }
+
     // Teste A/B: cada variante envia uma fatia da audiência
-    if (campaign.ab_test_id && campaign.ab_variant) {
+    if (campaign.ab_test_id && campaign.ab_variant && campaign.ab_variant !== "W") {
       const split = campaign.ab_split_pct ?? 50;
       const offset = campaign.ab_offset_pct ?? 0;
       eligible.sort((a, b) => a.email.localeCompare(b.email));
       const total = eligible.length;
+      // início e fim arredondados do mesmo jeito: fatias vizinhas dividem a mesma fronteira (sem sobreposição nem sobra)
       const start = Math.floor(total * offset / 100);
-      eligible = eligible.slice(start, Math.min(total, start + Math.ceil(total * split / 100)));
-      log.info(`[A/B] variante=${campaign.ab_variant} fatia=[${start}, ${start + eligible.length}) de ${total}`);
+      const end = offset + split >= 100 ? total : Math.floor(total * (offset + split) / 100);
+      eligible = eligible.slice(start, end);
+      log.info(`[A/B] variante=${campaign.ab_variant} fatia=[${start}, ${end}) de ${total}`);
     }
 
     // Cota diária da integração (só envios reais)

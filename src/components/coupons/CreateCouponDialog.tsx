@@ -40,14 +40,16 @@ const couponSchema = z.object({
     .min(3, "Código deve ter pelo menos 3 caracteres")
     .max(20, "Código deve ter no máximo 20 caracteres")
     .regex(/^[A-Za-z0-9_-]+$/, "Código deve conter apenas letras, números, _ e -"),
-  tipo: z.enum(["porcentagem", "valor_absoluto"]),
-  valor: z.number()
-    .min(0.01, "Valor deve ser maior que zero")
-    .max(100000, "Valor muito alto"),
+  tipo: z.enum(["porcentagem", "valor_absoluto", "fixo", "frete_gratis"]),
+  valor: z.number().min(0).max(100000, "Valor muito alto"),
+  valorMinimo: z.number().min(0).max(100000).optional().nullable(),
   dataInicio: z.string().optional(),
   dataFim: z.string().optional(),
   quantidadeUsoMaximo: z.number().min(1).max(10000).optional().nullable(),
   descricao: z.string().max(200, "Descrição muito longa").optional(),
+}).refine((data) => data.tipo === "frete_gratis" || data.valor >= 0.01, {
+  message: "Valor deve ser maior que zero",
+  path: ["valor"],
 }).refine((data) => {
   if (data.tipo === "porcentagem" && data.valor > 100) {
     return false;
@@ -87,12 +89,14 @@ export const CreateCouponDialog = ({
       dataInicio: new Date().toISOString().split('T')[0],
       dataFim: "",
       quantidadeUsoMaximo: null,
+      valorMinimo: null,
       descricao: "",
     },
   });
 
   const selectedType = form.watch("tipo");
 
+  const isLI = !integrationType || integrationType === "loja_integrada";
   const platformName = integrationType === 'bling' ? 'Bling' : integrationType === 'nuvemshop' ? 'Nuvemshop' : 'Loja Integrada';
   const functionName = integrationType === 'bling' ? 'bling-coupon-create' : integrationType === 'nuvemshop' ? 'nuvemshop-coupon-create' : 'li-coupon-create';
 
@@ -108,6 +112,7 @@ export const CreateCouponDialog = ({
           dataInicio: data.dataInicio || undefined,
           dataFim: data.dataFim || undefined,
           quantidadeUsoMaximo: data.quantidadeUsoMaximo || undefined,
+          valorMinimo: data.valorMinimo || undefined,
           descricao: data.descricao || undefined,
         }
       });
@@ -189,12 +194,13 @@ export const CreateCouponDialog = ({
                             Porcentagem
                           </span>
                         </SelectItem>
-                        <SelectItem value="valor_absoluto">
+                        <SelectItem value={isLI ? "fixo" : "valor_absoluto"}>
                           <span className="flex items-center gap-2">
                             <DollarSign className="h-4 w-4" />
                             Valor Fixo
                           </span>
                         </SelectItem>
+                        {isLI && <SelectItem value="frete_gratis">Frete grátis</SelectItem>}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -208,7 +214,7 @@ export const CreateCouponDialog = ({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>
-                      Valor {selectedType === "porcentagem" ? "(%)" : "(R$)"} *
+                      Valor {selectedType === "porcentagem" ? "(%)" : selectedType === "frete_gratis" ? "" : "(R$)"} {selectedType !== "frete_gratis" && "*"}
                     </FormLabel>
                     <FormControl>
                       <Input 
@@ -216,6 +222,7 @@ export const CreateCouponDialog = ({
                         step={selectedType === "porcentagem" ? "1" : "0.01"}
                         min="0.01"
                         max={selectedType === "porcentagem" ? "100" : "100000"}
+                        disabled={selectedType === "frete_gratis"}
                         {...field}
                         onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
                       />
@@ -271,6 +278,20 @@ export const CreateCouponDialog = ({
                       value={field.value ?? ""}
                       onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
                     />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="valorMinimo"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Valor mínimo do pedido, R$ (opcional)</FormLabel>
+                  <FormControl>
+                    <Input type="number" min="0" step="0.01" placeholder="Sem mínimo" {...field} value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : null)} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

@@ -2,40 +2,32 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { createLogger } from "@/lib/logger";
+import { type GeneratedCoupon, getCouponStatus, getCouponSource, matchesSource, formatDate, formatPhone, formatCurrency } from "@/hooks/couponsHelpers";
 
+export type { GeneratedCoupon } from "@/hooks/couponsHelpers";
 const log = createLogger("CouponsContent");
 
-export interface GeneratedCoupon {
-  id: string;
-  coupon_code: string;
-  discount_percentage: number;
-  coupon_value: number | null;
-  customer_name: string | null;
-  customer_email: string | null;
-  customer_phone: string | null;
-  order_id: string | null;
-  created_at: string;
-  expires_at: string;
-  used_at: string | null;
-  used_in_order_id: string | null;
-  used_order_value: number | null;
-  config_id: string | null;
-  integration_id: string | null;
-  source?: string;
-  li_coupon_id?: number;
-  coupon_type?: string;
-  li_quantidade_usada?: number | null;
-  li_quantidade_uso_maximo?: number | null;
-}
-
 export interface CouponStats {
-  total: number; used: number; expired: number; active: number;
+  total: number; used: number; expired: number; active: number; inactive: number;
   totalGeneratedValue: number; conversionRate: number; imported: number; cashback: number;
 }
-
 export interface UsedCouponInfo { coupon: GeneratedCoupon; orderValue: number; }
 
-const COUPON_SELECT = "id, config_id, coupon_code, coupon_description, coupon_type, coupon_value, created_at, customer_cpf, customer_email, customer_name, customer_phone, discount_percentage, expires_at, integration_id, li_coupon_id, li_data_fim, li_data_inicio, li_quantidade_usada, li_quantidade_uso_maximo, order_id, source, tenant_id, used_at, used_in_order_id, used_order_value";
+const COUPON_SELECT = "id, config_id, coupon_code, coupon_description, coupon_type, coupon_value, created_at, customer_cpf, customer_email, customer_name, customer_phone, discount_percentage, expires_at, integration_id, li_coupon_id, li_data_fim, li_data_inicio, li_quantidade_usada, li_quantidade_uso_maximo, li_quantidade_por_cliente, li_valor_minimo, li_ativo, order_id, source, tenant_id, used_at, used_in_order_id, used_order_value";
+const PAGE = 1000; // o servidor entrega no máximo 1000 linhas por consulta
+
+/** Traz todos os cupons da integração, página a página (a loja tem milhares). */
+async function fetchAll(integrationId: string): Promise<GeneratedCoupon[]> {
+  const all: GeneratedCoupon[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase.from("generated_coupons").select(COUPON_SELECT).eq("integration_id", integrationId)
+      .order("li_coupon_id", { ascending: false, nullsFirst: true }).order("id").range(from, from + PAGE - 1);
+    if (error) throw error;
+    all.push(...((data ?? []) as GeneratedCoupon[]));
+    if (!data || data.length < PAGE) break;
+  }
+  return all;
+}
 
 export function useCouponsData(integrationId: string) {
   const [coupons, setCoupons] = useState<GeneratedCoupon[]>([]);
@@ -44,10 +36,10 @@ export function useCouponsData(integrationId: string) {
   const [syncProgress, setSyncProgress] = useState<{ synced: number; total: number } | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [sourceFilter, setSourceFilter] = useState("all");
+  const [sourceFilter, setSourceFilter] = useState("campaign");
   const [integrationName, setIntegrationName] = useState("");
   const [integrationType, setIntegrationType] = useState("");
-  const [stats, setStats] = useState<CouponStats>({ total: 0, used: 0, expired: 0, active: 0, totalGeneratedValue: 0, conversionRate: 0, imported: 0, cashback: 0 });
+  const [stats, setStats] = useState<CouponStats>({ total: 0, used: 0, expired: 0, active: 0, inactive: 0, totalGeneratedValue: 0, conversionRate: 0, imported: 0, cashback: 0 });
   const [showSalesDialog, setShowSalesDialog] = useState(false);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [usedCoupons, setUsedCoupons] = useState<UsedCouponInfo[]>([]);
@@ -56,38 +48,35 @@ export function useCouponsData(integrationId: string) {
 
   const calculateStats = (data: GeneratedCoupon[]) => {
     const now = new Date();
-    const usedList = data.filter((c) => c.used_at !== null);
+    const codes = data.map((c) => getCouponStatus(c, now).code);
+    const usedList = data.filter((c, i) => codes[i] === "used");
     const totalGeneratedValue = usedList.reduce((acc, c) => acc + (c.used_order_value || 0), 0);
     setStats({
       total: data.length, used: usedList.length,
-      expired: data.filter((c) => !c.used_at && (new Date(c.expires_at) < now || (c.li_quantidade_uso_maximo != null && (c.li_quantidade_usada ?? 0) >= c.li_quantidade_uso_maximo))).length,
-      active: data.filter((c) => !c.used_at && new Date(c.expires_at) >= now && (c.li_quantidade_uso_maximo == null || (c.li_quantidade_usada ?? 0) < c.li_quantidade_uso_maximo)).length,
+      expired: codes.filter((c) => c === "expired" || c === "limit_reached").length,
+      active: codes.filter((c) => c === "active").length,
+      inactive: codes.filter((c) => c === "inactive").length,
       totalGeneratedValue, conversionRate: data.length > 0 ? (usedList.length / data.length) * 100 : 0,
-      imported: data.filter((c) => c.source === "imported").length,
+      imported: data.filter((c) => c.source !== "cashback" && !!c.source).length,
       cashback: data.filter((c) => c.source === "cashback" || !c.source).length,
     });
     setUsedCoupons(usedList.map((c) => ({ coupon: c, orderValue: c.used_order_value || 0 })));
   };
 
+  const apply = (data: GeneratedCoupon[]) => { setCoupons(data); calculateStats(data); };
+
   const loadCoupons = useCallback(async () => {
     setIsLoading(true);
-    try {
-      const { data, error } = await supabase.from("generated_coupons").select(COUPON_SELECT).eq("integration_id", integrationId).order("created_at", { ascending: false });
-      if (error) throw error;
-      setCoupons(data || []);
-      calculateStats(data || []);
-    } catch (error) {
+    try { apply(await fetchAll(integrationId)); }
+    catch (error) {
       log.error("Error loading coupons:", error);
       toast({ title: "Erro ao carregar cupons", description: "Não foi possível carregar o histórico de cupons.", variant: "destructive" });
     } finally { setIsLoading(false); }
   }, [integrationId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const silentRefresh = useCallback(async () => {
-    try {
-      const { data, error } = await supabase.from("generated_coupons").select(COUPON_SELECT).eq("integration_id", integrationId).order("created_at", { ascending: false });
-      if (!error && data) { setCoupons(data); calculateStats(data); }
-    } catch (error) { log.error("Error in silent refresh:", error); }
-  }, [integrationId]);
+    try { apply(await fetchAll(integrationId)); } catch (error) { log.error("Error in silent refresh:", error); }
+  }, [integrationId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let cancelled = false;
@@ -97,9 +86,7 @@ export function useCouponsData(integrationId: string) {
         if (cancelled) return;
         if (error) { log.error("Error loading integration info:", error); return; }
         if (data) { setIntegrationName(data.name); setIntegrationType(data.type || ""); }
-      } catch (e) {
-        if (!cancelled) log.error("Error loading integration info:", e);
-      }
+      } catch (e) { if (!cancelled) log.error("Error loading integration info:", e); }
     })();
     loadCoupons();
     return () => { cancelled = true; };
@@ -109,7 +96,7 @@ export function useCouponsData(integrationId: string) {
     const channel = supabase.channel(`coupons-realtime-${integrationId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "generated_coupons", filter: `integration_id=eq.${integrationId}` }, () => {
         if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-        debounceTimerRef.current = setTimeout(() => silentRefresh(), 500);
+        debounceTimerRef.current = setTimeout(() => silentRefresh(), 1500);
       }).subscribe();
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
@@ -124,8 +111,12 @@ export function useCouponsData(integrationId: string) {
       const syncFunction = integrationType === "bling" ? "bling-coupon-sync" : integrationType === "nuvemshop" ? "nuvemshop-coupon-sync" : "li-coupon-sync";
       const { data, error } = await supabase.functions.invoke(syncFunction, { body: { integrationId, action } });
       if (error) throw error;
-      const newCount = data.new ?? data.synced ?? 0;
-      toast({ title: "Sincronização concluída", description: `${newCount} cupons importados, ${data.updated ?? 0} atualizados` });
+      if (data?.success === false) throw new Error(data.error);
+      const done = data.synced ?? data.new ?? 0;
+      toast({
+        title: data.partial ? "Sincronização parcial" : "Sincronização concluída",
+        description: data.partial ? `${done} cupons atualizados de ${data.totalInApi}. Sincronize de novo para continuar.` : `${done} cupons atualizados${data.totalInApi ? ` (a loja tem ${data.totalInApi})` : ""}.`,
+      });
       loadCoupons();
     } catch (error) {
       log.error("Error syncing coupons:", error);
@@ -133,49 +124,37 @@ export function useCouponsData(integrationId: string) {
     } finally { setIsSyncing(false); setSyncProgress(null); }
   };
 
-  const getCouponStatus = (coupon: GeneratedCoupon): { code: "used" | "expired" | "limit_reached" | "active"; label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: string } => {
-    if (coupon.used_at) return { code: "used", label: "Utilizado", variant: "default", icon: "check" };
-    const now = new Date();
-    if (new Date(coupon.expires_at) < now) return { code: "expired", label: "Expirado", variant: "destructive", icon: "x" };
-    if (coupon.li_quantidade_uso_maximo != null && (coupon.li_quantidade_usada ?? 0) >= coupon.li_quantidade_uso_maximo) return { code: "limit_reached", label: "Limite atingido", variant: "destructive", icon: "x" };
-    return { code: "active", label: "Ativo", variant: "secondary", icon: "clock" };
-  };
-
-  const getCouponSource = (source?: string): { label: string; className: string } => {
-    switch (source) {
-      case "imported": return { label: "Importado", className: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" };
-      case "manual": return { label: "Manual", className: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" };
-      default: return { label: "Cashback", className: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" };
+  /** Ativa ou desativa o cupom na própria loja (só Loja Integrada). */
+  const toggleCoupon = async (coupon: GeneratedCoupon, ativo: boolean) => {
+    const { data, error } = await supabase.functions.invoke("li-coupon-update", { body: { integrationId, couponId: coupon.id, ativo } });
+    if (error || data?.success === false) {
+      toast({ title: "Não foi possível alterar o cupom", description: data?.error || "Tente de novo em instantes.", variant: "destructive" });
+      return;
     }
+    setCoupons((prev) => { const next = prev.map((c) => (c.id === coupon.id ? { ...c, li_ativo: ativo } : c)); calculateStats(next); return next; });
+    toast({ title: ativo ? "Cupom ativado" : "Cupom desativado", description: `${coupon.coupon_code} agora está ${ativo ? "valendo" : "inativo"} na loja.` });
   };
 
+  const search = searchTerm.toLowerCase();
   const filteredCoupons = coupons.filter((coupon) => {
-    const matchesSearch = coupon.coupon_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (coupon.customer_name?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (coupon.customer_email?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (coupon.customer_phone?.includes(searchTerm)) ||
-      (coupon.order_id?.toLowerCase().includes(searchTerm.toLowerCase()));
-    if (!matchesSearch) return false;
-    if (sourceFilter !== "all" && (coupon.source || "cashback") !== sourceFilter) return false;
+    const matchesSearch = !search || coupon.coupon_code.toLowerCase().includes(search) || coupon.customer_name?.toLowerCase().includes(search) ||
+      coupon.customer_email?.toLowerCase().includes(search) || coupon.customer_phone?.includes(searchTerm) || coupon.order_id?.toLowerCase().includes(search) ||
+      coupon.coupon_description?.toLowerCase().includes(search);
+    if (!matchesSearch || !matchesSource(coupon, sourceFilter)) return false;
     if (statusFilter !== "all") {
       const { code } = getCouponStatus(coupon);
-      if (statusFilter === "used" && code !== "used") return false;
-      if (statusFilter === "expired" && code !== "expired" && code !== "limit_reached") return false;
-      if (statusFilter === "active" && code !== "active") return false;
+      if (statusFilter === "expired") return code === "expired" || code === "limit_reached";
+      return code === statusFilter;
     }
     return true;
   });
-
-  const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-  const formatPhone = (phone: string | null) => { if (!phone) return "-"; const c = phone.replace(/\D/g, ""); return c.length === 13 ? `(${c.slice(2, 4)}) ${c.slice(4, 9)}-${c.slice(9)}` : phone; };
-  const formatCurrency = (value: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 
   return {
     coupons, filteredCoupons, isLoading, isSyncing, syncProgress,
     searchTerm, setSearchTerm, statusFilter, setStatusFilter, sourceFilter, setSourceFilter,
     integrationName, integrationType, stats, usedCoupons,
     showSalesDialog, setShowSalesDialog, showCreateDialog, setShowCreateDialog,
-    loadCoupons, handleSyncCoupons, getCouponStatus, getCouponSource,
+    loadCoupons, handleSyncCoupons, toggleCoupon, getCouponStatus, getCouponSource,
     formatDate, formatPhone, formatCurrency,
   };
 }

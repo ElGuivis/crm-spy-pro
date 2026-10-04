@@ -137,6 +137,14 @@ verify_jwt = false
 # AUTHENTICATED — in-code auth via requireUserAuth
 verify_jwt = false
 
+[functions.li-coupon-update]
+# AUTHENTICATED — in-code auth via requireUserAuth
+verify_jwt = false
+
+[functions.email-ab-winner]
+# INTERNAL (cron) — in-code auth via requireInternalAuth
+verify_jwt = false
+
 [functions.bling-coupon-create]
 # AUTHENTICATED — in-code auth via requireUserAuth
 verify_jwt = false

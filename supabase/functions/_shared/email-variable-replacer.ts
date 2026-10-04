@@ -9,6 +9,9 @@ export interface VariableData {
   phone?: string;
   company?: string;
   coupon_code?: string;
+  /** desconto do cupom único ("10%", "R$ 20,00" ou "Frete grátis") e validade "dd/mm/aaaa" */
+  coupon_value?: string;
+  coupon_expires?: string;
   unsubscribe_url?: string;
 }
 

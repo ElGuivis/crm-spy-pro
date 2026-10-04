@@ -39,6 +39,7 @@ export function CampaignDetailsDialog({ campaignId, open, onOpenChange, initialT
         .select("id, internal_name, subject, ab_variant, total_sent, total_delivered, total_opened, total_clicked, status")
         .eq("ab_test_id", campaign.ab_test_id)
         .neq("id", campaignId)
+        .in("ab_variant", ["A", "B"])
         .maybeSingle();
       return data;
     },

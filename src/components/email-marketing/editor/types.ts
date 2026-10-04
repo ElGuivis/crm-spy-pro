@@ -44,6 +44,10 @@ export interface HeadingBlock extends BaseBlockProps {
   color?: string;
   fontSize?: string;
   fontWeight?: 'normal' | 'bold';
+  lineHeight?: string;
+  /** TEXTO EM MAIÚSCULAS e espaçamento entre letras (títulos de impacto) */
+  uppercase?: boolean;
+  letterSpacing?: string;
 }
 
 export interface TextBlock extends BaseBlockProps {
@@ -54,6 +58,8 @@ export interface TextBlock extends BaseBlockProps {
   fontSize?: string;
   fontWeight?: 'normal' | 'bold';
   lineHeight?: string;
+  uppercase?: boolean;
+  letterSpacing?: string;
 }
 
 export interface ImageBlock extends BaseBlockProps {
@@ -97,6 +103,8 @@ export interface Columns2Block extends BaseBlockProps {
   /** proporção das colunas (esquerda-direita, em %) */
   ratio?: '50-50' | '33-67' | '67-33' | '25-75' | '75-25';
   verticalAlign?: 'top' | 'middle';
+  /** colunas por linha no celular (padrão 1) */
+  mobileCols?: 1 | 2;
 }
 
 export interface Columns3Block extends BaseBlockProps {
@@ -106,6 +114,8 @@ export interface Columns3Block extends BaseBlockProps {
   column3: EmailBlock[];
   columnGap?: string;
   verticalAlign?: 'top' | 'middle';
+  /** colunas por linha no celular (padrão 1; 2 deixa grades de produtos mais curtas) */
+  mobileCols?: 1 | 2;
 }
 
 export interface BannerBlock extends BaseBlockProps {

@@ -41,6 +41,11 @@ function generateHeaderHTML(block: HeaderBlock): string {
   </tr>`;
 }
 
+/** Maiúsculas e espaçamento entre letras (opcionais) de títulos e textos. */
+function textStyle(b: { uppercase?: boolean; letterSpacing?: string }): string {
+  return `${b.uppercase ? ' text-transform: uppercase;' : ''}${b.letterSpacing ? ` letter-spacing: ${esc(b.letterSpacing)};` : ''}`;
+}
+
 function generateHeadingHTML(block: HeadingBlock): string {
   const align = alignOf(block.alignment, 'left');
   const color = block.color || '#333333';
@@ -48,7 +53,7 @@ function generateHeadingHTML(block: HeadingBlock): string {
   return `
   <tr>
     <td style="${getBaseStyles(block)}; text-align: ${align}; padding: ${block.padding || '20px'};">
-      <${block.level} style="margin: 0; color: ${color}; font-size: ${fontSize}; font-weight: ${block.fontWeight || 'bold'};">${inlineFormat(block.text || 'Título')}</${block.level}>
+      <${block.level} style="margin: 0; color: ${color}; font-size: ${fontSize}; font-weight: ${block.fontWeight || 'bold'}; line-height: ${block.lineHeight || '1.25'};${textStyle(block)}">${inlineFormat(block.text || 'Título')}</${block.level}>
     </td>
   </tr>`;
 }
@@ -57,7 +62,7 @@ function generateTextHTML(block: TextBlock): string {
   const align = alignOf(block.alignment, 'left');
   return `
   <tr>
-    <td style="${getBaseStyles(block)}; text-align: ${align}; color: ${block.color || '#666666'}; font-size: ${block.fontSize || '16px'}; font-weight: ${block.fontWeight || 'normal'}; line-height: ${block.lineHeight || '1.6'}; padding: ${block.padding || '20px'};">
+    <td style="${getBaseStyles(block)}; text-align: ${align}; color: ${block.color || '#666666'}; font-size: ${block.fontSize || '16px'}; font-weight: ${block.fontWeight || 'normal'}; line-height: ${block.lineHeight || '1.6'};${textStyle(block)} padding: ${block.padding || '20px'};">
       ${inlineFormat(block.content || 'Texto do parágrafo')}
     </td>
   </tr>`;
@@ -131,15 +136,16 @@ function generateColumns2HTML(block: Columns2Block): string {
   const gap = block.columnGap || '20px';
   const [w1, w2] = columnWidths(block.ratio);
   const valign = block.verticalAlign === 'middle' ? 'middle' : 'top';
+  const cls = block.mobileCols === 2 ? 'mobile-half' : 'mobile-column';
   return `
   <tr>
     <td style="${getBaseStyles(block)}; padding: ${block.padding || '20px'};">
       <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
         <tr>
-          <td class="mobile-column" width="${w1}%" style="padding-right: ${gap}; vertical-align: ${valign};">
+          <td class="${cls}" width="${w1}%" style="padding-right: ${gap}; vertical-align: ${valign};">
             ${column(block.column1, 'Coluna 1')}
           </td>
-          <td class="mobile-column" width="${w2}%" style="vertical-align: ${valign};">
+          <td class="${cls}" width="${w2}%" style="vertical-align: ${valign};">
             ${column(block.column2, 'Coluna 2')}
           </td>
         </tr>
@@ -151,18 +157,19 @@ function generateColumns2HTML(block: Columns2Block): string {
 function generateColumns3HTML(block: Columns3Block): string {
   const gap = block.columnGap || '15px';
   const valign = block.verticalAlign === 'middle' ? 'middle' : 'top';
+  const cls = block.mobileCols === 2 ? 'mobile-half' : 'mobile-column';
   return `
   <tr>
     <td style="${getBaseStyles(block)}; padding: ${block.padding || '20px'};">
       <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
         <tr>
-          <td class="mobile-column" width="33%" style="padding-right: ${gap}; vertical-align: ${valign};">
+          <td class="${cls}" width="33%" style="padding-right: ${gap}; vertical-align: ${valign};">
             ${column(block.column1, 'Col 1')}
           </td>
-          <td class="mobile-column" width="33%" style="padding-right: ${gap}; vertical-align: ${valign};">
+          <td class="${cls}" width="33%" style="padding-right: ${gap}; vertical-align: ${valign};">
             ${column(block.column2, 'Col 2')}
           </td>
-          <td class="mobile-column" width="33%" style="vertical-align: ${valign};">
+          <td class="${cls}" width="33%" style="vertical-align: ${valign};">
             ${column(block.column3, 'Col 3')}
           </td>
         </tr>
