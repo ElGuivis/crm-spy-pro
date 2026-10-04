@@ -10188,6 +10188,23 @@ export type Database = {
           window_days: number
         }[]
       }
+      get_email_campaign_recipients: {
+        Args: { p_campaign_id: string; p_segment?: string; p_tenant_id: string }
+        Returns: {
+          bounced: boolean
+          clicks: number
+          email: string
+          first_open_at: string
+          last_click_at: string
+          last_open_at: string
+          name: string
+          opens: number
+          orders: number
+          revenue: number
+          sent_at: string
+          unsubscribed: boolean
+        }[]
+      }
       get_email_campaign_top_links: {
         Args: { p_campaign_id: string; p_tenant_id: string }
         Returns: {

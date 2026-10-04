@@ -11,6 +11,7 @@ export const RECENT_CHANGELOG: ChangelogEntry[] = [
       { type: 'feature', text: 'Nova aba "Desempenho" comparando todas as campanhas: pedidos, receita, ticket médio e conversão' },
       { type: 'feature', text: 'Cupons da campanha e janela de atribuição configuráveis ao criar ou editar a campanha' },
       { type: 'feature', text: 'Aba "Resultados" em cada campanha, com a origem de cada compra, os links mais clicados e a lista de pedidos' },
+      { type: 'feature', text: 'Exportar a lista de e-mails de cada campanha em CSV ou copiar: quem abriu, clicou, comprou, não abriu, descadastrou ou teve falha de entrega' },
       { type: 'improvement', text: 'Aberturas e cliques agora contam pessoas, não eventos (a taxa não passa mais de 100%)' },
       { type: 'improvement', text: 'Variante B de um teste A/B herda os cupons e a janela da campanha original' },
     ],

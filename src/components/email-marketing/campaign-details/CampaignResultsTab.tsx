@@ -7,6 +7,7 @@ import { Send, Eye, MousePointerClick, ShoppingCart, Wallet, Receipt, Percent, I
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { MetricCard } from "./MetricCard";
+import { CampaignExportCard } from "./CampaignExportCard";
 import { useCampaignResults, ATTRIBUTION_LABELS, pct, type CampaignPerformance } from "@/hooks/useEmailCampaignPerformance";
 
 export const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -90,6 +91,7 @@ export function CampaignResultsTab({ campaignId }: { campaignId: string }) {
         <>
           <Funnel p={p} />
           <Origins p={p} />
+          <CampaignExportCard campaignId={campaignId} campaignName={p.internal_name} counts={{ opened: p.unique_opens, clicked: p.unique_clicks, purchased: p.orders }} />
 
           {data!.links.length > 0 && (
             <Card>
