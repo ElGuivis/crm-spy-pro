@@ -14,6 +14,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Search, Package, Loader2, Link2 } from 'lucide-react';
 import { useStoreBaseUrl, buildProductUrl, normalizeStoreUrl } from '@/hooks/useStoreBaseUrl';
 import { toast } from 'sonner';
+import { hdImageUrl } from '@/lib/product-images';
 
 import { createLogger } from '@/lib/logger';
 const log = createLogger('ProductPickerDialog');
@@ -76,7 +77,7 @@ export function ProductPickerDialog({ open, onOpenChange, onSelect }: ProductPic
       // Helper: melhor imagem da LI (original em alta via caminho > grande > imagem salva)
       const getBestLiImage = (p: { image_path: string | null; image_large: string | null; image_url: string | null }): string | null => {
         if (p.image_path) return `https://cdn.awsli.com.br/${p.image_path}`;
-        return p.image_large || p.image_url || null;
+        return hdImageUrl(p.image_large || p.image_url);
       };
 
       // Helper: get best Bling image (imagens[0].link > imagem_url)

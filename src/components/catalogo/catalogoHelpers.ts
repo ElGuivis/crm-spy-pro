@@ -1,3 +1,4 @@
+import { bestLiImageUrl } from "@/lib/product-images";
 export interface CatalogProduct {
   id: string;
   name: string;
@@ -55,11 +56,7 @@ export function normalizeBlingProducts(blingProducts: any[]): CatalogProduct[] {
   });
 }
 
-const liImageUrl = (raw: any, fallback: string | null): string | null => {
-  const imagemPrincipal = raw?.imagem_principal;
-  const caminho = imagemPrincipal?.caminho;
-  return caminho ? `https://cdn.awsli.com.br/${caminho}` : imagemPrincipal?.grande || fallback || null;
-};
+const liImageUrl = bestLiImageUrl;
 
 export function normalizeLiProducts(liProducts: any[]): CatalogProduct[] {
   const parents = liProducts.filter(p => {

@@ -4,6 +4,7 @@ import { requireUserAuth, assertTenantMatch } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
+import { hdImageUrl } from "../_shared/product-images.ts";
 
 interface ProductPayload {
   id: string;
@@ -112,7 +113,8 @@ Deno.serve(async (req) => {
         }
 
         // Send image via Evolution API — always as image type
-        const imageUrl = product.image_url;
+        // sempre a melhor qualidade: mesmo que o cliente mande a versão reduzida (800x800), enviamos o original
+        const imageUrl = hdImageUrl(product.image_url) ?? product.image_url;
         log.info(`[CATALOG] Sending ${product.name} with URL: ${imageUrl}`);
 
         const response = await fetch(`${baseUrl}/message/sendMedia/${instanceName}`, {
