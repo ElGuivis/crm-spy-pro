@@ -46,7 +46,7 @@ serve(async (req) => {
     // Get campaign
     const { data: campaign, error: campError } = await supabase
       .from("email_campaigns")
-      .select("id, tenant_id, subject, content_html, content_json, preheader, email_integration_id")
+      .select("id, tenant_id, internal_name, subject, content_html, content_json, preheader, email_integration_id")
       .eq("id", campaign_id)
       .eq("tenant_id", tenantId)
       .single();
@@ -123,7 +123,7 @@ serve(async (req) => {
       const { data: tokenRow } = await supabase.from("email_unsubscribe_tokens").select("id").eq("campaign_id", campaign.id).eq("recipient_email", testKey).eq("is_test", true).maybeSingle();
       const unsubscribeUrl = tokenRow ? `${supabaseUrl}/functions/v1/email-unsubscribe?token=${tokenRow.id}` : "#";
       const personalized = replaceVariables(htmlContent, { ...sampleData, unsubscribe_url: unsubscribeUrl });
-      const finalHtml = tokenRow ? injectTracking(personalized, supabaseUrl, tokenRow.id) : personalized;
+      const finalHtml = tokenRow ? injectTracking(personalized, supabaseUrl, tokenRow.id, campaign.internal_name) : personalized;
 
       const result = await sendEmail(emailConfig, {
         to: trimmedEmail,

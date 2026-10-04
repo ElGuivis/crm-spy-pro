@@ -2,11 +2,14 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Download, Copy, Loader2 } from "lucide-react";
+import { Download, Copy, Loader2, Send } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useExportCSV } from "@/hooks/useExportCSV";
 import { fetchCampaignRecipients, recipientsToRows, RECIPIENT_HEADERS, SEGMENTS, type Segment } from "@/hooks/useCampaignRecipientsExport";
 import { useAuth } from "@/contexts/AuthContext";
+import { useResendToSegment } from "@/hooks/useResendToSegment";
+
+const RESENDABLE: Segment[] = ["not_opened", "opened_not_clicked", "opened", "clicked"];
 
 interface Props {
   campaignId: string;
@@ -20,6 +23,7 @@ export function CampaignExportCard({ campaignId, campaignName, counts }: Props) 
   const { toast } = useToast();
   const { exportToCSV } = useExportCSV();
   const [segment, setSegment] = useState<Segment>("opened");
+  const resend = useResendToSegment();
   const [busy, setBusy] = useState<"csv" | "copy" | null>(null);
 
   const run = async (mode: "csv" | "copy") => {
@@ -66,6 +70,12 @@ export function CampaignExportCard({ campaignId, campaignName, counts }: Props) 
             {busy === "copy" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
             Copiar e-mails
           </Button>
+          {RESENDABLE.includes(segment) && (
+            <Button size="sm" variant="secondary" className="gap-2" disabled={busy !== null || resend.isPending} onClick={() => resend.mutate({ campaignId, segment })}>
+              {resend.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Criar reenvio para este grupo
+            </Button>
+          )}
         </div>
         <p className="text-xs text-muted-foreground">
           {SEGMENTS.find((s) => s.value === segment)?.hint} O CSV inclui nome, aberturas, cliques, pedidos e receita de cada pessoa.

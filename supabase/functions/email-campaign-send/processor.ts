@@ -33,7 +33,7 @@ export async function processCampaign(supabase: Supabase, supabaseUrl: string, c
     .update({ send_lease_until: inSeconds(LEASE_SECONDS) })
     .eq("id", campaignId).eq("status", "sending")
     .or(`send_lease_until.is.null,send_lease_until.lt.${new Date().toISOString()}`)
-    .select("id, tenant_id, subject, content_html, preheader, coupon_codes, email_integration_id");
+    .select("id, tenant_id, internal_name, subject, content_html, preheader, coupon_codes, email_integration_id");
   const campaign = leased?.[0];
   if (!campaign) return;
 
@@ -99,7 +99,7 @@ export async function processCampaign(supabase: Supabase, supabaseUrl: string, c
             {
               to: row.recipient_email, subject,
               text: htmlToText(personalizedBase) || subject,
-              html: injectTracking(personalizedBase, supabaseUrl, tokenId),
+              html: injectTracking(personalizedBase, supabaseUrl, tokenId, campaign.internal_name as string),
               headers: listUnsubscribeHeaders(unsubscribeUrl),
             },
           );

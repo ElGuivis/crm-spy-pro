@@ -62,9 +62,9 @@ export function useDuplicateEmailCampaign() {
   return useMutation({
     mutationFn: async (id: string) => {
       if (!tenantId) throw new Error('Tenant not found');
-      const { data: original, error: fetchError } = await supabase.from('email_campaigns').select('internal_name, subject, preheader, sender_name, sender_email, reply_to, campaign_type, template_id, content_html, content_json, audience_type, audience_reference, email_integration_id').eq('id', id).single();
+      const { data: original, error: fetchError } = await supabase.from('email_campaigns').select('internal_name, subject, preheader, sender_name, sender_email, reply_to, campaign_type, template_id, content_html, content_json, audience_type, audience_reference, email_integration_id, coupon_codes, attribution_window_days').eq('id', id).single();
       if (fetchError) throw fetchError;
-      const { data, error } = await supabase.from('email_campaigns').insert({ tenant_id: tenantId, internal_name: `${original.internal_name} (Cópia)`, subject: original.subject, preheader: original.preheader, sender_name: original.sender_name, sender_email: original.sender_email, reply_to: original.reply_to, campaign_type: original.campaign_type, template_id: original.template_id, content_html: original.content_html, content_json: original.content_json, audience_type: original.audience_type, audience_reference: original.audience_reference, email_integration_id: original.email_integration_id, status: 'draft' }).select().single();
+      const { data, error } = await supabase.from('email_campaigns').insert({ tenant_id: tenantId, internal_name: `${original.internal_name} (Cópia)`, subject: original.subject, preheader: original.preheader, sender_name: original.sender_name, sender_email: original.sender_email, reply_to: original.reply_to, campaign_type: original.campaign_type, template_id: original.template_id, content_html: original.content_html, content_json: original.content_json, audience_type: original.audience_type, audience_reference: original.audience_reference, email_integration_id: original.email_integration_id, coupon_codes: original.coupon_codes, attribution_window_days: original.attribution_window_days, status: 'draft' }).select().single();
       if (error) throw error;
       return data;
     },
