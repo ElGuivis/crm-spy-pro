@@ -2,12 +2,19 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Mail, ShoppingCart, Wallet, Percent, BarChart3 } from "lucide-react";
+import { Mail, ShoppingCart, Wallet, Percent, BarChart3, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useExportCSV } from "@/hooks/useExportCSV";
+import { PerformanceChart } from "./PerformanceChart";
+import { EmailHealthCard } from "./EmailHealthCard";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useEmailCampaignsPerformance, pct } from "@/hooks/useEmailCampaignPerformance";
 import { CampaignDetailsDialog } from "./CampaignDetailsDialog";
 import { brl } from "./campaign-details/CampaignResultsTab";
+
+// planilhas executam células que começam com = + - @ (injeção de fórmula): prefixa com apóstrofo
+const safeCell = (v: string) => (/^[=+\-@\t\r]/.test(v) ? `'${v}` : v);
 
 function Stat({ title, value, hint, icon: Icon }: { title: string; value: string | number; hint: string; icon: React.ElementType }) {
   return (
@@ -27,6 +34,7 @@ function Stat({ title, value, hint, icon: Icon }: { title: string; value: string
 export function EmailPerformanceOverview() {
   const { data, isLoading } = useEmailCampaignsPerformance();
   const [openId, setOpenId] = useState<string | null>(null);
+  const { exportToCSV } = useExportCSV();
 
   if (isLoading) {
     return <div className="grid gap-4 md:grid-cols-4">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24" />)}</div>;
@@ -56,6 +64,18 @@ export function EmailPerformanceOverview() {
         <Stat title="Pedidos atribuídos" value={orders} hint="por cupom, clique ou abertura" icon={ShoppingCart} />
         <Stat title="Receita atribuída" value={brl(revenue)} hint={orders > 0 ? `ticket médio ${brl(revenue / orders)}` : "—"} icon={Wallet} />
         <Stat title="Conversão média" value={`${pct(orders, sent)}%`} hint="pedidos ÷ e-mails enviados" icon={Percent} />
+      </div>
+
+      <EmailHealthCard />
+
+      <PerformanceChart rows={rows} />
+
+      <div className="flex justify-end">
+        <Button size="sm" variant="outline" className="gap-2" onClick={() => exportToCSV({
+          filename: "desempenho-campanhas-email",
+          headers: ["Campanha", "Assunto", "Enviada em", "Enviados", "Pessoas que abriram", "Pessoas que clicaram", "Pedidos", "Pedidos por cupom", "Pedidos por clique", "Pedidos por abertura", "Receita (R$)", "Conversão (%)"],
+          data: rows.map((r) => [safeCell(r.internal_name), safeCell(r.subject), format(new Date(r.sent_at), "dd/MM/yyyy HH:mm"), r.total_sent, r.unique_opens, r.unique_clicks, r.orders, r.orders_coupon, r.orders_click, r.orders_open, r.revenue.toFixed(2).replace(".", ","), String(pct(r.orders, r.total_sent)).replace(".", ",")]),
+        })}><Download className="h-4 w-4" />Exportar CSV</Button>
       </div>
 
       <Card>

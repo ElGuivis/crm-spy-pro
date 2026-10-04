@@ -6,7 +6,7 @@ import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
-import { safeParseAudienceReference, resolveRecipients } from "./audience-resolvers.ts";
+import { safeParseAudienceReference, resolveRecipients, chunkArray } from "./audience-resolvers.ts";
 import { getSuppressedEmailSet } from "./send-helpers.ts";
 import { buildQueue, queueCount, type Sender } from "./queue.ts";
 import { processCampaign } from "./processor.ts";
@@ -64,7 +64,7 @@ serve(async (req) => {
       .from("email_campaigns")
       .update({ status: "sending", started_at: new Date().toISOString(), error_message: null, completed_at: null, send_lease_until: null })
       .eq("id", campaignId).eq("tenant_id", tenantId).in("status", ["draft", "scheduled", "paused", "error"])
-      .select("id, tenant_id, status, subject, content_html, preheader, email_integration_id, audience_type, audience_reference, ab_test_id, ab_variant, ab_split_pct, ab_offset_pct")
+      .select("id, tenant_id, status, subject, content_html, preheader, email_integration_id, audience_type, audience_reference, ab_test_id, ab_variant, ab_split_pct, ab_offset_pct, skip_recent_days")
       .maybeSingle();
     if (claimError) throw claimError;
     if (!campaign) return json({ success: false, error: "Campanha já foi enviada ou está em andamento" }, 409);
@@ -109,6 +109,20 @@ serve(async (req) => {
     const suppressed = await getSuppressedEmailSet(supabase, tenantId, recipients.map((r) => r.email));
     let eligible = recipients.filter((r) => !suppressed.has(r.email));
 
+    // Proteção contra excesso: pula quem já recebeu e-mail do tenant nos últimos N dias (opcional por campanha)
+    let skippedRecent = 0;
+    if (campaign.skip_recent_days) {
+      const recent = new Set<string>();
+      for (const chunk of chunkArray(eligible.map((r) => r.email), 1000)) {
+        const { data, error } = await supabase.rpc("get_recent_email_recipients", { p_tenant_id: tenantId, p_emails: chunk, p_days: campaign.skip_recent_days, p_exclude_campaign: campaignId });
+        if (error) throw error;
+        for (const row of (data ?? []) as { email: string }[]) recent.add(row.email);
+      }
+      skippedRecent = recent.size;
+      eligible = eligible.filter((r) => !recent.has(r.email));
+      if (!eligible.length) return await fail(`Todos os destinatários já receberam e-mail nos últimos ${campaign.skip_recent_days} dias. Reduza o intervalo ou desligue a proteção.`);
+    }
+
     // Teste A/B: cada variante envia uma fatia da audiência
     if (campaign.ab_test_id && campaign.ab_variant) {
       const split = campaign.ab_split_pct ?? 50;
@@ -132,15 +146,15 @@ serve(async (req) => {
     }
     if (!eligible.length) return await fail("Todos os destinatários estão na lista de supressão (descadastrados ou com endereço inválido).");
 
-    if (suppressed.size > 0) {
-      await supabase.from("email_campaign_logs").insert({ tenant_id: tenantId, campaign_id: campaignId, event_type: "suppression_filtered", event_data: { total_candidates: recipients.length, suppressed: suppressed.size, eligible: eligible.length }, status: "info", is_test: false });
+    if (suppressed.size > 0 || skippedRecent > 0) {
+      await supabase.from("email_campaign_logs").insert({ tenant_id: tenantId, campaign_id: campaignId, event_type: "suppression_filtered", event_data: { total_candidates: recipients.length, suppressed: suppressed.size, skipped_recent: skippedRecent, eligible: eligible.length }, status: "info", is_test: false });
     }
 
     const queued = await buildQueue(supabase, tenantId, campaignId, eligible, senders);
     await supabase.from("email_campaigns").update({ total_recipients: queued }).eq("id", campaignId);
 
     EdgeRuntime.waitUntil(processCampaign(supabase, supabaseUrl, campaignId, log));
-    return json({ success: true, queued, suppressed: suppressed.size }, 202);
+    return json({ success: true, queued, suppressed: suppressed.size, skipped_recent: skippedRecent }, 202);
   } catch (error: unknown) {
     if (error instanceof Response) return error;
     log.error("[EMAIL-CAMPAIGN-SEND]", error);

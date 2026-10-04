@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
-import { Plus, ChevronUp, ChevronDown, Copy, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { Plus, ChevronUp, ChevronDown, Copy, Trash2, GripVertical } from "lucide-react";
 import { BlockRenderer } from "./BlockRenderer";
 import { EmailColumnSlot } from "./EmailColumnSlot";
 import { getBaseInlineStyles } from "@/hooks/useEmailEditor";
@@ -15,6 +16,7 @@ interface Props {
   onClearSelection: () => void;
   onSelectBlock: (index: number) => void;
   onMoveBlock: (index: number, direction: "up" | "down") => void;
+  onReorderBlock: (from: number, to: number) => void;
   onDuplicateBlock: (index: number) => void;
   onDeleteBlock: (index: number) => void;
   onSelectColumnSlot: (parentIndex: number, columnKey: "column1" | "column2" | "column3") => void;
@@ -27,9 +29,12 @@ const isColumnBlock = (block: EmailBlock) => block.type === "columns-2" || block
 
 export function EmailEditorCanvas({
   content, selectedBlockIndex, selectedColumnPath, columnTarget,
-  onClearSelection, onSelectBlock, onMoveBlock, onDuplicateBlock, onDeleteBlock,
+  onClearSelection, onSelectBlock, onMoveBlock, onReorderBlock, onDuplicateBlock, onDeleteBlock,
   onSelectColumnSlot, onSelectColumnChild, onMoveColumnChild, onDeleteColumnChild,
 }: Props) {
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
+  const endDrag = () => { setDragFrom(null); setDragOver(null); };
   const renderColumn = (parentIndex: number, columnKey: "column1" | "column2" | "column3", blocks: EmailBlock[]) => (
     <EmailColumnSlot
       parentIndex={parentIndex}
@@ -67,7 +72,9 @@ export function EmailEditorCanvas({
             {content.blocks.map((block, index) => (
               <div
                 key={index}
-                className={`relative group ${selectedBlockIndex === index ? "ring-2 ring-primary" : ""}`}
+                className={`relative group ${selectedBlockIndex === index ? "ring-2 ring-primary" : ""} ${dragFrom === index ? "opacity-40" : ""} ${dragOver === index && dragFrom !== null && dragFrom !== index ? (dragFrom < index ? "border-b-4 border-primary" : "border-t-4 border-primary") : ""}`}
+                onDragOver={(e) => { if (dragFrom === null) return; e.preventDefault(); setDragOver(index); }}
+                onDrop={(e) => { e.preventDefault(); if (dragFrom !== null) onReorderBlock(dragFrom, index); endDrag(); }}
                 onClick={(e) => { e.stopPropagation(); onSelectBlock(index); if (!isColumnBlock(block)) { /* clear column target handled in hook */ } }}
               >
                 {block.type === "columns-2" ? (
@@ -84,6 +91,17 @@ export function EmailEditorCanvas({
                 ) : (
                   <BlockRenderer block={block} />
                 )}
+
+                <div
+                  className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity z-20 cursor-grab active:cursor-grabbing bg-secondary rounded-md h-8 w-8 flex items-center justify-center"
+                  draggable
+                  title="Arraste para mover"
+                  onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(index)); setDragFrom(index); }}
+                  onDragEnd={endDrag}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <GripVertical className="h-4 w-4" />
+                </div>
 
                 <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 z-20">
                   <Button size="icon" variant="secondary" className="h-8 w-8"

@@ -4,31 +4,24 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useRevenueAttribution } from '@/hooks/useRevenueAttribution';
-import { DollarSign, Mail, MousePointer, Users } from 'lucide-react';
+import { useEmailCampaignsPerformance, pct } from '@/hooks/useEmailCampaignPerformance';
+import { DollarSign, Mail, MousePointer, ShoppingCart } from 'lucide-react';
 
-function fmt(n: number) {
-  return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const int = (n: number) => n.toLocaleString('pt-BR');
 
-function pct(part: number, total: number) {
-  if (!total) return '—';
-  return `${Math.round((part / total) * 100)}%`;
-}
-
+/** Receita atribuída às campanhas de e-mail (mesma conta da aba Desempenho do E-mail Marketing: cupom > clique > abertura, um pedido conta uma vez). */
 export function RFMRevenueAttribution() {
   const [lookback, setLookback] = useState(90);
-  const { data, isLoading } = useRevenueAttribution(lookback);
+  const { data, isLoading } = useEmailCampaignsPerformance();
 
-  const rows = data || [];
+  const since = Date.now() - lookback * 86_400_000;
+  const rows = (data ?? [])
+    .filter((r) => r.sent_at && new Date(r.sent_at).getTime() >= since)
+    .sort((a, b) => b.revenue - a.revenue);
   const totals = rows.reduce(
-    (acc, r) => ({
-      opens: acc.opens + r.opens,
-      clicks: acc.clicks + r.clicks,
-      customers: acc.customers + r.attributed_customers,
-      revenue: acc.revenue + r.attributed_revenue,
-    }),
-    { opens: 0, clicks: 0, customers: 0, revenue: 0 },
+    (acc, r) => ({ opens: acc.opens + r.unique_opens, clicks: acc.clicks + r.unique_clicks, orders: acc.orders + r.orders, revenue: acc.revenue + r.revenue }),
+    { opens: 0, clicks: 0, orders: 0, revenue: 0 },
   );
 
   return (
@@ -38,16 +31,14 @@ export function RFMRevenueAttribution() {
           <div>
             <CardTitle className="text-lg flex items-center gap-2">
               <DollarSign className="h-5 w-5" />
-              Atribuição de Receita por Campanha
+              Receita por Campanha de E-mail
             </CardTitle>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Receita total dos clientes que abriram ou clicaram em cada campanha
+              Pedidos que vieram de cada campanha, por cupom, clique ou abertura
             </p>
           </div>
           <Select value={String(lookback)} onValueChange={(v) => setLookback(Number(v))}>
-            <SelectTrigger className="w-[140px] text-xs">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger className="w-[140px] text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="30">Últimos 30 dias</SelectItem>
               <SelectItem value="60">Últimos 60 dias</SelectItem>
@@ -63,26 +54,20 @@ export function RFMRevenueAttribution() {
         ) : rows.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <Mail className="h-10 w-10 text-muted-foreground mb-3" />
-            <h3 className="text-base font-semibold mb-1">Sem dados de atribuição</h3>
-            <p className="text-sm text-muted-foreground">
-              Envie campanhas de e-mail para visualizar a receita influenciada.
-            </p>
+            <h3 className="text-base font-semibold mb-1">Sem campanhas no período</h3>
+            <p className="text-sm text-muted-foreground">Envie campanhas de e-mail para acompanhar a receita que elas geram.</p>
           </div>
         ) : (
           <>
-            {/* Summary chips */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
               {[
-                { icon: Mail, label: 'Aberturas', value: totals.opens.toLocaleString('pt-BR') },
-                { icon: MousePointer, label: 'Cliques', value: totals.clicks.toLocaleString('pt-BR') },
-                { icon: Users, label: 'Clientes engajados', value: totals.customers.toLocaleString('pt-BR') },
-                { icon: DollarSign, label: 'Receita influenciada', value: `R$ ${fmt(totals.revenue)}` },
+                { icon: Mail, label: 'Pessoas que abriram', value: int(totals.opens) },
+                { icon: MousePointer, label: 'Pessoas que clicaram', value: int(totals.clicks) },
+                { icon: ShoppingCart, label: 'Pedidos atribuídos', value: int(totals.orders) },
+                { icon: DollarSign, label: 'Receita atribuída', value: brl(totals.revenue) },
               ].map(({ icon: Icon, label, value }) => (
                 <div key={label} className="rounded-lg border border-border/50 bg-muted/30 p-3">
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
-                    <Icon className="h-3.5 w-3.5" />
-                    {label}
-                  </div>
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1"><Icon className="h-3.5 w-3.5" />{label}</div>
                   <div className="font-semibold text-sm">{value}</div>
                 </div>
               ))}
@@ -94,48 +79,34 @@ export function RFMRevenueAttribution() {
                   <TableRow>
                     <TableHead>Campanha</TableHead>
                     <TableHead className="text-center">Enviados</TableHead>
-                    <TableHead className="text-center">Aberturas</TableHead>
-                    <TableHead className="text-center">Cliques</TableHead>
-                    <TableHead className="text-center">Clientes</TableHead>
+                    <TableHead className="text-center">Abriram</TableHead>
+                    <TableHead className="text-center">Clicaram</TableHead>
+                    <TableHead className="text-center">Pedidos</TableHead>
                     <TableHead className="text-right">Receita</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.map((r) => (
                     <TableRow key={r.campaign_id}>
-                      <TableCell className="font-medium max-w-[200px] truncate">{r.campaign_name}</TableCell>
-                      <TableCell className="text-center text-muted-foreground">{r.sent_count.toLocaleString('pt-BR')}</TableCell>
+                      <TableCell className="font-medium max-w-[200px] truncate">{r.internal_name}</TableCell>
+                      <TableCell className="text-center text-muted-foreground">{int(r.total_sent)}</TableCell>
                       <TableCell className="text-center">
-                        <span className="font-medium">{r.opens.toLocaleString('pt-BR')}</span>
-                        {r.sent_count > 0 && (
-                          <span className="text-xs text-muted-foreground ml-1">
-                            ({pct(r.opens, r.sent_count)})
-                          </span>
-                        )}
+                        <span className="font-medium">{int(r.unique_opens)}</span>
+                        {r.total_sent > 0 && <span className="text-xs text-muted-foreground ml-1">({pct(r.unique_opens, r.total_sent)}%)</span>}
                       </TableCell>
                       <TableCell className="text-center">
-                        <span className="font-medium">{r.clicks.toLocaleString('pt-BR')}</span>
-                        {r.opens > 0 && (
-                          <span className="text-xs text-muted-foreground ml-1">
-                            ({pct(r.clicks, r.opens)})
-                          </span>
-                        )}
+                        <span className="font-medium">{int(r.unique_clicks)}</span>
+                        {r.total_sent > 0 && <span className="text-xs text-muted-foreground ml-1">({pct(r.unique_clicks, r.total_sent)}%)</span>}
                       </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant="secondary" className="font-medium">
-                          {r.attributed_customers.toLocaleString('pt-BR')}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-semibold text-primary">
-                        R$ {fmt(r.attributed_revenue)}
-                      </TableCell>
+                      <TableCell className="text-center"><Badge variant="secondary" className="font-medium">{int(r.orders)}</Badge></TableCell>
+                      <TableCell className="text-right font-semibold text-primary">{brl(r.revenue)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </div>
             <p className="text-[11px] text-muted-foreground mt-3">
-              * Receita total do histórico de compras dos clientes que interagiram com a campanha — não representa receita diretamente gerada pelo e-mail.
+              * Cada pedido conta uma vez, para a campanha de maior prova (cupom, depois clique, depois abertura), dentro da janela de atribuição de cada campanha. Detalhes na aba Resultados do E-mail Marketing.
             </p>
           </>
         )}

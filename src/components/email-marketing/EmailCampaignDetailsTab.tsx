@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, Save, ChevronRight, Mail } from "lucide-react";
 import { VariablesPicker } from "./VariablesPicker";
 import { CampaignAttributionFields } from "./CampaignAttributionFields";
+import { CampaignSafetyFields } from "./CampaignSafetyFields";
 import { AudienceSelector, AudienceType } from "./AudienceSelector";
 import { AudienceReference } from "@/hooks/useAudienceEstimate";
 import { CampaignFormData } from "@/hooks/useEmailCampaignForm";
@@ -195,6 +196,8 @@ export function EmailCampaignDetailsTab({
         </div>
 
         <CampaignAttributionFields form={form} />
+
+        <CampaignSafetyFields form={form} />
 
         <FormField control={form.control} name="scheduled_at" render={({ field }) => (
           <FormItem>

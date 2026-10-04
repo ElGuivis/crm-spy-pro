@@ -51,7 +51,7 @@ export function useEmailCampaignForm({ open, onOpenChange, campaignId, defaultVa
 
   const form = useForm<CampaignFormData>({
     resolver: zodResolver(campaignSchema),
-    defaultValues: { internal_name: "", subject: "", preheader: "", sender_name: "", sender_email: "", reply_to: "", campaign_type: "newsletter", email_integration_id: "", coupon_codes: [], attribution_window_days: 7, ...initialDefaultValues },
+    defaultValues: { internal_name: "", subject: "", preheader: "", sender_name: "", sender_email: "", reply_to: "", campaign_type: "newsletter", email_integration_id: "", coupon_codes: [], attribution_window_days: 7, skip_recent_days: 0, ...initialDefaultValues },
   });
 
   const { data: integrationSenders } = useQuery({
@@ -75,7 +75,7 @@ export function useEmailCampaignForm({ open, onOpenChange, campaignId, defaultVa
 
   useEffect(() => {
     if (open && !campaignId) {
-      resetSilently({ internal_name: "", subject: "", preheader: "", sender_name: "", sender_email: "", reply_to: "", campaign_type: "newsletter", email_integration_id: "", coupon_codes: [], attribution_window_days: 7, ...initialDefaultValues });
+      resetSilently({ internal_name: "", subject: "", preheader: "", sender_name: "", sender_email: "", reply_to: "", campaign_type: "newsletter", email_integration_id: "", coupon_codes: [], attribution_window_days: 7, skip_recent_days: 0, ...initialDefaultValues });
       setEmailContent(null); setEmailHTML(""); setActiveTab("details"); setSelectedTemplateId(undefined);
       setAudienceType("all"); setAudienceReference({}); setIsDirty(false); setEditorKey((prev) => prev + 1);
     }
@@ -93,7 +93,7 @@ export function useEmailCampaignForm({ open, onOpenChange, campaignId, defaultVa
   useEffect(() => {
     if (existingCampaign) {
       const integId = (existingCampaign as any).email_integration_id || "";
-      resetSilently({ internal_name: existingCampaign.internal_name || "", subject: existingCampaign.subject || "", preheader: existingCampaign.preheader || "", sender_name: existingCampaign.sender_name || "", sender_email: existingCampaign.sender_email || "", reply_to: existingCampaign.reply_to || "", campaign_type: (existingCampaign.campaign_type as EmailCampaignType) || "newsletter", template_id: existingCampaign.template_id || "", scheduled_at: existingCampaign.scheduled_at || "", email_integration_id: integId, coupon_codes: existingCampaign.coupon_codes ?? [], attribution_window_days: existingCampaign.attribution_window_days ?? 7 });
+      resetSilently({ internal_name: existingCampaign.internal_name || "", subject: existingCampaign.subject || "", preheader: existingCampaign.preheader || "", sender_name: existingCampaign.sender_name || "", sender_email: existingCampaign.sender_email || "", reply_to: existingCampaign.reply_to || "", campaign_type: (existingCampaign.campaign_type as EmailCampaignType) || "newsletter", template_id: existingCampaign.template_id || "", scheduled_at: existingCampaign.scheduled_at || "", email_integration_id: integId, coupon_codes: existingCampaign.coupon_codes ?? [], attribution_window_days: existingCampaign.attribution_window_days ?? 7, skip_recent_days: existingCampaign.skip_recent_days ?? 0 });
       setWatchedIntegrationId(integId || undefined);
       setAudienceType((existingCampaign.audience_type || "all") as AudienceType);
       try {
@@ -146,7 +146,7 @@ export function useEmailCampaignForm({ open, onOpenChange, campaignId, defaultVa
       return;
     }
     try {
-      const payload = { internal_name: data.internal_name, subject: data.subject, preheader: data.preheader, sender_name: data.sender_name, sender_email: data.sender_email, reply_to: data.reply_to || undefined, campaign_type: data.campaign_type, template_id: data.template_id || undefined, audience_type: audienceType, audience_reference: JSON.stringify(audienceReference), scheduled_at: data.scheduled_at || undefined, content_json: emailContent, content_html: emailHTML, email_integration_id: data.email_integration_id, coupon_codes: data.coupon_codes ?? [], attribution_window_days: data.attribution_window_days ?? 7 };
+      const payload = { internal_name: data.internal_name, subject: data.subject, preheader: data.preheader, sender_name: data.sender_name, sender_email: data.sender_email, reply_to: data.reply_to || undefined, campaign_type: data.campaign_type, template_id: data.template_id || undefined, audience_type: audienceType, audience_reference: JSON.stringify(audienceReference), scheduled_at: data.scheduled_at || undefined, content_json: emailContent, content_html: emailHTML, email_integration_id: data.email_integration_id, coupon_codes: data.coupon_codes ?? [], attribution_window_days: data.attribution_window_days ?? 7, skip_recent_days: data.skip_recent_days || null };
       if (campaignId) { await updateMutation.mutateAsync({ id: campaignId, updates: payload }); }
       else { await createMutation.mutateAsync(payload); }
       setIsDirty(false); onOpenChange(false); setActiveTab("details"); form.reset();
@@ -155,5 +155,6 @@ export function useEmailCampaignForm({ open, onOpenChange, campaignId, defaultVa
 
   const handleEditorChange = (content: EmailContent, html: string) => { setEmailContent(content); setEmailHTML(html); setIsDirty(true); };
 
-  return { form, templates, emailIntegrations, integrationSenders, totalSenders, emailContent, emailHTML, activeTab, setActiveTab, selectedTemplateId, setSelectedTemplateId, isDirty, setIsDirty, showCloseWarning, setShowCloseWarning, watchedIntegrationId, setWatchedIntegrationId, editorKey, audienceType, setAudienceType, audienceReference, setAudienceReference, loadingTemplate, isPending, handleClose, handleForceClose, onSubmit, handleEditorChange };
+  const draftKey = `campaign:${campaignId ?? "new"}:${(existingCampaign as { updated_at?: string } | undefined)?.updated_at ?? ""}`;
+  return { draftKey, form, templates, emailIntegrations, integrationSenders, totalSenders, emailContent, emailHTML, activeTab, setActiveTab, selectedTemplateId, setSelectedTemplateId, isDirty, setIsDirty, showCloseWarning, setShowCloseWarning, watchedIntegrationId, setWatchedIntegrationId, editorKey, audienceType, setAudienceType, audienceReference, setAudienceReference, loadingTemplate, isPending, handleClose, handleForceClose, onSubmit, handleEditorChange };
 }

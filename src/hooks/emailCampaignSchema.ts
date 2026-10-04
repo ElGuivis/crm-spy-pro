@@ -16,6 +16,8 @@ export const campaignSchema = z.object({
   email_integration_id: z.string().uuid("Selecione uma integração SMTP"),
   coupon_codes: z.array(z.string()).optional(),
   attribution_window_days: z.number().int().min(1).max(30).optional(),
+  /** 0 = desligado; senão pula quem recebeu e-mail nos últimos N dias */
+  skip_recent_days: z.number().int().min(0).max(90).optional(),
 });
 
 export type CampaignFormData = z.infer<typeof campaignSchema>;

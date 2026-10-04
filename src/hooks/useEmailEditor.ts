@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { EmailBlock, EmailContent } from "@/components/email-marketing/editor/types";
 import { blockTemplates } from "@/components/email-marketing/editor/blockTemplates";
 import { generateEmailHTML } from "@/components/email-marketing/editor/htmlGenerator";
+import { useEditorHistory } from "@/hooks/useEditorHistory";
 
 export interface ColumnTarget {
   blockIndex: number;
@@ -20,20 +21,32 @@ interface Options {
   onChange?: (content: EmailContent, html: string) => void;
 }
 
+type Columned = Record<string, EmailBlock[] | undefined>;
+
+/** Copia o bloco pai trocando só a lista de uma coluna (sem alterar o estado anterior, que o desfazer guarda). */
+function withColumn(content: EmailContent, blockIndex: number, columnKey: string, fn: (column: EmailBlock[]) => EmailBlock[]): EmailContent {
+  const blocks = [...content.blocks];
+  const parent = { ...(blocks[blockIndex] as unknown as Columned) };
+  parent[columnKey] = fn([...(parent[columnKey] ?? [])]);
+  blocks[blockIndex] = parent as unknown as EmailBlock;
+  return { ...content, blocks };
+}
+
 export function useEmailEditor({ initialContent, onChange }: Options) {
-  const [content, setContent] = useState<EmailContent>(initialContent || { blocks: [], globalStyles: {} });
+  const apply = useCallback((c: EmailContent) => onChange?.(c, generateEmailHTML(c)), [onChange]);
+  const history = useEditorHistory<EmailContent>(initialContent || { blocks: [], globalStyles: {} }, apply);
+  const content = history.value;
+  const commit = history.commit;
   const [selectedBlockIndex, setSelectedBlockIndex] = useState<number | null>(null);
   const [selectedColumnPath, setSelectedColumnPath] = useState<ColumnPath | null>(null);
   const [columnTarget, setColumnTarget] = useState<ColumnTarget | null>(null);
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
   const [viewMode, setViewMode] = useState<"editor" | "preview" | "code">("editor");
 
-  const notifyChange = (updatedContent: EmailContent) => {
-    if (onChange) {
-      const html = generateEmailHTML(updatedContent);
-      onChange(updatedContent, html);
-    }
-  };
+  const clearSelectionState = () => { setSelectedBlockIndex(null); setSelectedColumnPath(null); };
+
+  const handleUndo = () => { history.undo(); clearSelectionState(); };
+  const handleRedo = () => { history.redo(); clearSelectionState(); };
 
   const handleAddBlock = (blockType: string) => {
     const template = blockTemplates[blockType];
@@ -41,122 +54,92 @@ export function useEmailEditor({ initialContent, onChange }: Options) {
     const newBlock = JSON.parse(JSON.stringify(template)) as EmailBlock;
 
     if (columnTarget) {
-      const updatedBlocks = [...content.blocks];
-      const parentBlock = updatedBlocks[columnTarget.blockIndex] as any;
-      if (parentBlock && parentBlock[columnTarget.columnKey]) {
-        parentBlock[columnTarget.columnKey] = [...parentBlock[columnTarget.columnKey], newBlock];
-      }
-      const updatedContent = { ...content, blocks: updatedBlocks };
-      setContent(updatedContent);
-      notifyChange(updatedContent);
+      const current = (content.blocks[columnTarget.blockIndex] as unknown as Columned | undefined)?.[columnTarget.columnKey] ?? [];
+      commit(withColumn(content, columnTarget.blockIndex, columnTarget.columnKey, (col) => [...col, newBlock]));
       setSelectedBlockIndex(null);
-      setSelectedColumnPath({
-        blockIndex: columnTarget.blockIndex,
-        columnKey: columnTarget.columnKey,
-        childIndex: parentBlock[columnTarget.columnKey].length - 1,
-      });
+      setSelectedColumnPath({ blockIndex: columnTarget.blockIndex, columnKey: columnTarget.columnKey, childIndex: current.length });
       toast.success("Bloco adicionado na coluna");
       return;
     }
 
-    const updatedBlocks = [...content.blocks, newBlock];
-    const updatedContent = { ...content, blocks: updatedBlocks };
-    setContent(updatedContent);
-    setSelectedBlockIndex(updatedBlocks.length - 1);
+    commit({ ...content, blocks: [...content.blocks, newBlock] });
+    setSelectedBlockIndex(content.blocks.length);
     setSelectedColumnPath(null);
-    notifyChange(updatedContent);
     toast.success("Bloco adicionado");
   };
 
+  /** Insere vários blocos de uma vez (modelos prontos); `replace` troca o conteúdo atual. */
+  const handleInsertBlocks = (blocks: EmailBlock[], replace = false, globalStyles?: EmailContent["globalStyles"]) => {
+    const fresh = JSON.parse(JSON.stringify(blocks)) as EmailBlock[];
+    commit({
+      ...content,
+      blocks: replace ? fresh : [...content.blocks, ...fresh],
+      globalStyles: replace && globalStyles ? globalStyles : content.globalStyles,
+    });
+    clearSelectionState();
+    setColumnTarget(null);
+  };
+
   const handleUpdateBlock = (index: number, updates: Partial<EmailBlock>) => {
-    const updatedBlocks = [...content.blocks];
-    updatedBlocks[index] = { ...updatedBlocks[index], ...updates } as EmailBlock;
-    const updatedContent = { ...content, blocks: updatedBlocks };
-    setContent(updatedContent);
-    notifyChange(updatedContent);
+    const blocks = [...content.blocks];
+    blocks[index] = { ...blocks[index], ...updates } as EmailBlock;
+    commit({ ...content, blocks }, `b${index}:${Object.keys(updates).sort().join(",")}`);
   };
 
   const handleUpdateColumnChild = (blockIndex: number, columnKey: string, childIndex: number, updates: Partial<EmailBlock>) => {
-    const updatedBlocks = [...content.blocks];
-    const parentBlock = updatedBlocks[blockIndex] as any;
-    if (parentBlock && parentBlock[columnKey]) {
-      const column = [...parentBlock[columnKey]];
-      column[childIndex] = { ...column[childIndex], ...updates };
-      parentBlock[columnKey] = column;
-    }
-    const updatedContent = { ...content, blocks: updatedBlocks };
-    setContent(updatedContent);
-    notifyChange(updatedContent);
+    commit(
+      withColumn(content, blockIndex, columnKey, (col) => { col[childIndex] = { ...col[childIndex], ...updates } as EmailBlock; return col; }),
+      `c${blockIndex}.${columnKey}.${childIndex}:${Object.keys(updates).sort().join(",")}`,
+    );
   };
 
   const handleDeleteBlock = (index: number) => {
-    const updatedBlocks = content.blocks.filter((_, i) => i !== index);
-    const updatedContent = { ...content, blocks: updatedBlocks };
-    setContent(updatedContent);
-    setSelectedBlockIndex(null);
-    setSelectedColumnPath(null);
+    commit({ ...content, blocks: content.blocks.filter((_, i) => i !== index) });
+    clearSelectionState();
     if (columnTarget && columnTarget.blockIndex === index) setColumnTarget(null);
-    notifyChange(updatedContent);
     toast.success("Bloco removido");
   };
 
   const handleDeleteColumnChild = (blockIndex: number, columnKey: string, childIndex: number) => {
-    const updatedBlocks = [...content.blocks];
-    const parentBlock = updatedBlocks[blockIndex] as any;
-    if (parentBlock && parentBlock[columnKey]) {
-      parentBlock[columnKey] = parentBlock[columnKey].filter((_: any, i: number) => i !== childIndex);
-    }
-    const updatedContent = { ...content, blocks: updatedBlocks };
-    setContent(updatedContent);
+    commit(withColumn(content, blockIndex, columnKey, (col) => col.filter((_, i) => i !== childIndex)));
     setSelectedColumnPath(null);
-    notifyChange(updatedContent);
     toast.success("Bloco removido da coluna");
   };
 
   const handleDuplicateBlock = (index: number) => {
-    const blockToDuplicate = content.blocks[index];
-    const duplicatedBlock = JSON.parse(JSON.stringify(blockToDuplicate)) as EmailBlock;
-    const updatedBlocks = [
-      ...content.blocks.slice(0, index + 1),
-      duplicatedBlock,
-      ...content.blocks.slice(index + 1),
-    ];
-    const updatedContent = { ...content, blocks: updatedBlocks };
-    setContent(updatedContent);
-    notifyChange(updatedContent);
+    const copy = JSON.parse(JSON.stringify(content.blocks[index])) as EmailBlock;
+    commit({ ...content, blocks: [...content.blocks.slice(0, index + 1), copy, ...content.blocks.slice(index + 1)] });
     toast.success("Bloco duplicado");
   };
 
+  /** Move o bloco para outra posição (usado pelo arrastar e soltar). */
+  const handleReorderBlock = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0 || from >= content.blocks.length || to >= content.blocks.length) return;
+    const blocks = [...content.blocks];
+    const [moved] = blocks.splice(from, 1);
+    blocks.splice(to, 0, moved);
+    commit({ ...content, blocks });
+    setSelectedBlockIndex(to);
+    setSelectedColumnPath(null);
+  };
+
   const handleMoveBlock = (index: number, direction: "up" | "down") => {
-    if (direction === "up" && index === 0) return;
-    if (direction === "down" && index === content.blocks.length - 1) return;
-    const updatedBlocks = [...content.blocks];
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    [updatedBlocks[index], updatedBlocks[targetIndex]] = [updatedBlocks[targetIndex], updatedBlocks[index]];
-    const updatedContent = { ...content, blocks: updatedBlocks };
-    setContent(updatedContent);
-    setSelectedBlockIndex(targetIndex);
-    notifyChange(updatedContent);
+    const target = direction === "up" ? index - 1 : index + 1;
+    if (target < 0 || target >= content.blocks.length) return;
+    handleReorderBlock(index, target);
   };
 
   const handleMoveColumnChild = (blockIndex: number, columnKey: string, childIndex: number, direction: "up" | "down") => {
-    const updatedBlocks = [...content.blocks];
-    const parentBlock = updatedBlocks[blockIndex] as any;
-    if (!parentBlock || !parentBlock[columnKey]) return;
-    const column = [...parentBlock[columnKey]];
-    const targetIndex = direction === "up" ? childIndex - 1 : childIndex + 1;
-    if (targetIndex < 0 || targetIndex >= column.length) return;
-    [column[childIndex], column[targetIndex]] = [column[targetIndex], column[childIndex]];
-    parentBlock[columnKey] = column;
-    const updatedContent = { ...content, blocks: updatedBlocks };
-    setContent(updatedContent);
-    setSelectedColumnPath({ blockIndex, columnKey, childIndex: targetIndex });
-    notifyChange(updatedContent);
+    const target = direction === "up" ? childIndex - 1 : childIndex + 1;
+    const size = (content.blocks[blockIndex] as unknown as Columned | undefined)?.[columnKey]?.length ?? 0;
+    if (target < 0 || target >= size) return;
+    commit(withColumn(content, blockIndex, columnKey, (col) => { [col[childIndex], col[target]] = [col[target], col[childIndex]]; return col; }));
+    setSelectedColumnPath({ blockIndex, columnKey, childIndex: target });
   };
 
   const getSelectedBlock = (): EmailBlock | null => {
     if (selectedColumnPath) {
-      const parent = content.blocks[selectedColumnPath.blockIndex] as any;
+      const parent = content.blocks[selectedColumnPath.blockIndex] as unknown as Columned | undefined;
       return parent?.[selectedColumnPath.columnKey]?.[selectedColumnPath.childIndex] || null;
     }
     if (selectedBlockIndex !== null) return content.blocks[selectedBlockIndex] || null;
@@ -174,31 +157,21 @@ export function useEmailEditor({ initialContent, onChange }: Options) {
   const handleGlobalStylesChange = (updates: Partial<NonNullable<EmailContent["globalStyles"]>>) => {
     const cleaned = { ...(content.globalStyles ?? {}), ...updates };
     (Object.keys(cleaned) as Array<keyof typeof cleaned>).forEach((k) => { if (cleaned[k] === undefined) delete cleaned[k]; });
-    const updatedContent = { ...content, globalStyles: cleaned };
-    setContent(updatedContent);
-    notifyChange(updatedContent);
+    commit({ ...content, globalStyles: cleaned }, `g:${Object.keys(updates).sort().join(",")}`);
   };
 
-  const handlePropertiesClose = () => {
-    setSelectedBlockIndex(null);
-    setSelectedColumnPath(null);
-  };
-
-  const clearSelection = () => {
-    setColumnTarget(null);
-    setSelectedBlockIndex(null);
-    setSelectedColumnPath(null);
-  };
+  const clearSelection = () => { setColumnTarget(null); clearSelectionState(); };
 
   return {
     content, selectedBlockIndex, selectedColumnPath, columnTarget,
     previewMode, viewMode,
     setSelectedBlockIndex, setSelectedColumnPath, setColumnTarget,
     setPreviewMode, setViewMode,
-    handleAddBlock, handleMoveBlock, handleMoveColumnChild,
+    handleAddBlock, handleInsertBlocks, handleMoveBlock, handleReorderBlock, handleMoveColumnChild,
     handleDeleteBlock, handleDeleteColumnChild, handleDuplicateBlock,
-    getSelectedBlock, handlePropertiesUpdate, handlePropertiesClose,
+    getSelectedBlock, handlePropertiesUpdate, handlePropertiesClose: clearSelectionState,
     handleGlobalStylesChange, clearSelection,
+    undo: handleUndo, redo: handleRedo, canUndo: history.canUndo, canRedo: history.canRedo,
   };
 }
 

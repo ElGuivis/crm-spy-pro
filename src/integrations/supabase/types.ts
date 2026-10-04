@@ -3396,6 +3396,7 @@ export type Database = {
           campaign_type: Database["public"]["Enums"]["email_campaign_type"]
           attribution_refreshed_at: string | null
           attribution_window_days: number
+          skip_recent_days: number | null
           coupon_codes: string[]
           completed_at: string | null
           compliance_checked_at: string | null
@@ -3442,6 +3443,7 @@ export type Database = {
           campaign_type: Database["public"]["Enums"]["email_campaign_type"]
           attribution_refreshed_at?: string | null
           attribution_window_days?: number
+          skip_recent_days?: number | null
           coupon_codes?: string[]
           completed_at?: string | null
           compliance_checked_at?: string | null
@@ -3488,6 +3490,7 @@ export type Database = {
           campaign_type?: Database["public"]["Enums"]["email_campaign_type"]
           attribution_refreshed_at?: string | null
           attribution_window_days?: number
+          skip_recent_days?: number | null
           coupon_codes?: string[]
           completed_at?: string | null
           compliance_checked_at?: string | null
@@ -10166,6 +10169,19 @@ export type Database = {
           touch_at: string
         }[]
       }
+      get_email_health: {
+        Args: { p_days?: number; p_tenant_id: string }
+        Returns: {
+          bounced: number
+          campaigns: number
+          complaints: number
+          failed: number
+          last_send_at: string
+          sent: number
+          stuck_campaigns: number
+          unsubscribed: number
+        }[]
+      }
       get_email_campaign_performance: {
         Args: { p_campaign_id?: string; p_tenant_id: string }
         Returns: {
@@ -10243,6 +10259,21 @@ export type Database = {
           sku: string
           url: string
           variant_count: number
+        }[]
+      }
+      get_li_showcase_products: {
+        Args: { p_days?: number; p_limit?: number; p_mode?: string }
+        Returns: {
+          id: string
+          image_large: string
+          image_path: string
+          image_url: string
+          name: string
+          price: number
+          promotional_price: number
+          score: number
+          sku: string
+          url: string
         }[]
       }
       get_revenue_attribution: {

@@ -73,7 +73,9 @@ export function generateImageTextHTML(block: ImageTextBlock): string {
   const gap = 20;
   const valign = block.verticalAlign === 'middle' ? 'middle' : 'top';
   const img = `<img src="${esc(block.imageUrl || 'https://via.placeholder.com/300x300')}" alt="${esc(block.alt || '')}" width="100%" style="display: block; width: 100%; max-width: 100%; height: auto;${block.imageRadius ? ` border-radius: ${block.imageRadius};` : ''}">`;
-  const imageCell = `<td class="mobile-column" width="${pct}%" style="vertical-align: ${valign};${block.imagePosition === 'right' ? ` padding-left: ${gap}px;` : ` padding-right: ${gap}px;`}">${block.linkUrl ? `<a href="${safeUrl(block.linkUrl)}" style="display: block;">${img}</a>` : img}</td>`;
+  const right = block.imagePosition === 'right';
+  // imagem à direita: o HTML traz a imagem primeiro e a linha é rtl; no desktop ela fica à direita e no celular (empilhado) vem em cima do texto
+  const imageCell = `<td class="mobile-column" dir="ltr" width="${pct}%" style="vertical-align: ${valign};${block.imagePosition === 'right' ? ` padding-left: ${gap}px;` : ` padding-right: ${gap}px;`}">${block.linkUrl ? `<a href="${safeUrl(block.linkUrl)}" style="display: block;">${img}</a>` : img}</td>`;
 
   const button = block.buttonText
     ? `<div style="margin-top: 14px;">${bulletproofButton({
@@ -82,7 +84,7 @@ export function generateImageTextHTML(block: ImageTextBlock): string {
         radius: block.buttonRadius || '4px', fontSize: '15px', padding: '10px 24px',
       })}</div>`
     : '';
-  const textCell = `<td class="mobile-column" width="${100 - pct}%" style="vertical-align: ${valign}; text-align: ${align};">
+  const textCell = `<td class="mobile-column" dir="ltr" width="${100 - pct}%" style="vertical-align: ${valign}; text-align: ${align};">
             ${block.title ? `<h3 style="margin: 0 0 8px; font-size: ${block.titleSize || '22px'}; color: ${block.titleColor || '#333333'}; line-height: 1.3;">${inlineFormat(block.title)}</h3>` : ''}
             ${block.text ? `<div style="font-size: ${block.textSize || '15px'}; color: ${block.textColor || '#666666'}; line-height: 1.6;">${inlineFormat(block.text)}</div>` : ''}
             ${button}
@@ -91,9 +93,10 @@ export function generateImageTextHTML(block: ImageTextBlock): string {
   return `
   <tr>
     <td style="${getBaseStyles(block)}; padding: ${block.padding || '20px'};">
-      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%"${right ? ' dir="rtl"' : ''}>
         <tr>
-          ${block.imagePosition === 'right' ? `${textCell}\n          ${imageCell}` : `${imageCell}\n          ${textCell}`}
+          ${imageCell}
+          ${textCell}
         </tr>
       </table>
     </td>

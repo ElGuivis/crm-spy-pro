@@ -305,6 +305,7 @@ export function EmailTemplateFormDialog({
             <TabsContent value="content" className="mt-6">
               <EmailEditor
                 key={editorKey}
+                draftKey={`template:${templateId ?? "new"}:${(existingTemplate as { updated_at?: string } | undefined)?.updated_at ?? ""}`}
                 initialContent={emailContent || undefined}
                 onChange={handleEditorChange}
               />
