@@ -5,7 +5,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  MoreVertical, Edit, Copy, Archive, Trash2, Calendar, Eye, TestTube, Send, Loader2, FlaskConical,
+  MoreVertical, Edit, Copy, Archive, Trash2, Calendar, Eye, TestTube, Send, Loader2, FlaskConical, Pause, Play,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -23,6 +23,7 @@ export interface RowActions {
   onAbTest: (c: EmailCampaign) => void;
   onArchive: (c: EmailCampaign) => void;
   onDelete: (c: EmailCampaign) => void;
+  onPause: (c: EmailCampaign) => void;
 }
 
 interface Props {
@@ -106,7 +107,18 @@ export function EmailCampaignRow({ campaign, isActing, pendingAction, actions }:
                 <DropdownMenuSeparator />
               </>
             )}
-            {["sent", "sending", "error"].includes(campaign.status) && (
+            {campaign.status === "sending" && (
+              <DropdownMenuItem onClick={() => actions.onPause(campaign)}>
+                <Pause className="h-4 w-4 mr-2 text-amber-600" />Pausar envio
+              </DropdownMenuItem>
+            )}
+            {["paused", "error"].includes(campaign.status) && (
+              <DropdownMenuItem onClick={() => actions.onSend(campaign)}>
+                <Play className="h-4 w-4 mr-2 text-primary" />
+                <span className="text-primary font-medium">Retomar envio</span>
+              </DropdownMenuItem>
+            )}
+            {["sent", "sending", "error", "paused"].includes(campaign.status) && (
               <DropdownMenuItem onClick={() => actions.onDetails(campaign.id)}>
                 <Eye className="h-4 w-4 mr-2" />Ver Detalhes
               </DropdownMenuItem>

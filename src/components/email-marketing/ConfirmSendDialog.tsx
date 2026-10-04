@@ -28,6 +28,18 @@ interface ConfirmSendDialogProps {
   onSuccess: () => void;
 }
 
+/** A resposta de erro da função traz a mensagem real (ex.: "Cota diária atingida"); o invoke só mostra "non-2xx". */
+async function serverMessage(error: unknown): Promise<string> {
+  try {
+    const res = (error as { context?: Response }).context;
+    if (res && typeof res.json === 'function') {
+      const body = await res.json();
+      if (body?.error) return String(body.error);
+    }
+  } catch { /* usa a mensagem padrão */ }
+  return error instanceof Error ? error.message : 'Erro ao iniciar envio';
+}
+
 export function ConfirmSendDialog({
   campaignId,
   campaignName,
@@ -85,12 +97,10 @@ export function ConfirmSendDialog({
         body: { campaign_id: campaignId },
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await serverMessage(error));
 
       if (data?.success) {
-        const sent = data.sent ?? 0;
-        const failed = data.failed ?? 0;
-        toast.success(`Campanha enviada! ${sent} entregues${failed > 0 ? `, ${failed} falhas` : ''}.`);
+        toast.success(`Envio iniciado! ${data.queued ?? 0} e-mail(s) na fila. Acompanhe o andamento em Resultados da campanha.`);
         onSuccess();
         onOpenChange(false);
       } else {

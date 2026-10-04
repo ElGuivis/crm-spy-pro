@@ -5,7 +5,7 @@ import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components
 import { Skeleton } from "@/components/ui/skeleton";
 import { Search, Mail } from "lucide-react";
 import {
-  useEmailCampaigns, useDeleteEmailCampaign, useArchiveEmailCampaign, useDuplicateEmailCampaign,
+  useEmailCampaigns, useDeleteEmailCampaign, useArchiveEmailCampaign, useDuplicateEmailCampaign, useUpdateEmailCampaign,
   EmailCampaignStatus, EmailCampaign,
 } from "@/hooks/useEmailCampaigns";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -33,6 +33,14 @@ export function EmailCampaignList({ onEdit, statusFilter }: Props) {
   const deleteMutation = useDeleteEmailCampaign();
   const archiveMutation = useArchiveEmailCampaign();
   const duplicateMutation = useDuplicateEmailCampaign();
+  const updateMutation = useUpdateEmailCampaign();
+
+  // O envio verifica o status a cada lote: "pausada" interrompe no fim do lote atual e "Retomar envio" continua de onde parou
+  const handlePause = async (campaign: EmailCampaign) => {
+    if (pendingAction) return;
+    setPendingAction(`pause-${campaign.id}`);
+    try { await updateMutation.mutateAsync({ id: campaign.id, updates: { status: "paused" } }); } finally { setPendingAction(null); }
+  };
 
   const handleDuplicate = async (campaign: EmailCampaign) => {
     if (pendingAction) return;
@@ -73,6 +81,7 @@ export function EmailCampaignList({ onEdit, statusFilter }: Props) {
     onDuplicate: handleDuplicate,
     onAbTest: setAbTestCampaign,
     onArchive: setArchiveTarget,
+    onPause: handlePause,
     onDelete: setDeleteTarget,
   };
 

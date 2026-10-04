@@ -3414,6 +3414,7 @@ export type Database = {
           sender_email: string
           sender_name: string
           sent_at: string | null
+          send_lease_until: string | null
           started_at: string | null
           status: Database["public"]["Enums"]["email_campaign_status"]
           subject: string
@@ -3459,6 +3460,7 @@ export type Database = {
           sender_email: string
           sender_name: string
           sent_at?: string | null
+          send_lease_until?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["email_campaign_status"]
           subject: string
@@ -3504,6 +3506,7 @@ export type Database = {
           sender_email?: string
           sender_name?: string
           sent_at?: string | null
+          send_lease_until?: string | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["email_campaign_status"]
           subject?: string
@@ -10186,6 +10189,16 @@ export type Database = {
           unique_clicks: number
           unique_opens: number
           window_days: number
+        }[]
+      }
+      get_email_campaign_progress: {
+        Args: { p_campaign_id: string; p_tenant_id: string }
+        Returns: {
+          failed: number
+          pending: number
+          sending: number
+          sent: number
+          total: number
         }[]
       }
       get_email_campaign_recipients: {

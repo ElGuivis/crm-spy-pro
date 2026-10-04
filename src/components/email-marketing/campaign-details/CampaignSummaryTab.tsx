@@ -5,6 +5,7 @@ import { Send, CheckCircle2, Eye, MousePointerClick, XCircle, AlertTriangle, Use
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { MetricCard } from "./MetricCard";
+import { SendProgressBanner } from "./SendProgressBanner";
 
 interface Props {
   isLoading: boolean;
@@ -21,6 +22,7 @@ export function CampaignSummaryTab({ isLoading, metrics, campaign }: Props) {
         </div>
       ) : metrics ? (
         <div className="space-y-6">
+          {campaign?.id && <SendProgressBanner campaignId={campaign.id} status={campaign.status} errorMessage={campaign.error_message} />}
           <div className="grid gap-4 md:grid-cols-4">
             <MetricCard title="Enviados" value={metrics.total_sent} icon={Send} />
             <MetricCard title="Entregues" value={metrics.total_delivered}

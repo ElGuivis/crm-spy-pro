@@ -74,6 +74,8 @@ export function useEmailCampaigns(filters?: { status?: EmailCampaignStatus; sear
       return data as EmailCampaign[];
     },
     enabled: !!tenantId,
+    // enquanto alguma campanha está enviando, a lista se atualiza sozinha (status e totais)
+    refetchInterval: (query) => ((query.state.data as EmailCampaign[] | undefined)?.some((c) => c.status === 'sending') ? 5000 : false),
   });
 }
 

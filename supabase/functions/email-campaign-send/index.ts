@@ -1,21 +1,32 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
-import { sendEmail, getEmailConfig } from "../_shared/email-sender.ts";
-import { injectPreheader, htmlToText, listUnsubscribeHeaders } from "../_shared/email-prepare.ts";
-import { replaceVariables } from "../_shared/email-variable-replacer.ts";
+import { getEmailConfig } from "../_shared/email-sender.ts";
+import { injectPreheader } from "../_shared/email-prepare.ts";
 import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { safeParseAudienceReference, resolveRecipients } from "./audience-resolvers.ts";
-import { injectTracking, getSuppressedEmailSet } from "./send-helpers.ts";
+import { getSuppressedEmailSet } from "./send-helpers.ts";
+import { buildQueue, queueCount, type Sender } from "./queue.ts";
+import { processCampaign } from "./processor.ts";
 
+declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
+
+/**
+ * Envio de campanha. Esta chamada só PREPARA e responde na hora (202):
+ *   1. valida a campanha e monta a fila de destinatários (email_send_queue);
+ *   2. dispara o processador em segundo plano, que envia em lotes, continua sozinho em outra chamada se o tempo
+ *      acabar e é reativado pelo watchdog (cron) se algo cair.
+ * Chamada interna com { action: "resume" } só reativa o processador (continuação automática e watchdog).
+ */
 serve(async (req) => {
   const corsHeaders = getRestrictedCorsHeaders(req);
   const cid = getCorrelationId(req);
   const log = createLogger("email-campaign-send", cid);
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   let campaignId: string | null = null;
 
   try {
@@ -24,201 +35,122 @@ serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    let tenantId: string;
-    if (auth.isInternal) {
-      const payload = await req.clone().json();
-      const cId = String(payload?.campaign_id || "").trim();
-      if (!cId) throw new Error("Missing campaign_id");
-      const { data: camp } = await supabase.from("email_campaigns").select("tenant_id").eq("id", cId).single();
-      if (!camp?.tenant_id) throw new Error("Campaign not found");
-      tenantId = camp.tenant_id;
-    } else {
-      tenantId = auth.tenantId!;
-    }
-
     const payload = await req.json();
     campaignId = String(payload?.campaign_id || "").trim();
     if (!campaignId) throw new Error("Missing campaign_id");
 
-    if (!auth.isInternal) {
+    // Continuação / watchdog: só reativa o processador
+    if (auth.isInternal && payload?.action === "resume") {
+      EdgeRuntime.waitUntil(processCampaign(supabase, supabaseUrl, campaignId, log));
+      return json({ success: true, resumed: true }, 202);
+    }
+
+    let tenantId: string;
+    if (auth.isInternal) {
+      const { data: camp } = await supabase.from("email_campaigns").select("tenant_id").eq("id", campaignId).single();
+      if (!camp?.tenant_id) throw new Error("Campaign not found");
+      tenantId = camp.tenant_id;
+    } else {
+      tenantId = auth.tenantId!;
       await requireResource(supabase, "email_campaigns", campaignId, tenantId, req);
     }
 
+    const fail = async (message: string, status = 400) => {
+      await supabase.from("email_campaigns").update({ status: "error", completed_at: new Date().toISOString(), error_message: message }).eq("id", campaignId as string).eq("tenant_id", tenantId);
+      return json({ success: false, error: message }, status);
+    };
+
     const { data: campaign, error: claimError } = await supabase
       .from("email_campaigns")
-      .update({ status: "sending", started_at: new Date().toISOString(), error_message: null })
+      .update({ status: "sending", started_at: new Date().toISOString(), error_message: null, completed_at: null, send_lease_until: null })
       .eq("id", campaignId).eq("tenant_id", tenantId).in("status", ["draft", "scheduled", "paused", "error"])
-      .select("id, tenant_id, status, subject, content_html, content_json, preheader, coupon_codes, sender_name, sender_email, reply_to, email_integration_id, audience_type, audience_reference, total_recipients, total_sent, total_opened, total_clicked, total_unsubscribed, total_bounced, total_complained, scheduled_at, started_at, completed_at, error_message, ab_test_id, ab_variant, ab_split_pct, ab_offset_pct")
+      .select("id, tenant_id, status, subject, content_html, preheader, email_integration_id, audience_type, audience_reference, ab_test_id, ab_variant, ab_split_pct, ab_offset_pct")
       .maybeSingle();
-
     if (claimError) throw claimError;
-    if (!campaign) {
-      return new Response(JSON.stringify({ success: false, error: "Campanha já foi enviada ou está em andamento" }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!campaign) return json({ success: false, error: "Campanha já foi enviada ou está em andamento" }, 409);
+
+    // Já existe fila (campanha pausada ou que caiu no meio): só retoma, sem montar a fila de novo
+    const existing = await queueCount(supabase, campaignId);
+    if (existing > 0) {
+      EdgeRuntime.waitUntil(processCampaign(supabase, supabaseUrl, campaignId, log));
+      return json({ success: true, queued: existing, resumed: true }, 202);
     }
 
-    // Só o HTML salvo pelo editor vai no envio (é o que você viu na pré-visualização). O gerador antigo do servidor
-    // não conhece os blocos novos (cupom, imagem + texto, alinhamento) e mandaria um e-mail diferente.
+    // Só o HTML salvo pelo editor vai no envio (é o que você viu na pré-visualização)
     if (!campaign.content_html) {
-      const msg = "Esta campanha não tem conteúdo salvo. Abra a campanha no editor, confira o e-mail e salve antes de enviar.";
-      await supabase.from("email_campaigns").update({ status: "error", completed_at: new Date().toISOString(), error_message: msg }).eq("id", campaignId).eq("tenant_id", tenantId);
-      return new Response(JSON.stringify({ success: false, error: msg }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return await fail("Esta campanha não tem conteúdo salvo. Abra a campanha no editor, confira o e-mail e salve antes de enviar.");
     }
     const baseHtml = injectPreheader(campaign.content_html, campaign.preheader);
     const hasUnsubscribeVariable = baseHtml.includes("{{unsubscribe_url}}");
-
     await supabase.from("email_campaigns").update({ has_unsubscribe_link: hasUnsubscribeVariable, compliance_checked_at: new Date().toISOString() }).eq("id", campaignId).eq("tenant_id", tenantId);
-
     if (!hasUnsubscribeVariable) {
-      await supabase.from("email_campaigns").update({ status: "error", completed_at: new Date().toISOString(), error_message: "Envio bloqueado: inclua {{unsubscribe_url}} no conteúdo da campanha." }).eq("id", campaignId).eq("tenant_id", tenantId);
-      return new Response(JSON.stringify({ success: false, error: "Envio bloqueado por conformidade: falta {{unsubscribe_url}}." }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return await fail("Envio bloqueado: inclua {{unsubscribe_url}} no conteúdo da campanha (bloco Descadastrar).");
     }
-
     if (!campaign.email_integration_id) {
-      throw new Error("Esta campanha não tem integração de e-mail configurada. Edite a campanha em Email Marketing e selecione uma integração SMTP antes de enviar.");
+      return await fail("Esta campanha não tem integração de e-mail configurada. Edite a campanha em Email Marketing e selecione uma integração SMTP antes de enviar.");
     }
     const integrationId: string = campaign.email_integration_id;
 
-    const { data: integrationRow } = await supabase.from("email_integrations").select("daily_send_limit, max_sends_per_second").eq("id", integrationId).single();
+    const { data: integrationRow } = await supabase.from("email_integrations").select("daily_send_limit").eq("id", integrationId).single();
     const dailySendLimit: number | null = integrationRow?.daily_send_limit ?? null;
-    const maxSendsPerSecond: number | null = integrationRow?.max_sends_per_second ?? null;
 
     const { config: emailConfig, error: configError } = await getEmailConfig(supabase, integrationId);
-    if (configError || !emailConfig) throw new Error(configError || "Invalid email configuration");
+    if (configError || !emailConfig) return await fail(configError || "Configuração de e-mail inválida");
 
+    const senders: Sender[] = [{ email: emailConfig.senderEmail || emailConfig.smtpUser, name: emailConfig.senderName }];
     const { data: extraSenders } = await supabase.from("email_integration_senders").select("sender_email, sender_name").eq("integration_id", integrationId).eq("is_active", true);
+    for (const s of extraSenders ?? []) senders.push({ email: s.sender_email, name: s.sender_name || emailConfig.senderName });
 
-    const sendersList: { email: string; name: string }[] = [{ email: emailConfig.senderEmail || emailConfig.smtpUser, name: emailConfig.senderName }];
-    if (extraSenders && extraSenders.length > 0) {
-      for (const s of extraSenders) sendersList.push({ email: s.sender_email, name: s.sender_name || emailConfig.senderName });
-    }
-    log.info(`[EMAIL-CAMPAIGN-SEND] Using ${sendersList.length} sender(s) for rotation`);
-
-    const audienceType = String(campaign.audience_type || "all");
-    const audienceReference = safeParseAudienceReference(campaign.audience_reference);
-    const recipients = await resolveRecipients(supabase, tenantId, audienceType, audienceReference);
-
+    const recipients = await resolveRecipients(supabase, tenantId, String(campaign.audience_type || "all"), safeParseAudienceReference(campaign.audience_reference));
     if (!recipients.length) {
-      // Audiência vazia não é um envio concluído: volta para "erro" (reenviável) em vez de marcar como enviada com 0 destinatários
-      const emptyMsg = "Nenhum destinatário na audiência. Confira a lista ou o segmento escolhido e tente de novo.";
-      await supabase.from("email_campaigns").update({ status: "error", completed_at: new Date().toISOString(), error_message: emptyMsg, total_recipients: 0 }).eq("id", campaignId).eq("tenant_id", tenantId);
-      return new Response(JSON.stringify({ success: false, error: emptyMsg }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return await fail("Nenhum destinatário na audiência. Confira a lista ou o segmento escolhido e tente de novo.");
     }
 
-    const suppressedSet = await getSuppressedEmailSet(supabase, tenantId, recipients.map((r) => r.email));
-    let eligibleRecipients = recipients.filter((r) => !suppressedSet.has(r.email));
+    const suppressed = await getSuppressedEmailSet(supabase, tenantId, recipients.map((r) => r.email));
+    let eligible = recipients.filter((r) => !suppressed.has(r.email));
 
-    const abVariant   = (campaign as Record<string, unknown>).ab_variant as string | null;
-    const abTestId    = (campaign as Record<string, unknown>).ab_test_id as string | null;
-    const abSplitPct  = ((campaign as Record<string, unknown>).ab_split_pct as number | null) ?? 50;
-    const abOffsetPct = ((campaign as Record<string, unknown>).ab_offset_pct as number | null) ?? 0;
-
-    if (abTestId && abVariant) {
-      eligibleRecipients.sort((a, b) => a.email.localeCompare(b.email));
-      const total = eligibleRecipients.length;
-      const start = Math.floor(total * abOffsetPct / 100);
-      const end   = Math.min(total, start + Math.ceil(total * abSplitPct / 100));
-      eligibleRecipients = eligibleRecipients.slice(start, end);
-      log.info(`[A/B] variant=${abVariant} slice=[${start},${end}) of ${total} eligible`);
+    // Teste A/B: cada variante envia uma fatia da audiência
+    if (campaign.ab_test_id && campaign.ab_variant) {
+      const split = campaign.ab_split_pct ?? 50;
+      const offset = campaign.ab_offset_pct ?? 0;
+      eligible.sort((a, b) => a.email.localeCompare(b.email));
+      const total = eligible.length;
+      const start = Math.floor(total * offset / 100);
+      eligible = eligible.slice(start, Math.min(total, start + Math.ceil(total * split / 100)));
+      log.info(`[A/B] variante=${campaign.ab_variant} fatia=[${start}, ${start + eligible.length}) de ${total}`);
     }
 
+    // Cota diária da integração (só envios reais)
     if (dailySendLimit && dailySendLimit > 0) {
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const { count: sentLast24h } = await supabase.from("email_campaign_logs").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).in("status", ["delivered", "sent"]).gte("sent_at", twentyFourHoursAgo);
-      const alreadySent = sentLast24h || 0;
-      const remaining = Math.max(dailySendLimit - alreadySent, 0);
-      log.info(`[EMAIL-CAMPAIGN-SEND] Daily quota: ${alreadySent}/${dailySendLimit} sent, ${remaining} remaining`);
-      if (remaining === 0) {
-        await supabase.from("email_campaigns").update({ status: "error", completed_at: new Date().toISOString(), error_message: `Cota diária atingida (${dailySendLimit} emails/24h). Tente novamente mais tarde.` }).eq("id", campaignId).eq("tenant_id", tenantId);
-        return new Response(JSON.stringify({ success: false, error: `Cota diária atingida (${dailySendLimit}/24h).` }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-      if (eligibleRecipients.length > remaining) {
-        log.info(`[EMAIL-CAMPAIGN-SEND] Truncating recipients from ${eligibleRecipients.length} to ${remaining} due to daily limit`);
-        eligibleRecipients = eligibleRecipients.slice(0, remaining);
-      }
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { count } = await supabase.from("email_campaign_logs").select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId).eq("is_test", false).in("status", ["delivered", "sent"]).gte("sent_at", since);
+      const remaining = Math.max(dailySendLimit - (count || 0), 0);
+      log.info(`[EMAIL-CAMPAIGN-SEND] cota diária: ${count || 0}/${dailySendLimit}, restam ${remaining}`);
+      if (remaining === 0) return await fail(`Cota diária atingida (${dailySendLimit} e-mails em 24 h). Tente novamente mais tarde.`, 429);
+      if (eligible.length > remaining) eligible = eligible.slice(0, remaining);
+    }
+    if (!eligible.length) return await fail("Todos os destinatários estão na lista de supressão (descadastrados ou com endereço inválido).");
+
+    if (suppressed.size > 0) {
+      await supabase.from("email_campaign_logs").insert({ tenant_id: tenantId, campaign_id: campaignId, event_type: "suppression_filtered", event_data: { total_candidates: recipients.length, suppressed: suppressed.size, eligible: eligible.length }, status: "info", is_test: false });
     }
 
-    const sendDelayMs = maxSendsPerSecond && maxSendsPerSecond > 0 ? Math.ceil(1000 / maxSendsPerSecond) : 0;
-    if (sendDelayMs > 0) log.info(`[EMAIL-CAMPAIGN-SEND] Rate limiting: ${maxSendsPerSecond}/s → ${sendDelayMs}ms delay between sends`);
+    const queued = await buildQueue(supabase, tenantId, campaignId, eligible, senders);
+    await supabase.from("email_campaigns").update({ total_recipients: queued }).eq("id", campaignId);
 
-    if (suppressedSet.size > 0) {
-      await supabase.from("email_campaign_logs").insert({ tenant_id: tenantId, campaign_id: campaignId, event_type: "suppression_filtered", event_data: { total_candidates: recipients.length, suppressed: suppressedSet.size, eligible: eligibleRecipients.length }, status: "info", is_test: false });
-    }
-
-    let sentCount = 0;
-    let deliveredCount = 0;
-    let failedCount = 0;
-
-    for (let i = 0; i < eligibleRecipients.length; i++) {
-      const recipient = eligibleRecipients[i];
-      let logId: string | null = null;
-      const currentSender = sendersList[i % sendersList.length];
-      const senderConfig = { ...emailConfig, senderEmail: currentSender.email, senderName: currentSender.name };
-
-      try {
-        const { data: tokenRow, error: tokenError } = await supabase.from("email_unsubscribe_tokens").insert({ tenant_id: tenantId, campaign_id: campaignId, recipient_email: recipient.email, recipient_name: recipient.name }).select("id").single();
-        if (tokenError || !tokenRow) throw tokenError || new Error("Failed to create unsubscribe token");
-
-        const unsubscribeUrl = `${supabaseUrl}/functions/v1/email-unsubscribe?token=${tokenRow.id}`;
-        const recipientData = {
-          first_name: recipient.name?.split(" ")[0] || "",
-          last_name: recipient.name?.split(" ").slice(1).join(" ") || "",
-          email: recipient.email,
-          phone: recipient.phone || "",
-          company: "",
-          coupon_code: (campaign.coupon_codes as string[] | null)?.[0] || "",
-          unsubscribe_url: unsubscribeUrl,
-        };
-
-        // 1) variáveis, 2) versão em texto (com os links reais), 3) rastreio só no HTML
-        const personalizedBase = replaceVariables(baseHtml, recipientData);
-        const textVersion = htmlToText(personalizedBase);
-        const personalizedHtml = injectTracking(personalizedBase, supabaseUrl, tokenRow.id);
-        const personalizedSubject = replaceVariables(campaign.subject, recipientData);
-        const result = await sendEmail(senderConfig, {
-          to: recipient.email, subject: personalizedSubject, text: textVersion || personalizedSubject, html: personalizedHtml,
-          headers: listUnsubscribeHeaders(unsubscribeUrl),
-        });
-
-        const nowIso = new Date().toISOString();
-        const { data: logRow } = await supabase.from("email_campaign_logs").insert({
-          tenant_id: tenantId, campaign_id: campaignId,
-          recipient_email: recipient.email, recipient_name: recipient.name, sender_email: currentSender.email,
-          status: result.success ? "delivered" : "failed", error_message: result.error || null,
-          sent_at: result.success ? nowIso : null, delivered_at: result.success ? nowIso : null,
-          event_type: result.success ? "delivery_accepted" : "delivery_failed",
-          event_data: { provider: "smtp", sender: currentSender.email, attempts: result.attempts || 1 },
-          is_test: false,
-        }).select("id").single();
-        logId = logRow?.id || null;
-
-        if (result.success) { sentCount++; deliveredCount++; } else { failedCount++; }
-
-        await supabase.from("email_events").insert({ tenant_id: tenantId, campaign_id: campaignId, log_id: logId, event_type: result.success ? "delivered" : "failed", recipient_email: recipient.email, metadata: { reason: result.error || null } });
-
-        if (sendDelayMs > 0 && i < eligibleRecipients.length - 1) await new Promise((resolve) => setTimeout(resolve, sendDelayMs));
-      } catch (sendError: unknown) {
-        failedCount++;
-        await supabase.from("email_campaign_logs").insert({ tenant_id: tenantId, campaign_id: campaignId, recipient_email: recipient.email, recipient_name: recipient.name, status: "failed", error_message: (sendError as Error)?.message || "Unknown send error", event_type: "delivery_failed", event_data: { provider: "smtp", unexpected_error: true }, is_test: false });
-      }
-    }
-
-    const finalStatus = sentCount === 0 && failedCount > 0 ? "error" : "sent";
-    await supabase.from("email_campaigns").update({ status: finalStatus, completed_at: new Date().toISOString(), sent_at: new Date().toISOString(), total_recipients: eligibleRecipients.length, total_sent: sentCount, total_delivered: deliveredCount, error_message: finalStatus === "error" ? "Nenhum destinatário elegível recebeu a campanha com sucesso." : failedCount > 0 ? `${failedCount} envio(s) falharam.` : null }).eq("id", campaignId).eq("tenant_id", tenantId);
-
-    return new Response(JSON.stringify({ success: true, sent: sentCount, delivered: deliveredCount, failed: failedCount, suppressed: suppressedSet.size, total: eligibleRecipients.length }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    EdgeRuntime.waitUntil(processCampaign(supabase, supabaseUrl, campaignId, log));
+    return json({ success: true, queued, suppressed: suppressed.size }, 202);
   } catch (error: unknown) {
     if (error instanceof Response) return error;
     log.error("[EMAIL-CAMPAIGN-SEND]", error);
 
     if (campaignId) {
       try {
-        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-        const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-        const supabase = createClient(supabaseUrl, serviceRoleKey);
+        const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
         await supabase.from("email_campaigns").update({ status: "error", completed_at: new Date().toISOString(), error_message: (error as Error)?.message || "Erro inesperado no envio" }).eq("id", campaignId);
       } catch { /* noop */ }
     }
-
-    return new Response(JSON.stringify({ success: false, error: (error as Error)?.message || "Unexpected error" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return json({ success: false, error: (error as Error)?.message || "Unexpected error" }, 400);
   }
 });
