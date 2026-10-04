@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { requireUserAuth } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
 import { sendEmail, getEmailConfig } from "../_shared/email-sender.ts";
-import { generateEmailHtml } from "../_shared/email-html-generator.ts";
+import { injectPreheader, htmlToText } from "../_shared/email-prepare.ts";
 import { replaceVariables } from "../_shared/email-variable-replacer.ts";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
@@ -86,7 +86,10 @@ serve(async (req) => {
     }
 
     // Generate HTML
-    const htmlContent = campaign.content_html || generateEmailHtml(campaign.content_json, campaign.preheader || undefined);
+    if (!campaign.content_html) {
+      throw new Error("Esta campanha não tem conteúdo salvo. Abra a campanha no editor, confira o e-mail e salve antes de testar.");
+    }
+    const htmlContent = injectPreheader(campaign.content_html, campaign.preheader);
 
     // Sample data for test with a real-looking unsubscribe URL
     const sampleData = {
@@ -113,7 +116,7 @@ serve(async (req) => {
       const result = await sendEmail(emailConfig, {
         to: trimmedEmail,
         subject: `[TESTE] ${finalSubject}`,
-        text: "Versão de teste",
+        text: htmlToText(finalHtml) || finalSubject,
         html: finalHtml,
       });
 

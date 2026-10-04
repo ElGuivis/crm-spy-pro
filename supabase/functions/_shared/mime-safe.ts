@@ -53,6 +53,7 @@ export interface SafeMailInput {
   text: string;
   html?: string;
   replyTo?: string;
+  headers?: Record<string, string>;
 }
 
 /** Opções do `client.send` do denomailer com assunto e corpo já codificados. */
@@ -69,6 +70,10 @@ export function buildSafeMailOptions(input: SafeMailInput): Record<string, unkno
     subject: encodeSubject(input.subject),
     mimeContent,
   };
-  if (input.replyTo) options.replyTo = input.replyTo;
+  // O replyTo do denomailer sai errado ("ReplyTo: <>", sem hífen e sem endereço) e os leitores de e-mail ignoram:
+  // quem respondia, respondia para o remetente. Vai como cabeçalho Reply-To normal.
+  const headers: Record<string, string> = { ...(input.headers ?? {}) };
+  if (input.replyTo && /^[^\s<>@]+@[^\s<>@]+$/.test(input.replyTo.trim())) headers["Reply-To"] = input.replyTo.trim();
+  if (Object.keys(headers).length) options.headers = headers;
   return options;
 }

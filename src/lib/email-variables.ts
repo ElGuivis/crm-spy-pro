@@ -30,14 +30,12 @@ export interface VariableData {
 export function replaceVariables(text: string, data: VariableData): string {
   if (!text) return text;
   
-  let result = text;
-  
-  Object.entries(data).forEach(([key, value]) => {
-    const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
-    result = result.replace(regex, value || '');
+  // {{variavel}} ou {{variavel|valor padrão}}; igual ao envio (supabase/functions/_shared/email-variable-replacer.ts)
+  return text.replace(/\{\{\s*(\w+)\s*(?:\|([^}]*))?\}\}/g, (match, key: string, fallback?: string) => {
+    if (!(key in data)) return match;
+    const value = (data as Record<string, string | undefined>)[key];
+    return value || fallback?.trim() || '';
   });
-  
-  return result;
 }
 
 /**
@@ -49,7 +47,7 @@ export function replaceVariablesWithSample(text: string): string {
   let result = text;
   
   Object.entries(EMAIL_VARIABLES).forEach(([key, { example }]) => {
-    const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+    const regex = new RegExp(`\\{\\{\\s*${key}\\s*(?:\\|[^}]*)?\\}\\}`, 'g');
     result = result.replace(regex, example);
   });
   
@@ -60,7 +58,7 @@ export function replaceVariablesWithSample(text: string): string {
  * Check if text contains variables
  */
 export function hasVariables(text: string): boolean {
-  return /\{\{[a-z_]+\}\}/.test(text);
+  return /\{\{[a-z_]+(\|[^}]*)?\}\}/.test(text);
 }
 
 /**

@@ -12,15 +12,16 @@ export interface VariableData {
   unsubscribe_url?: string;
 }
 
+/**
+ * Troca {{variavel}} pelo dado. Aceita valor padrão: {{first_name|cliente}} usa "cliente" quando o nome está vazio.
+ * Variáveis desconhecidas ficam como estão.
+ */
 export function replaceVariables(text: string, data: VariableData): string {
   if (!text) return text;
 
-  let result = text;
-
-  Object.entries(data).forEach(([key, value]) => {
-    const regex = new RegExp(`\\{\\{${key}\\}\\}`, "g");
-    result = result.replace(regex, value || "");
+  return text.replace(/\{\{\s*(\w+)\s*(?:\|([^}]*))?\}\}/g, (match, key: string, fallback?: string) => {
+    if (!(key in data)) return match;
+    const value = (data as Record<string, string | undefined>)[key];
+    return value || fallback?.trim() || "";
   });
-
-  return result;
 }

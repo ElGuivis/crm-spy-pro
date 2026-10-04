@@ -3,11 +3,19 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
-function htmlResponse(status: number, title: string, description: string) {
+function htmlResponse(status: number, title: string, description: string, extraHtml = "") {
   return new Response(
-    `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>${title}</title></head><body style="margin:0;font-family:Arial,sans-serif;background:#ffffff;color:#111;"><main style="max-width:560px;margin:60px auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;"><h1 style="font-size:22px;margin:0 0 12px;">${title}</h1><p style="font-size:15px;line-height:1.6;margin:0;">${description}</p></main></body></html>`,
+    `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>${title}</title></head><body style="margin:0;font-family:Arial,sans-serif;background:#ffffff;color:#111;"><main style="max-width:560px;margin:60px auto;padding:24px;border:1px solid #e5e7eb;border-radius:12px;"><h1 style="font-size:22px;margin:0 0 12px;">${title}</h1><p style="font-size:15px;line-height:1.6;margin:0;">${description}</p>${extraHtml}</main></body></html>`,
     { status, headers: { ...corsHeaders, "Content-Type": "text/html; charset=utf-8" } }
   );
+}
+
+// Abrir o link NÃO descadastra: leitores de e-mail e filtros de segurança (Outlook, antivírus) abrem os links sozinhos
+// e tirariam clientes da lista sem eles pedirem. O descadastro só acontece no clique do botão (POST) ou pelo
+// cabeçalho List-Unsubscribe-Post (um clique do próprio Gmail/Yahoo).
+function confirmPage(token: string) {
+  const form = `<form method="POST" action="?token=${encodeURIComponent(token)}" style="margin-top:20px;"><button type="submit" style="background:#111;color:#fff;border:0;border-radius:8px;padding:12px 22px;font-size:15px;cursor:pointer;">Confirmar descadastro</button></form>`;
+  return htmlResponse(200, "Deseja parar de receber nossos e-mails?", "Clique no botão abaixo para confirmar. Você deixa de receber as campanhas deste remetente.", form);
 }
 
 serve(async (req) => {
@@ -45,6 +53,8 @@ serve(async (req) => {
     if (tokenError || !unsubscribeToken) {
       return htmlResponse(404, "Link não encontrado", "Este link de descadastro não existe ou já expirou.");
     }
+
+    if (req.method === "GET") return confirmPage(token);
 
     const nowIso = new Date().toISOString();
     const normalizedEmail = (unsubscribeToken.recipient_email || "").trim().toLowerCase();

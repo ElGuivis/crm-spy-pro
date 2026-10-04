@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { sendEmail, getEmailConfig } from "../_shared/email-sender.ts";
-import { generateEmailHtml } from "../_shared/email-html-generator.ts";
+import { injectPreheader, htmlToText, listUnsubscribeHeaders } from "../_shared/email-prepare.ts";
 import { replaceVariables } from "../_shared/email-variable-replacer.ts";
 import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
@@ -48,7 +48,7 @@ serve(async (req) => {
       .from("email_campaigns")
       .update({ status: "sending", started_at: new Date().toISOString(), error_message: null })
       .eq("id", campaignId).eq("tenant_id", tenantId).in("status", ["draft", "scheduled", "paused", "error"])
-      .select("id, tenant_id, status, subject, content_html, content_json, preheader, sender_name, sender_email, reply_to, email_integration_id, audience_type, audience_reference, total_recipients, total_sent, total_opened, total_clicked, total_unsubscribed, total_bounced, total_complained, scheduled_at, started_at, completed_at, error_message, ab_test_id, ab_variant, ab_split_pct, ab_offset_pct")
+      .select("id, tenant_id, status, subject, content_html, content_json, preheader, coupon_codes, sender_name, sender_email, reply_to, email_integration_id, audience_type, audience_reference, total_recipients, total_sent, total_opened, total_clicked, total_unsubscribed, total_bounced, total_complained, scheduled_at, started_at, completed_at, error_message, ab_test_id, ab_variant, ab_split_pct, ab_offset_pct")
       .maybeSingle();
 
     if (claimError) throw claimError;
@@ -56,7 +56,14 @@ serve(async (req) => {
       return new Response(JSON.stringify({ success: false, error: "Campanha já foi enviada ou está em andamento" }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const baseHtml = campaign.content_html || generateEmailHtml(campaign.content_json, campaign.preheader || undefined);
+    // Só o HTML salvo pelo editor vai no envio (é o que você viu na pré-visualização). O gerador antigo do servidor
+    // não conhece os blocos novos (cupom, imagem + texto, alinhamento) e mandaria um e-mail diferente.
+    if (!campaign.content_html) {
+      const msg = "Esta campanha não tem conteúdo salvo. Abra a campanha no editor, confira o e-mail e salve antes de enviar.";
+      await supabase.from("email_campaigns").update({ status: "error", completed_at: new Date().toISOString(), error_message: msg }).eq("id", campaignId).eq("tenant_id", tenantId);
+      return new Response(JSON.stringify({ success: false, error: msg }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    const baseHtml = injectPreheader(campaign.content_html, campaign.preheader);
     const hasUnsubscribeVariable = baseHtml.includes("{{unsubscribe_url}}");
 
     await supabase.from("email_campaigns").update({ has_unsubscribe_link: hasUnsubscribeVariable, compliance_checked_at: new Date().toISOString() }).eq("id", campaignId).eq("tenant_id", tenantId);
@@ -152,20 +159,25 @@ serve(async (req) => {
         if (tokenError || !tokenRow) throw tokenError || new Error("Failed to create unsubscribe token");
 
         const unsubscribeUrl = `${supabaseUrl}/functions/v1/email-unsubscribe?token=${tokenRow.id}`;
-        const htmlWithTracking = injectTracking(baseHtml, supabaseUrl, tokenRow.id);
         const recipientData = {
           first_name: recipient.name?.split(" ")[0] || "",
           last_name: recipient.name?.split(" ").slice(1).join(" ") || "",
           email: recipient.email,
           phone: recipient.phone || "",
           company: "",
-          coupon_code: "",
+          coupon_code: (campaign.coupon_codes as string[] | null)?.[0] || "",
           unsubscribe_url: unsubscribeUrl,
         };
 
-        const personalizedHtml = replaceVariables(htmlWithTracking, recipientData);
+        // 1) variáveis, 2) versão em texto (com os links reais), 3) rastreio só no HTML
+        const personalizedBase = replaceVariables(baseHtml, recipientData);
+        const textVersion = htmlToText(personalizedBase);
+        const personalizedHtml = injectTracking(personalizedBase, supabaseUrl, tokenRow.id);
         const personalizedSubject = replaceVariables(campaign.subject, recipientData);
-        const result = await sendEmail(senderConfig, { to: recipient.email, subject: personalizedSubject, text: "Email Marketing", html: personalizedHtml });
+        const result = await sendEmail(senderConfig, {
+          to: recipient.email, subject: personalizedSubject, text: textVersion || personalizedSubject, html: personalizedHtml,
+          headers: listUnsubscribeHeaders(unsubscribeUrl),
+        });
 
         const nowIso = new Date().toISOString();
         const { data: logRow } = await supabase.from("email_campaign_logs").insert({

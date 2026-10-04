@@ -33,6 +33,7 @@ export interface EmailMessage {
   subject: string;
   text: string;
   html?: string;
+  headers?: Record<string, string>;
 }
 
 /**
@@ -80,6 +81,7 @@ export async function sendEmail(
         text: message.text,
         html: message.html,
         replyTo: config.replyTo,
+        headers: message.headers,
       });
 
       await client.send(sendOptions as never);
