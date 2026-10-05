@@ -424,3 +424,7 @@ verify_jwt = false
 # AUTHENTICATED — in-code auth via requireUserAuth
 verify_jwt = false
 
+
+[functions.domain-event-processor]
+# INTERNAL (cron) — in-code auth via requireInternalAuth
+verify_jwt = false

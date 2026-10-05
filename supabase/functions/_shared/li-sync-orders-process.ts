@@ -203,48 +203,7 @@ export async function processOrder(
 
   const situacaoNome = order.situacao?.nome || "";
 
-  const { data: cashbackConfig } = await supabase
-    .from("cashback_configs")
-    .select("trigger_statuses, is_active, id")
-    .eq("tenant_id", tenantId)
-    .eq("is_active", true)
-    .limit(1)
-    .maybeSingle();
-
-  log.info(`[CASHBACK] Order #${order.numero} status: "${situacaoNome}", config: ${!!cashbackConfig}`);
-
-  if (cashbackConfig?.is_active && cashbackConfig.trigger_statuses?.length > 0) {
-    const shouldTrigger = (cashbackConfig.trigger_statuses as string[]).some(
-      (s: string) => situacaoNome.toLowerCase() === s.toLowerCase(),
-    );
-    log.info(`[CASHBACK] Should trigger: ${shouldTrigger}`);
-    if (shouldTrigger && order.valor_total) {
-      const { data: existingCoupon } = await supabase
-        .from("generated_coupons").select("id")
-        .eq("order_id", String(order.numero)).eq("tenant_id", tenantId).maybeSingle();
-      if (!existingCoupon) {
-        log.info(`[CASHBACK] Triggering cashback for order #${order.numero}`);
-        try {
-          const cashbackRes = await fetch(`${supabaseUrl}/functions/v1/li-cashback`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${supabaseKey}` },
-            body: JSON.stringify({
-              order_id: order.id, order_number: String(order.numero),
-              customer_name: clienteNome || "Cliente", customer_email: clienteEmail || "",
-              customer_phone: clienteTelefone || "", customer_cpf: clienteCpf || "",
-              order_total: parseFloat(order.valor_total), tenant_id: tenantId,
-            }),
-          });
-          const cashbackResult = await cashbackRes.json();
-          log.info(`[CASHBACK] Result for order #${order.numero}:`, JSON.stringify(cashbackResult));
-        } catch (e) {
-          log.error(`[CASHBACK] Failed to trigger for order #${order.numero}:`, e);
-        }
-      } else {
-        log.info(`[CASHBACK] Coupon already exists for order #${order.numero}`);
-      }
-    }
-  }
+  // cashback, recuperação e atribuição reagem ao evento 'order_ingested' (gatilho em li_orders → domain-event-processor)
 
   if (situacaoNome && tenantId && integrationId && orderData) {
     log.info(`[NEW-ORDER-NOTIFICATION] Checking notifications for new order #${order.numero}, status: "${situacaoNome}"`);

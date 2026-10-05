@@ -308,8 +308,7 @@ async function processOrder(
     await supabase.from('li_order_items').insert(items);
   }
 
-  // Trigger cashback check
-  await checkCashback(supabase, order, customerId, tenantId, supabaseUrl, supabaseKey);
+  // cashback, recuperação e atribuição reagem ao evento 'order_ingested' (gatilho em li_orders → domain-event-processor)
 
   log.info(`[WEBHOOK] Order ${order.numero} upserted`);
 }
@@ -370,44 +369,3 @@ async function processCustomer(
 
   log.info(`[WEBHOOK] Customer ${customer.id} upserted`);
 }
-
-async function checkCashback(
-  supabase: ServiceClient, order: Record<string, unknown>, customerId: string | null,
-  tenantId: string, supabaseUrl: string, supabaseKey: string
-) {
-  const situacaoNome = order.situacao?.nome || '';
-  const { data: cashbackConfig } = await supabase.from('cashback_configs')
-    .select('trigger_statuses, is_active')
-    .eq('tenant_id', tenantId).eq('is_active', true)
-    .limit(1).maybeSingle();
-
-  if (!cashbackConfig?.trigger_statuses?.length) return;
-
-  const shouldTrigger = cashbackConfig.trigger_statuses.some(
-    (s: string) => situacaoNome.toLowerCase() === s.toLowerCase()
-  );
-  if (!shouldTrigger || !order.valor_total) return;
-
-  const { data: existingCoupon } = await supabase.from('generated_coupons')
-    .select('id').eq('order_id', String(order.numero)).eq('tenant_id', tenantId).maybeSingle();
-  if (existingCoupon) return;
-
-  try {
-    await fetch(`${supabaseUrl}/functions/v1/li-cashback`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${supabaseKey}` },
-      body: JSON.stringify({
-        order_id: order.id,
-        order_number: order.numero,
-        customer_name: order.cliente?.nome || 'Cliente',
-        customer_email: order.cliente?.email || '',
-        customer_phone: order.cliente?.telefone_celular || '',
-        order_total: parseFloat(order.valor_total),
-        tenant_id: tenantId,
-      }),
-    });
-  } catch (e) {
-    log.error('[WEBHOOK] Cashback trigger failed:', e);
-  }
-}
-

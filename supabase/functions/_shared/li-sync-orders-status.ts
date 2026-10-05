@@ -172,63 +172,7 @@ export async function updateOrderStatuses(
           updated++;
         }
 
-        // Cashback trigger on status change
-        if (statusChanged && apiStatusNome && tenantId && order.integration_id) {
-          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-          const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-          const { data: cashbackConfig } = await supabase
-            .from("cashback_configs")
-            .select("trigger_statuses, is_active, id, integration_id, send_via_whatsapp, whatsapp_integration_id")
-            .eq("tenant_id", tenantId)
-            .eq("integration_id", order.integration_id)
-            .eq("is_active", true)
-            .limit(1)
-            .maybeSingle();
-
-          if (cashbackConfig?.trigger_statuses?.length > 0) {
-            const shouldTrigger = (cashbackConfig.trigger_statuses as string[]).some(
-              (trigger: string) => apiStatusNome!.toLowerCase() === trigger.toLowerCase(),
-            );
-            log.info(`[STATUS-CASHBACK] Order #${order.order_number} new status "${apiStatusNome}", trigger: ${shouldTrigger}`);
-
-            if (shouldTrigger) {
-              const { data: existingCoupon } = await supabase
-                .from("generated_coupons").select("id")
-                .eq("order_id", String(order.order_number)).eq("tenant_id", tenantId).maybeSingle();
-
-              if (!existingCoupon) {
-                let customerName = "Cliente", customerEmail = "", customerPhone = "", customerCpf = "";
-                if (apiOrder.cliente && typeof apiOrder.cliente === "object") {
-                  customerName = apiOrder.cliente.nome || "Cliente";
-                  customerEmail = apiOrder.cliente.email || "";
-                  customerPhone = apiOrder.cliente.telefone_celular || apiOrder.cliente.telefone_principal || "";
-                  customerCpf = apiOrder.cliente.cpf || "";
-                }
-                log.info(`[STATUS-CASHBACK] Triggering cashback for order #${order.order_number}`);
-                try {
-                  const cashbackRes = await fetch(`${supabaseUrl}/functions/v1/li-cashback`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${supabaseKey}` },
-                    body: JSON.stringify({
-                      order_id: apiOrder.id, order_number: String(order.order_number),
-                      customer_name: customerName, customer_email: customerEmail,
-                      customer_phone: customerPhone, customer_cpf: customerCpf,
-                      order_total: parseFloat(apiOrder.valor_total || "0"),
-                      tenant_id: tenantId, integration_id: order.integration_id,
-                    }),
-                  });
-                  const cashbackResult = await cashbackRes.json();
-                  log.info(`[STATUS-CASHBACK] Result for order #${order.order_number}:`, JSON.stringify(cashbackResult));
-                } catch (e) {
-                  log.error(`[STATUS-CASHBACK] Failed for order #${order.order_number}:`, e);
-                }
-              } else {
-                log.info(`[STATUS-CASHBACK] Coupon already exists for order #${order.order_number}`);
-              }
-            }
-          }
-        }
+        // cashback, recuperação e atribuição reagem ao evento 'order_ingested' (gatilho em li_orders → domain-event-processor)
 
         // Order notification trigger on status change
         if (statusChanged && apiStatusNome && tenantId && order.integration_id) {
