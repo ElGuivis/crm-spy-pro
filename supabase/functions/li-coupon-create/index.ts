@@ -36,11 +36,12 @@ Deno.serve(async (req) => {
     const max = b.quantidadeUsoMaximo ? Number(b.quantidadeUsoMaximo) : UNLIMITED_USES;
     const perCustomer = b.quantidadePorCliente ? Number(b.quantidadePorCliente) : 1;
     const minimo = b.valorMinimo ? Number(b.valorMinimo) : null;
+    const grupos = Array.isArray(b.grupoIds) ? b.grupoIds.map(Number).filter((n: number) => Number.isInteger(n) && n > 0) : [];
 
     log.info(`[COUPON-CREATE] ${codigo} (${tipo})`);
     const created = await createLiCoupon(liAuthHeader(integration.api_key), {
       codigo, tipo, valor: tipo === "frete_gratis" ? 0 : valor, validade, quantidade: max, quantidadePorCliente: perCustomer,
-      valorMinimo: minimo, cumulativo: !!b.cumulativo, descricao: b.descricao || undefined,
+      valorMinimo: minimo, cumulativo: !!b.cumulativo, descricao: b.descricao || undefined, grupos,
     });
     if (!created.ok) {
       log.error(`[COUPON-CREATE] LI recusou: ${created.status} ${created.error}`);

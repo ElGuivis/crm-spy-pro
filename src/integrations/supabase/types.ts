@@ -3319,6 +3319,495 @@ export type Database = {
           },
         ]
       }
+      abandonment_flows: {
+        Row: {
+          cooldown_days: number
+          created_at: string
+          email_integration_id: string | null
+          enabled: boolean
+          enabled_at: string | null
+          kind: string
+          max_event_age_hours: number
+          min_value: number
+          opt_out_native: boolean
+          quiet_end: string
+          quiet_start: string
+          steps: Json
+          tenant_id: string
+          updated_at: string
+          whatsapp_integration_id: string | null
+        }
+        Insert: {
+          cooldown_days?: number
+          created_at?: string
+          email_integration_id?: string | null
+          enabled?: boolean
+          enabled_at?: string | null
+          kind: string
+          max_event_age_hours?: number
+          min_value?: number
+          opt_out_native?: boolean
+          quiet_end?: string
+          quiet_start?: string
+          steps?: Json
+          tenant_id: string
+          updated_at?: string
+          whatsapp_integration_id?: string | null
+        }
+        Update: {
+          cooldown_days?: number
+          created_at?: string
+          email_integration_id?: string | null
+          enabled?: boolean
+          enabled_at?: string | null
+          kind?: string
+          max_event_age_hours?: number
+          min_value?: number
+          opt_out_native?: boolean
+          quiet_end?: string
+          quiet_start?: string
+          steps?: Json
+          tenant_id?: string
+          updated_at?: string
+          whatsapp_integration_id?: string | null
+        }
+        Relationships: []
+      }
+      abandonment_flow_sends: {
+        Row: {
+          abandonment_id: string
+          channel: string
+          coupon_code: string | null
+          created_at: string
+          flow_campaign_id: string | null
+          id: string
+          kind: string
+          reason: string | null
+          sent_at: string | null
+          status: string
+          step_id: string
+          tenant_id: string
+        }
+        Insert: {
+          abandonment_id: string
+          channel: string
+          coupon_code?: string | null
+          created_at?: string
+          flow_campaign_id?: string | null
+          id?: string
+          kind: string
+          reason?: string | null
+          sent_at?: string | null
+          status: string
+          step_id: string
+          tenant_id: string
+        }
+        Update: {
+          abandonment_id?: string
+          channel?: string
+          coupon_code?: string | null
+          created_at?: string
+          flow_campaign_id?: string | null
+          id?: string
+          kind?: string
+          reason?: string | null
+          sent_at?: string | null
+          status?: string
+          step_id?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      li_abandonment_campaigns: {
+        Row: {
+          automation_id: number
+          cart_json: Json | null
+          captured_at: string
+          client_id: number | null
+          details_fetched_at: string | null
+          event_at: string | null
+          flow_status: string
+          gone_at: string | null
+          id: string
+          integration_id: string
+          items: Json
+          kind: string
+          last_seen_at: string
+          li_campaign_id: number
+          li_last_sent_at: string | null
+          li_status: string | null
+          native_optout_at: string | null
+          product_ids: number[]
+          recipient_email: string | null
+          recipient_name: string | null
+          recipient_phone: string | null
+          recovered_at: string | null
+          recovered_order_id: string | null
+          recovered_total: number | null
+          recovered_via: string | null
+          rule_id: number | null
+          tenant_id: string
+          value: number
+        }
+        Insert: {
+          automation_id: number
+          cart_json?: Json | null
+          captured_at?: string
+          client_id?: number | null
+          details_fetched_at?: string | null
+          event_at?: string | null
+          flow_status?: string
+          gone_at?: string | null
+          id?: string
+          integration_id: string
+          items?: Json
+          kind: string
+          last_seen_at?: string
+          li_campaign_id: number
+          li_last_sent_at?: string | null
+          li_status?: string | null
+          native_optout_at?: string | null
+          product_ids?: number[]
+          recipient_email?: string | null
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          recovered_at?: string | null
+          recovered_order_id?: string | null
+          recovered_total?: number | null
+          recovered_via?: string | null
+          rule_id?: number | null
+          tenant_id: string
+          value?: number
+        }
+        Update: {
+          automation_id?: number
+          cart_json?: Json | null
+          captured_at?: string
+          client_id?: number | null
+          details_fetched_at?: string | null
+          event_at?: string | null
+          flow_status?: string
+          gone_at?: string | null
+          id?: string
+          integration_id?: string
+          items?: Json
+          kind?: string
+          last_seen_at?: string
+          li_campaign_id?: number
+          li_last_sent_at?: string | null
+          li_status?: string | null
+          native_optout_at?: string | null
+          product_ids?: number[]
+          recipient_email?: string | null
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          recovered_at?: string | null
+          recovered_order_id?: string | null
+          recovered_total?: number | null
+          recovered_via?: string | null
+          rule_id?: number | null
+          tenant_id?: string
+          value?: number
+        }
+        Relationships: []
+      }
+      li_native_toggle_log: {
+        Row: {
+          created_at: string
+          from_state: boolean | null
+          id: string
+          snapshot: Json | null
+          tenant_id: string
+          to_state: boolean
+          toggle_key: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          from_state?: boolean | null
+          id?: string
+          snapshot?: Json | null
+          tenant_id: string
+          to_state: boolean
+          toggle_key: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          from_state?: boolean | null
+          id?: string
+          snapshot?: Json | null
+          tenant_id?: string
+          to_state?: boolean
+          toggle_key?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      li_marketing_settings: {
+        Row: {
+          sync_unsubscribes: boolean
+          tenant_id: string
+          updated_at: string
+          waitlist_alert: boolean
+        }
+        Insert: {
+          sync_unsubscribes?: boolean
+          tenant_id: string
+          updated_at?: string
+          waitlist_alert?: boolean
+        }
+        Update: {
+          sync_unsubscribes?: boolean
+          tenant_id?: string
+          updated_at?: string
+          waitlist_alert?: boolean
+        }
+        Relationships: []
+      }
+      li_marketing_outbox: {
+        Row: {
+          attempts: number
+          created_at: string
+          done_at: string | null
+          id: string
+          integration_id: string
+          kind: string
+          last_error: string | null
+          next_attempt_at: string
+          payload: Json
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          done_at?: string | null
+          id?: string
+          integration_id: string
+          kind: string
+          last_error?: string | null
+          next_attempt_at?: string
+          payload: Json
+          status?: string
+          tenant_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          done_at?: string | null
+          id?: string
+          integration_id?: string
+          kind?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          payload?: Json
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      li_newsletter_subscribers: {
+        Row: {
+          email: string
+          first_seen_at: string
+          integration_id: string
+          is_baseline: boolean
+          is_customer: boolean
+          last_scan: number
+          li_id: number
+          removed_at: string | null
+          tenant_id: string
+        }
+        Insert: {
+          email: string
+          first_seen_at?: string
+          integration_id: string
+          is_baseline?: boolean
+          is_customer?: boolean
+          last_scan?: number
+          li_id: number
+          removed_at?: string | null
+          tenant_id: string
+        }
+        Update: {
+          email?: string
+          first_seen_at?: string
+          integration_id?: string
+          is_baseline?: boolean
+          is_customer?: boolean
+          last_scan?: number
+          li_id?: number
+          removed_at?: string | null
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      li_newsletter_scan_state: {
+        Row: {
+          baseline_done: boolean
+          integration_id: string
+          last_check_at: string | null
+          last_full_scan_at: string | null
+          next_offset: number
+          scan_no: number
+          scanning: boolean
+          tenant_id: string
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          baseline_done?: boolean
+          integration_id: string
+          last_check_at?: string | null
+          last_full_scan_at?: string | null
+          next_offset?: number
+          scan_no?: number
+          scanning?: boolean
+          tenant_id: string
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          baseline_done?: boolean
+          integration_id?: string
+          last_check_at?: string | null
+          last_full_scan_at?: string | null
+          next_offset?: number
+          scan_no?: number
+          scanning?: boolean
+          tenant_id?: string
+          total?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      li_waitlist_snapshots: {
+        Row: {
+          integration_id: string
+          name: string | null
+          parent_id: number | null
+          product_id: number
+          sku: string | null
+          snapshot_date: string
+          stock: number | null
+          subscribers: number
+          tenant_id: string
+        }
+        Insert: {
+          integration_id: string
+          name?: string | null
+          parent_id?: number | null
+          product_id: number
+          sku?: string | null
+          snapshot_date: string
+          stock?: number | null
+          subscribers?: number
+          tenant_id: string
+        }
+        Update: {
+          integration_id?: string
+          name?: string | null
+          parent_id?: number | null
+          product_id?: number
+          sku?: string | null
+          snapshot_date?: string
+          stock?: number | null
+          subscribers?: number
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      li_group_jobs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          done: number
+          failed: number
+          finished_at: string | null
+          id: string
+          integration_id: string
+          label: string
+          skipped: number
+          status: string
+          target_group: string | null
+          tenant_id: string
+          total: number
+          undo_of: string | null
+          undone_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          done?: number
+          failed?: number
+          finished_at?: string | null
+          id?: string
+          integration_id: string
+          label: string
+          skipped?: number
+          status?: string
+          target_group?: string | null
+          tenant_id: string
+          total?: number
+          undo_of?: string | null
+          undone_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          done?: number
+          failed?: number
+          finished_at?: string | null
+          id?: string
+          integration_id?: string
+          label?: string
+          skipped?: number
+          status?: string
+          target_group?: string | null
+          tenant_id?: string
+          total?: number
+          undo_of?: string | null
+          undone_at?: string | null
+        }
+        Relationships: []
+      }
+      li_group_job_items: {
+        Row: {
+          done_at: string | null
+          email: string | null
+          error: string | null
+          job_id: string
+          li_customer_id: number
+          new_group: string | null
+          previous_group: string | null
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          done_at?: string | null
+          email?: string | null
+          error?: string | null
+          job_id: string
+          li_customer_id: number
+          new_group?: string | null
+          previous_group?: string | null
+          status?: string
+          tenant_id: string
+        }
+        Update: {
+          done_at?: string | null
+          email?: string | null
+          error?: string | null
+          job_id?: string
+          li_customer_id?: number
+          new_group?: string | null
+          previous_group?: string | null
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       email_campaign_coupons: {
         Row: {
           campaign_id: string
@@ -3433,6 +3922,8 @@ export type Database = {
           ab_winner_variant: string | null
           ab_winner_decided_at: string | null
           ab_winner_detail: Json | null
+          flow_kind: string | null
+          flow_step: string | null
           coupon_codes: string[]
           completed_at: string | null
           compliance_checked_at: string | null
@@ -3486,6 +3977,8 @@ export type Database = {
           ab_winner_variant?: string | null
           ab_winner_decided_at?: string | null
           ab_winner_detail?: Json | null
+          flow_kind?: string | null
+          flow_step?: string | null
           coupon_codes?: string[]
           completed_at?: string | null
           compliance_checked_at?: string | null
@@ -3539,6 +4032,8 @@ export type Database = {
           ab_winner_variant?: string | null
           ab_winner_decided_at?: string | null
           ab_winner_detail?: Json | null
+          flow_kind?: string | null
+          flow_step?: string | null
           coupon_codes?: string[]
           completed_at?: string | null
           compliance_checked_at?: string | null
@@ -10227,6 +10722,45 @@ export type Database = {
           ordered_at: string
           platform: string
           touch_at: string
+        }[]
+      }
+      get_abandonment_funnel: {
+        Args: { p_days?: number; p_tenant_id: string }
+        Returns: {
+          captured: number
+          clicked: number
+          contacted: number
+          kind: string
+          opened: number
+          recovered_other: number
+          recovered_ours: number
+          revenue_ours: number
+          whatsapp_sent: number
+          with_contact: number
+        }[]
+      }
+      get_waitlist_panel: {
+        Args: { p_limit?: number; p_tenant_id: string }
+        Returns: {
+          current_stock: number | null
+          delta_7d: number
+          image_url: string | null
+          name: string | null
+          parent_id: number | null
+          product_id: number
+          restocked: boolean
+          sku: string | null
+          snapshot_date: string
+          snapshot_stock: number | null
+          subscribers: number
+        }[]
+      }
+      get_rfm_audience_li_customers: {
+        Args: { p_audience_id: string; p_tenant_id: string }
+        Returns: {
+          current_group: string | null
+          email: string | null
+          li_customer_id: number
         }[]
       }
       get_email_health: {

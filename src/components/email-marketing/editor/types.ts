@@ -11,6 +11,7 @@ export type BlockType =
   | 'banner'
   | 'product'
   | 'coupon'
+  | 'cart-items'
   | 'imagetext'
   | 'social'
   | 'footer'
@@ -195,6 +196,15 @@ export interface CouponBlock extends BaseBlockProps {
   descriptionColor?: string;
 }
 
+/** Itens que a pessoa deixou no carrinho (só em e-mails de recuperação): o envio troca {{cart_items}} pela lista. */
+export interface CartItemsBlock extends BaseBlockProps {
+  type: 'cart-items';
+  title?: string;
+  titleColor?: string;
+  /** cor do nome, quantidade e preço dos itens */
+  textColor?: string;
+}
+
 export interface SocialBlock extends BaseBlockProps {
   type: 'social';
   platforms: Array<{
@@ -242,6 +252,7 @@ export type EmailBlock =
   | BannerBlock
   | ProductBlock
   | CouponBlock
+  | CartItemsBlock
   | ImageTextBlock
   | SocialBlock
   | FooterBlock

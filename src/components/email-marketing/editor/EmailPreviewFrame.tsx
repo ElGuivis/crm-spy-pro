@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { EmailContent } from "./types";
 import { generateEmailHTML } from "./htmlGenerator";
+import { withPreviewSamples } from "./cartPreview";
 
 interface Props {
   content: EmailContent;
@@ -13,7 +14,7 @@ interface Props {
 export function EmailPreviewFrame({ content, mode, compact }: Props) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(600);
-  const html = generateEmailHTML(content);
+  const html = withPreviewSamples(generateEmailHTML(content));
 
   const fit = () => {
     const doc = ref.current?.contentDocument;

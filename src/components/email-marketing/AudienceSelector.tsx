@@ -14,14 +14,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Users, UserCheck, UserX, Loader2, AlertCircle, Filter, List, Layers, TrendingUp, FileSpreadsheet } from "lucide-react";
+import { Users, UserCheck, UserX, Loader2, AlertCircle, Filter, List, Layers, TrendingUp, FileSpreadsheet, Newspaper } from "lucide-react";
 import { useAudienceEstimate, AudienceReference } from "@/hooks/useAudienceEstimate";
 import { useCrmSegments } from "@/hooks/useCrmSegments";
 import { useTags } from "@/hooks/useTags";
 import { useAllRFMAudiences } from "@/hooks/useAllRFMAudiences";
 import { cn } from "@/lib/utils";
 
-export type AudienceType = "all" | "segment" | "filters" | "manual" | "rfm";
+export type AudienceType = "all" | "segment" | "filters" | "manual" | "rfm" | "newsletter";
 
 interface AudienceSelectorProps {
   value: {
@@ -45,6 +45,7 @@ export function AudienceSelector({ value, onChange, className }: AudienceSelecto
   const [emailContains, setEmailContains] = useState(value.reference?.filters?.email_contains || "");
   const [manualEmails, setManualEmails] = useState<string>(value.reference?.emails?.join("\n") || "");
   const [manualNames, setManualNames] = useState<Record<string, string>>(value.reference?.names ?? {});
+  const [newsletterDays, setNewsletterDays] = useState<number>(value.reference?.days ?? 30);
   const fileInput = useRef<HTMLInputElement>(null);
 
   // Build reference object based on type
@@ -54,6 +55,8 @@ export function AudienceSelector({ value, onChange, className }: AudienceSelecto
         return { segment_id: selectedSegmentId };
       case "rfm":
         return { rfm_audience_id: selectedRfmAudienceId };
+      case "newsletter":
+        return { days: newsletterDays };
       case "filters":
         return {
           filters: {
@@ -74,7 +77,7 @@ export function AudienceSelector({ value, onChange, className }: AudienceSelecto
       default:
         return {};
     }
-  }, [value.type, selectedSegmentId, selectedRfmAudienceId, selectedTagIds, nameContains, emailContains, manualEmails, manualNames]);
+  }, [value.type, selectedSegmentId, selectedRfmAudienceId, selectedTagIds, nameContains, emailContains, manualEmails, manualNames, newsletterDays]);
 
   // Estimate audience
   const { data: estimate, isLoading: loadingEstimate, error: estimateError } = useAudienceEstimate(
@@ -133,6 +136,7 @@ export function AudienceSelector({ value, onChange, className }: AudienceSelecto
     { value: "rfm", label: "Audiência RFM", icon: TrendingUp },
     { value: "filters", label: "Filtros customizados", icon: Filter },
     { value: "manual", label: "Lista manual", icon: List },
+    { value: "newsletter", label: "Novos inscritos da newsletter", icon: Newspaper },
   ];
 
   return (
@@ -185,6 +189,22 @@ export function AudienceSelector({ value, onChange, className }: AudienceSelecto
                 </SelectContent>
               </Select>
             )}
+          </div>
+        )}
+
+        {/* Novos inscritos da newsletter da loja */}
+        {value.type === "newsletter" && (
+          <div className="space-y-2">
+            <Label>Inscreveram-se nos últimos</Label>
+            <Select value={String(newsletterDays)} onValueChange={(v) => setNewsletterDays(Number(v))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {[7, 15, 30, 60, 90, 180].map((d) => <SelectItem key={d} value={String(d)}>{d} dias</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Só quem entrou na newsletter da loja depois da conexão e continua inscrito. Os inscritos antigos ficam só como histórico e nunca entram aqui.
+            </p>
           </div>
         )}
 

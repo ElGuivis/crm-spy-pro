@@ -20,6 +20,8 @@ export interface CouponSpec {
   cumulativo?: boolean;
   ativo?: boolean;
   descricao?: string;
+  /** ids dos grupos de clientes que podem usar (vazio = todos os clientes) */
+  grupos?: number[];
 }
 
 export function buildLiCouponPayload(s: CouponSpec): Record<string, unknown> {
@@ -36,6 +38,10 @@ export function buildLiCouponPayload(s: CouponSpec): Record<string, unknown> {
     condicao_cliente: "todos_clientes",
     condicao_produto: "todos_produtos",
   };
+  if (s.grupos?.length) {
+    payload.condicao_cliente = "grupos_selecionados";
+    payload.grupos = s.grupos.map(String);
+  }
   if (s.validade) payload.validade = s.validade;
   if (s.valorMinimo && s.valorMinimo > 0) payload.valor_minimo = s.valorMinimo.toFixed(2);
   return payload;

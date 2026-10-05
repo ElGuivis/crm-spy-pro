@@ -35,6 +35,9 @@ Deno.serve(async (req) => {
 
     const next: Record<string, unknown> = { ...coupon };
     for (const k of READ_ONLY) delete next[k];
+    // a loja devolve "" (sem mínimo) e null (sem limite), mas recusa receber esses valores de volta (HTTP 400): omite os vazios
+    if (next.valor_minimo === "" || next.valor_minimo == null) delete next.valor_minimo;
+    if (next.limite_desconto == null) delete next.limite_desconto;
     if (typeof b.ativo === "boolean") next.ativo = b.ativo;
     if (b.validade !== undefined) next.validade = b.validade ? `${b.validade}T23:59:59` : null;
     if (b.quantidade !== undefined) next.quantidade = b.quantidade ?? UNLIMITED_USES;

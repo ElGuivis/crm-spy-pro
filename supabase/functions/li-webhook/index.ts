@@ -8,11 +8,13 @@ import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
 const LI_API_BASE = 'https://api.awsli.com.br/v1';
+// logger de módulo: as funções de processamento (processOrder etc.) rodam fora do handler e também registram
+const log = createLogger("li-webhook", "bg");
 
 Deno.serve(async (req) => {
 
   const cid = getCorrelationId(req);
-  const log = createLogger("li-webhook", cid);
+  const reqLog = createLogger("li-webhook", cid);
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -45,7 +47,7 @@ Deno.serve(async (req) => {
   const tokenToValidate = payloadToken || (isJWT ? null : bearerToken);
 
   if (!tokenToValidate) {
-    log.error('[WEBHOOK] No token found in Authorization header or payload');
+    reqLog.error('[WEBHOOK] No token found in Authorization header or payload');
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -67,7 +69,7 @@ Deno.serve(async (req) => {
   });
 
   if (lookupError || !integration) {
-    log.error('[WEBHOOK] Invalid token - no matching integration found', { count: integrations?.length });
+    reqLog.error('[WEBHOOK] Invalid token - no matching integration found', { count: integrations?.length });
     return new Response(JSON.stringify({ error: 'Invalid token' }), {
       status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -95,8 +97,11 @@ Deno.serve(async (req) => {
     resourceType = 'customer';
   }
 
-  // Generate stable dedupe key
-  const dedupeKey = `${eventType}:${resourceType}:${resourceId}:${Date.now()}`;
+  // Chave estável: a loja manda o mesmo aviso várias vezes; o que muda de verdade muda data_modificacao (ou a situação do pedido).
+  // Sem nenhuma dessas informações, agrupa em janelas de 10 s.
+  const situacaoId = (payload.situacao as Record<string, unknown> | undefined)?.id;
+  const version = String(payload.data_modificacao ?? (situacaoId !== undefined ? `s${situacaoId}` : Math.floor(Date.now() / 10_000)));
+  const dedupeKey = `${integrationId}:${eventType}:${resourceType}:${resourceId}:${version}`;
 
   // Rate limiting: check recent events count (100/min per integration)
   const oneMinuteAgo = new Date(Date.now() - 60000).toISOString();
@@ -106,7 +111,7 @@ Deno.serve(async (req) => {
     .gte('received_at', oneMinuteAgo);
 
   if ((count || 0) >= 100) {
-    log.warn('[WEBHOOK] Rate limit exceeded');
+    reqLog.warn('[WEBHOOK] Rate limit exceeded');
     return new Response(JSON.stringify({ error: 'Rate limit exceeded' }), {
       status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -128,7 +133,7 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (insertError) {
-    log.error('[WEBHOOK] Failed to persist event:', insertError.message);
+    reqLog.error('[WEBHOOK] Failed to persist event:', insertError.message);
   }
 
   // If event already existed (processed/processing), skip

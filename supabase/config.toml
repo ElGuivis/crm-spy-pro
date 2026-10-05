@@ -402,3 +402,25 @@ verify_jwt = false
 [functions.instagram-list-media]
 # AUTHENTICATED — user lists channel media (requireUserAuth)
 verify_jwt = false
+
+[functions.abandonment-capture]
+# INTERNAL (cron) — in-code auth via requireInternalAuth
+verify_jwt = false
+
+[functions.abandonment-processor]
+# INTERNAL (cron) — in-code auth via requireInternalAuth
+verify_jwt = false
+
+[functions.li-marketing]
+# AUTHENTICATED — in-code auth via requireUserAuth
+verify_jwt = false
+
+[functions.li-marketing-jobs]
+# INTERNAL (cron) — in-code auth via requireInternalAuth
+verify_jwt = false
+
+
+[functions.li-customer-groups]
+# AUTHENTICATED — in-code auth via requireUserAuth
+verify_jwt = false
+

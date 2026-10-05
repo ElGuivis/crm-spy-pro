@@ -22,6 +22,8 @@ export interface AudienceReference {
     updated_to?: string;
   };
   emails?: string[];
+  /** audiência "newsletter": inscritos dos últimos N dias */
+  days?: number;
   /** nomes vindos de planilha importada (e-mail -> nome), usados em {{first_name}} */
   names?: Record<string, string>;
 }

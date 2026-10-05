@@ -13,6 +13,16 @@ export interface VariableData {
   coupon_value?: string;
   coupon_expires?: string;
   unsubscribe_url?: string;
+  /** recuperação de carrinho: bloco HTML dos itens, versão em texto, total, quantidade, link do carrinho e 1º produto */
+  cart_items?: string;
+  cart_items_text?: string;
+  cart_total?: string;
+  cart_count?: string;
+  cart_url?: string;
+  product_name?: string;
+  product_image?: string;
+  product_url?: string;
+  store_url?: string;
 }
 
 /**

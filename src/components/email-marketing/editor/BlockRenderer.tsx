@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import type { EmailBlock } from './types';
 import { generateBlockHTML } from './htmlBlockGenerators';
 import { sanitizeHtml } from '@/lib/sanitize-html';
+import { withPreviewSamples } from './cartPreview';
 
 interface BlockRendererProps {
   block: EmailBlock;
@@ -15,7 +16,7 @@ interface BlockRendererProps {
 export function BlockRenderer({ block, isPreview = false }: BlockRendererProps) {
   const html = useMemo(
     () => sanitizeHtml(
-      `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse: collapse;"><tbody>${generateBlockHTML(block)}</tbody></table>`,
+      `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse: collapse;"><tbody>${withPreviewSamples(generateBlockHTML(block))}</tbody></table>`,
       'emailPreview',
     ),
     [block],

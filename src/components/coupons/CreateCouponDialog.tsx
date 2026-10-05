@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/form";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useLiGroups } from "@/hooks/useLiGroups";
 
 import { createLogger } from '@/lib/logger';
 const log = createLogger('CreateCouponDialog');
@@ -78,6 +79,7 @@ export const CreateCouponDialog = ({
   onSuccess
 }: CreateCouponDialogProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [groupId, setGroupId] = useState<string>("all");
   const { toast } = useToast();
 
   const form = useForm<CouponFormData>({
@@ -98,6 +100,7 @@ export const CreateCouponDialog = ({
 
   const isLI = !integrationType || integrationType === "loja_integrada";
   const platformName = integrationType === 'bling' ? 'Bling' : integrationType === 'nuvemshop' ? 'Nuvemshop' : 'Loja Integrada';
+  const groups = useLiGroups(open && (!integrationType || integrationType === 'loja_integrada'));
   const functionName = integrationType === 'bling' ? 'bling-coupon-create' : integrationType === 'nuvemshop' ? 'nuvemshop-coupon-create' : 'li-coupon-create';
 
   const onSubmit = async (data: CouponFormData) => {
@@ -114,6 +117,7 @@ export const CreateCouponDialog = ({
           quantidadeUsoMaximo: data.quantidadeUsoMaximo || undefined,
           valorMinimo: data.valorMinimo || undefined,
           descricao: data.descricao || undefined,
+          grupoIds: isLI && groupId !== "all" ? [Number(groupId)] : undefined,
         }
       });
 
@@ -129,6 +133,7 @@ export const CreateCouponDialog = ({
       });
 
       form.reset();
+      setGroupId("all");
       onOpenChange(false);
       onSuccess();
     } catch (error) {
@@ -315,6 +320,20 @@ export const CreateCouponDialog = ({
                 </FormItem>
               )}
             />
+
+            {isLI && (groups.data?.length ?? 0) > 1 && (
+              <div className="space-y-1.5">
+                <Label>Quem pode usar</Label>
+                <Select value={groupId} onValueChange={setGroupId}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os clientes</SelectItem>
+                    {(groups.data ?? []).map((g) => <SelectItem key={g.id} value={String(g.id)}>Só o grupo "{g.nome}"</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Restringir a um grupo da loja (ex.: VIP). Quem não estiver no grupo não consegue usar o cupom.</p>
+              </div>
+            )}
 
             <DialogFooter className="gap-2 sm:gap-0">
               <Button

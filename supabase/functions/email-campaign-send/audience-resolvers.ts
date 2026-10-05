@@ -135,6 +135,29 @@ export async function resolveRecipients(supabase: Supabase, tenantId: string, au
     }
     return list.map((email) => ({ email, name: names.get(email) ?? null, phone: null }));
   }
+  if (audienceType === "newsletter") {
+    // só quem se inscreveu na newsletter da loja depois da conexão (o histórico anterior nunca vira audiência) e continua inscrito
+    const days = Math.min(Math.max(Number(audienceReference.days) || 30, 1), 365);
+    const since = new Date(Date.now() - days * 86_400_000).toISOString();
+    const emails: string[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabase.from("li_newsletter_subscribers").select("email").eq("tenant_id", tenantId).eq("is_baseline", false).is("removed_at", null).gte("first_seen_at", since).range(from, from + 999);
+      if (error) throw error;
+      for (const r of data ?? []) emails.push(normalizeEmail((r as Record<string, unknown>).email as string));
+      if (!data || data.length < 1000) break;
+    }
+    const list = Array.from(new Set(emails.filter(Boolean)));
+    const names = new Map<string, string>();
+    for (const chunk of chunkArray(list, 200)) {
+      const { data } = await supabase.from("li_customers").select("email, name").eq("tenant_id", tenantId).in("email", chunk);
+      for (const row of data ?? []) {
+        const email = normalizeEmail((row as Record<string, unknown>).email as string);
+        const name = String((row as Record<string, unknown>).name ?? "").trim();
+        if (email && name && !names.has(email)) names.set(email, name);
+      }
+    }
+    return list.map((email) => ({ email, name: names.get(email) ?? null, phone: null }));
+  }
   if (audienceType === "rfm") {
     const audienceId = String(audienceReference.rfm_audience_id || "").trim();
     if (!audienceId) throw new Error("rfm_audience_id é obrigatório para audiência RFM");

@@ -6,6 +6,7 @@ import { sendEmail, getEmailConfig } from "../_shared/email-sender.ts";
 import { injectPreheader, htmlToText, listUnsubscribeHeaders } from "../_shared/email-prepare.ts";
 import { injectTracking } from "../_shared/email-tracking.ts";
 import { replaceVariables } from "../_shared/email-variable-replacer.ts";
+import { buildCartVars, type CartItem } from "../_shared/abandonment-render.ts";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
@@ -105,7 +106,22 @@ serve(async (req) => {
       unsubscribe_url: "",
     };
 
-    const finalSubject = replaceVariables(campaign.subject, sampleData);
+    // E-mails de recuperação usam o carrinho da pessoa: no teste mostra um carrinho de exemplo com produtos reais da loja
+    let cartSample = {};
+    if (/\{\{\s*(cart_|product_)/.test(htmlContent)) {
+      const { data: li } = await supabase.from("integrations").select("id, metadata").eq("tenant_id", tenantId).eq("type", "loja_integrada").limit(1).maybeSingle();
+      const storeUrl = (li?.metadata as { store_url?: string } | null)?.store_url || "https://www.sualoja.com.br";
+      const { data: prods } = li ? await supabase.from("li_products").select("loja_integrada_product_id, name, price, promotional_price, image_url, raw_json")
+        .eq("integration_id", li.id).eq("active", true).not("image_url", "is", null).is("raw_json->>pai", null).order("updated_at_local", { ascending: false }).limit(2) : { data: [] };
+      const items: CartItem[] = (prods ?? []).map((p, i) => ({
+        product_id: Number(p.loja_integrada_product_id), quantity: i === 0 ? 1 : 2, name: String(p.name), variant: null,
+        price: Number(p.promotional_price || p.price) || null, image: String(p.image_url).replace(/\/\d+x\d+\//, "/380x380/"),
+        url: ((p.raw_json as Record<string, unknown> | null)?.url as string | undefined) ?? null,
+      }));
+      cartSample = buildCartVars(items.length ? items : [{ product_id: null, quantity: 1, name: "Produto de exemplo", variant: "Tamanho: M", price: 129.9, image: null, url: null }], 0, storeUrl);
+    }
+
+    const finalSubject = replaceVariables(campaign.subject, { ...sampleData, ...cartSample });
 
     // Send to each test email
     const results = [];
@@ -124,7 +140,7 @@ serve(async (req) => {
       );
       const { data: tokenRow } = await supabase.from("email_unsubscribe_tokens").select("id").eq("campaign_id", campaign.id).eq("recipient_email", testKey).eq("is_test", true).maybeSingle();
       const unsubscribeUrl = tokenRow ? `${supabaseUrl}/functions/v1/email-unsubscribe?token=${tokenRow.id}` : "#";
-      const personalized = replaceVariables(htmlContent, { ...sampleData, unsubscribe_url: unsubscribeUrl });
+      const personalized = replaceVariables(htmlContent, { ...sampleData, ...cartSample, unsubscribe_url: unsubscribeUrl });
       const finalHtml = tokenRow ? injectTracking(personalized, supabaseUrl, tokenRow.id, campaign.internal_name) : personalized;
 
       const result = await sendEmail(emailConfig, {

@@ -9,6 +9,7 @@ import { BlockInteractiveProps } from "./blockProperties/BlockInteractiveProps";
 import { BlockLayoutProps } from "./blockProperties/BlockLayoutProps";
 import { BlockProductProps } from "./blockProperties/BlockProductProps";
 import { BlockCouponProps } from "./blockProperties/BlockCouponProps";
+import { BlockCartItemsProps } from "./blockProperties/BlockCartItemsProps";
 import { BlockImageTextProps } from "./blockProperties/BlockImageTextProps";
 import { FONTS } from "./fonts";
 import { Label } from "@/components/ui/label";
@@ -61,6 +62,7 @@ export function BlockPropertiesPanel({ block, onUpdate, onClose }: BlockProperti
         {LAYOUT_TYPES.includes(block.type) && <BlockLayoutProps block={block} onChange={handleChange} />}
         {block.type === "product" && <BlockProductProps block={block} onChange={handleChange} onUpdate={onUpdate} />}
         {block.type === "coupon" && <BlockCouponProps block={block} onChange={handleChange} />}
+        {block.type === "cart-items" && <BlockCartItemsProps block={block} onChange={handleChange} />}
         {block.type === "imagetext" && <BlockImageTextProps block={block} onChange={handleChange} uploading={uploading} onUpload={upload} />}
 
         {block.type !== "spacer" && (

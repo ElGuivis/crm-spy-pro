@@ -7,7 +7,7 @@ CRM/ERP multi-tenant em produção (https://spypro.com.br) com integrações de 
 ## Stack
 
 - **Frontend**: Vite 5 + React 18 + TypeScript + shadcn/ui (Radix) + Tailwind + React Router 7 + TanStack Query 5. Build: `vite build`. Dev: `npm run dev`.
-- **Backend**: Supabase auto-hospedado (Postgres 17 + Auth + REST + Realtime + Storage + Edge Functions Deno). 96 edge functions, 153 tabelas com RLS, 388 policies, 33 cron jobs.
+- **Backend**: Supabase auto-hospedado (Postgres 17 + Auth + REST + Realtime + Storage + Edge Functions Deno). 103 edge functions, 166 tabelas com RLS, 394 policies, 39 cron jobs.
 - **Deploy**: frontend via EasyPanel (Dockerfile + nginx, rebuild manual, Build Args `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`). Edge functions: `powershell scripts/deploy-functions-vps.ps1 [-Only <nome>]` (copia para a VPS e reinicia o runtime; `supabase functions deploy` NÃO se aplica ao servidor novo).
 - **Owner / login dev**: `usechronic@gmail.com` (único usuário; cadastros bloqueados por trigger + `DISABLE_SIGNUP`).
 
@@ -83,7 +83,7 @@ src/
   integrations/supabase/ # client.ts (auto-gerado) + types.ts (tipos do DB, regenerar via gen types)
   contexts/              # AuthContext, etc.
 supabase/
-  functions/             # 96 edge functions Deno
+  functions/             # 103 edge functions Deno
     _shared/             # auth-guard.ts, li-sync-*.ts, melhor-envio-*.ts, ai-chat-*.ts, ...
     li-sync/             # sync de Loja Integrada (waitUntil + time budget 110s)
     li-job-processor/    # incremental sync recorrente (waitUntil)
@@ -159,6 +159,18 @@ Tabelas no `supabase_realtime` publication (tem que estar lá pra `postgres_chan
 
 Para subscriptions com múltiplos consumidores, **não** usar `Date.now()` em channel name (race condition entre instâncias). Padrão: extrair sub para hook próprio chamado uma única vez no topo da árvore. Frontend uses prefix-match invalidation do React Query pra propagar.
 
+## API da Loja Integrada (v2) e área de Marketing
+
+Especificação oficial (OpenAPI, 740 KB): https://api-docs.lojaintegrada.com.br/openapi/API-Loja-Integrada.json (a página é Scalar, renderizada por JS; a spec está em `/openapi/API-Loja-Integrada.json`). Base `https://api.awsli.com.br`: `/v1/...` (loja) e `/v3/marketing/...`. Auth: `Authorization: Basic <Personal Token>` (`_shared/li-auth.ts`). **Limite: 100 chamadas/min por loja** (429 acima); `_shared/li-marketing.ts` repete com espera.
+
+- **Webhooks não funcionam com Personal Token**: `PUT /webhooks/v1/{pedido,produto}` devolve 401 "Acesso negado" (exige credencial de integrador/parceiro; só existem webhook de pedido e produto, o de cliente acabou). O motivo fica em `integrations.metadata.webhooks_error`; pedidos/produtos entram pelo `li-job-processor` (5 min). O webhook antigo da loja pode apontar para o projeto cloud.
+- **Marketing (`/v3/marketing`)**: automações nativas da loja ids 6 carrinho (`AbandonedCartAutomation`), 7 navegação (`AbandonedBrowsingAutomation`), 2 pedido (`AbandonedOrderAutomation`), regras de tempo em minutos (60/1440/2880); `GET campaign/{id}` lista os abandonos (`recipient` pode vir nulo e o e-mail só em `recipientIdentifier`; status `F` = encerrada, e o carrinho de `campaign/details/{id}` vem **vazio** depois disso: capturar enquanto pendente); `POST rules/toggle` (`abandoned-cart`, `abandoned-product`, `cancelled-order`; o mapeamento chave→automação é palpite e o `li-marketing` confere e reverte); `POST automations/optout`; newsletter v3 trava em 1.000 (usar a v1: 100 por página, ordenada por e-mail, não ordena por id; limite acima de 100 devolve vazio); lista de espera responde em snake_case (`total_records`, `results`, `produto_id`) ao contrário da doc, e só dá a contagem por produto.
+- **Código**: `_shared/li-marketing.ts` (cliente), `_shared/abandonment-render.ts` (carrinho em HTML/texto, janela de silêncio, `nextDueStep`), `_shared/email-coupons.ts` (cupom único), `abandonment-capture` (cron 10 min), `abandonment-processor` (cron 1 min; e-mail e WhatsApp; só atende abandonos depois de `abandonment_flows.enabled_at`; reserva o envio em `abandonment_flow_sends` antes de enviar: no máximo uma vez), `li-marketing` (status/toggle da nativa), `li-marketing-jobs` (newsletter 15 min, outbox 5 min, waitlist diário, groups 1 min), `li-customer-groups` (grupos de clientes com prévia/desfazer). Front: aba "Recuperação" em E-mail Marketing (`components/email-marketing/recovery/`).
+- **Fluxos** (`abandonment_flows`, um por tipo: cart, browse, order, welcome): cada etapa de e-mail é uma campanha `email_campaigns` com `flow_kind/flow_step` (editor, rastreio e métricas reaproveitados; escondidas da lista normal e do contador). Variáveis: `cart_items` (bloco "Itens do carrinho"), `cart_items_text`, `cart_total`, `cart_count`, `cart_url` (`/carrinho/index` da loja), `product_name/url/image`, `store_url`, mais as de cupom. Precisa de `integrations.metadata.store_url` (endereço da loja). Boas-vindas = novos inscritos da newsletter (registro `li_abandonment_campaigns` com `li_campaign_id` NEGATIVO = -id da newsletter, `automation_id` 0); os 17 mil inscritos antigos são `is_baseline` e nunca recebem nada.
+- **Recuperação** (`refresh_abandonment_recovery`): compra do mesmo e-mail depois do abandono (7 dias); `recovered_via` = ours (recebeu algo nosso antes) ou other (inclui a nativa). Conversão do nosso fluxo entra em `email_campaign_conversions` com tipo `recovery`. Atribuição de campanhas agora: cupom > UTM (`utm_campaign` do pedido = `utm_slug(nome da campanha)`) > clique > abertura.
+- **Descadastro em duas vias**: gatilho em `email_suppression_list` → fila `li_marketing_outbox` → remove da newsletter e faz opt-out nas automações (`li_marketing_settings.sync_unsubscribes`, padrão ligado); o contrário (saiu da newsletter da loja) entra na supressão com `source = 'li_newsletter'`, que não volta para a loja.
+- **PUT de cupom**: a loja devolve `valor_minimo: ""` e `limite_desconto: null` mas recusa receber de volta (400): omitir os vazios (`li-coupon-update`).
+
 ## Convenções e regras de tamanho
 
 - **Limites**: pages ≤400L, components shared ≤250L, hooks ≤200L, edge `index.ts` ≤500L, `_shared/` ≤300L.
@@ -205,7 +217,7 @@ ssh -i ~/.ssh/spypro_vps root@37.148.134.55 "cd /opt/supabase && sh run.sh statu
 - `20260509000006`: cron auth pós-migração (anon JWT → `get_internal_headers()`)
 - `20260509000007-008`: timeout extension em crons lentos
 - `20260509000009`: bulk-li-status-update-cron auth fix
-- `20260509000010-011`: aposentar feature de carrinho abandonado
+- `20260509000010-011`: aposentar feature de carrinho abandonado (reativada em 05/10/2026 pela API de Marketing da loja: migrations `20261004000011+`, seção "API da Loja Integrada")
 - `20261003000001`: bloqueio de novos cadastros em `auth.users`
 - `20261003000002`: repara textos padrão com dupla codificação (UTF-8 lido como cp1252)
 - `20261003000003`: cron diário de limpeza do histórico dos crons
@@ -218,3 +230,8 @@ ssh -i ~/.ssh/spypro_vps root@37.148.134.55 "cd /opt/supabase && sh run.sh statu
 - `20261004000008`: `get_email_health(tenant, dias)` — saúde do envio (falhas, descadastros, bounce/reclamação, campanhas travadas)
 - `20261004000009`: cupons — `generated_coupons` ganha `li_ativo/li_valor_minimo/li_quantidade_por_cliente/li_cumulativo` e índice único (integração, código); `email_campaigns.unique_coupon` + tabela `email_campaign_coupons` (cupom único por destinatário); a atribuição de compra reconhece esses códigos. Formato real da API de cupom da LI: `_shared/li-coupons.ts` (tipos porcentagem|fixo|frete_gratis, validade AAAA-MM-DD, quantidade, quantidade_por_cliente). A API recusa rajadas (HTTP 429): criar com poucas conexões
 - `20261004000010`: teste A/B com vencedor automático: colunas `ab_auto_winner/ab_winner_*`, `get_ab_winner_candidates()` e cron `email-ab-winner` (10 min, função `email-ab-winner`). A variante "W" (resto da lista) sai com o assunto de maior abertura e exclui quem recebeu A ou B
+- `20261004000011`: recuperação de abandono: `abandonment_flows`, `li_abandonment_campaigns`, `abandonment_flow_sends`, `li_native_toggle_log`, `email_campaigns.flow_kind/flow_step`, `utm_slug()`, atribuição por UTM, `refresh_abandonment_recovery()`, `get_abandonment_funnel()`, crons `abandonment-capture` e `abandonment-processor`
+- `20261004000012`: `abandonment_flows.enabled_at` (só atende abandonos depois de ligado) e `native_optout_at`
+- `20261004000013`: fluxo `welcome`, newsletter da loja (`li_newsletter_subscribers`, `li_newsletter_scan_state`), lista de espera (`li_waitlist_snapshots`, `get_waitlist_panel`), descadastro em duas vias (`li_marketing_settings`, `li_marketing_outbox`, gatilho), índice de e-mail em `li_orders`, crons `li-newsletter-sync`, `li-marketing-outbox`, `li-waitlist-sync`
+- `20261004000014`: audiência "newsletter" (novos inscritos) em `estimate_email_audience`
+- `20261004000015`: grupos de clientes da loja (`li_group_jobs`, `li_group_job_items`, `get_rfm_audience_li_customers`, cron `li-group-jobs`)

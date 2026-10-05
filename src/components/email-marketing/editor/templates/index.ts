@@ -5,6 +5,7 @@ import { EDITORIAL_TEMPLATES } from "./editorial";
 import type { ProductCard, TemplateCategory } from "./kit";
 
 export * from "./kit";
+export * from "./recovery";
 
 export const READY_TEMPLATES = [...SALES_TEMPLATES, ...RELATIONSHIP_TEMPLATES, ...SEASONAL_TEMPLATES, ...EDITORIAL_TEMPLATES];
 

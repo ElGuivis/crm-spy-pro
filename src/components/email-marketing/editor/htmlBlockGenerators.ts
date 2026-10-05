@@ -1,5 +1,5 @@
 import type {
-  Alignment, BannerBlock, ButtonBlock, Columns2Block, Columns3Block, DividerBlock, EmailBlock, FooterBlock,
+  Alignment, BannerBlock, ButtonBlock, CartItemsBlock, Columns2Block, Columns3Block, DividerBlock, EmailBlock, FooterBlock,
   HeaderBlock, HeadingBlock, ImageBlock, LegalBlock, SocialBlock, SpacerBlock, TextBlock, UnsubscribeBlock,
 } from './types';
 import { alignOf, blockMargin, bulletproofButton, esc, getBaseStyles, inlineFormat, pxNumber, safeUrl } from './htmlHelpers';
@@ -21,6 +21,7 @@ export function generateBlockHTML(block: EmailBlock): string {
     case 'banner': return generateBannerHTML(block);
     case 'product': return generateProductHTML(block);
     case 'coupon': return generateCouponHTML(block);
+    case 'cart-items': return generateCartItemsHTML(block);
     case 'imagetext': return generateImageTextHTML(block);
     case 'social': return generateSocialHTML(block);
     case 'footer': return generateFooterHTML(block);
@@ -28,6 +29,17 @@ export function generateBlockHTML(block: EmailBlock): string {
     case 'unsubscribe': return generateUnsubscribeHTML(block);
     default: return '';
   }
+}
+
+/** Itens do carrinho: o e-mail de recuperação troca {{cart_items}} pela lista da pessoa (foto, nome, quantidade, preço, total). */
+function generateCartItemsHTML(block: CartItemsBlock): string {
+  return `
+  <tr>
+    <td style="${getBaseStyles(block)}; padding: ${block.padding || '20px 36px'}; color: ${block.textColor || '#111827'};">
+      ${block.title ? `<div style="font-size: 18px; font-weight: bold; color: ${block.titleColor || block.textColor || '#111827'}; margin-bottom: 8px;">${inlineFormat(block.title)}</div>` : ''}
+      {{cart_items}}
+    </td>
+  </tr>`;
 }
 
 function generateHeaderHTML(block: HeaderBlock): string {

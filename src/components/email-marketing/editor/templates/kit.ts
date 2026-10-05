@@ -164,8 +164,8 @@ export const steps = (p: Palette, items: [string, string][]): EmailBlock => {
 export const divider = (p: Palette): EmailBlock => ({ type: "divider", color: p.border, thickness: "1px", width: "100%", padding: "10px 36px" });
 
 /** Rodapé: identificação, endereço (troque o de exemplo) e descadastro (obrigatório). */
-export const footer = (p: Palette, c: TemplateCtx): EmailBlock[] => [
-  { type: "footer", content: `${c.brandName || "Sua Empresa"}<br>Endereço da empresa — Cidade/UF<br>Você recebeu este e-mail porque se cadastrou em nossa loja.<br>Esta é uma mensagem automática: este endereço não recebe respostas.`, alignment: "center", color: p.muted, fontSize: "12px", backgroundColor: p.content, padding: "32px 28px 8px" },
+export const footer = (p: Palette, c: TemplateCtx, reason = "Você recebeu este e-mail porque se cadastrou em nossa loja."): EmailBlock[] => [
+  { type: "footer", content: `${c.brandName || "Sua Empresa"}<br>Endereço da empresa — Cidade/UF<br>${reason}<br>Esta é uma mensagem automática: este endereço não recebe respostas.`, alignment: "center", color: p.muted, fontSize: "12px", backgroundColor: p.content, padding: "32px 28px 8px" },
   { type: "unsubscribe", text: "Não quer mais receber nossos e-mails?", linkText: "Cancelar inscrição", alignment: "center", fontSize: "12px", color: p.muted, backgroundColor: p.content, padding: "6px 24px 30px" },
 ];
 

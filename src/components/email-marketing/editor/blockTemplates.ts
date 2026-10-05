@@ -110,6 +110,11 @@ export const blockTemplates: Record<string, EmailBlock> = {
     alignment: 'center',
     padding: '20px',
   },
+  'cart-items': {
+    type: 'cart-items',
+    title: 'Você deixou isto no carrinho',
+    padding: '20px 36px',
+  },
   social: {
     type: 'social',
     platforms: [
@@ -162,6 +167,10 @@ export const blockCategories = [
     blocks: ['columns-2', 'columns-3'],
   },
   {
+    name: 'Recuperação de carrinho',
+    blocks: ['cart-items'],
+  },
+  {
     name: 'Social & Legal',
     blocks: ['social', 'legal', 'unsubscribe'],
   },
@@ -180,6 +189,7 @@ export const blockLabels: Record<string, string> = {
   banner: 'Banner',
   product: 'Produto',
   coupon: 'Cupom',
+  'cart-items': 'Itens do carrinho',
   imagetext: 'Imagem + Texto',
   social: 'Redes Sociais',
   footer: 'Rodapé',

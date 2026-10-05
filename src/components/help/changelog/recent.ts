@@ -3,6 +3,23 @@ import type { ChangelogEntry } from './types';
 /** De maio a outubro de 2026. Mais recente primeiro. */
 export const RECENT_CHANGELOG: ChangelogEntry[] = [
   {
+    version: '4.2.0',
+    date: '05 Out 2026',
+    items: [
+      { type: 'feature', text: 'E-mail Marketing > Recuperação: carrinho, navegação e pedido abandonado direto da API de Marketing da Loja Integrada, com até 4 etapas por tipo (de 5 minutos a 48 horas), e-mail e WhatsApp, cupom único por pessoa e janela de silêncio. Tudo começa desligado e só atende quem abandonar depois de você ligar' },
+      { type: 'feature', text: 'Novo bloco "Itens do carrinho" no editor: mostra foto, nome, quantidade, preço e total dos produtos que a própria pessoa deixou, com 9 modelos prontos de recuperação' },
+      { type: 'feature', text: 'Você decide se a automação nativa da Loja Integrada continua ligada: chave por tipo, lida direto da loja, com verificação e restauração automática se a loja não aplicar a mudança, ou a opção de tirar da nativa só quem o nosso fluxo atender' },
+      { type: 'feature', text: 'Resultado da recuperação: abandonos capturados, contatados, aberturas, cliques e valor recuperado, separando o que veio do nosso fluxo do que comprou por outro caminho' },
+      { type: 'feature', text: 'Newsletter da loja: 17 mil inscritos sincronizados como histórico (sem nenhum envio) e série de boas-vindas só para quem se inscrever daqui para frente; nova audiência "Novos inscritos da newsletter"' },
+      { type: 'feature', text: 'Descadastro em duas vias: quem sair aqui (link, reclamação, e-mail inválido) também sai da newsletter e das automações da loja, e quem sair da newsletter da loja entra na nossa lista de supressão' },
+      { type: 'feature', text: 'Painel de Reposição com a lista de espera ("avise-me"): quais produtos esgotados têm mais gente esperando, tendência de 7 dias, destaque dos que voltaram ao estoque e exportação em CSV' },
+      { type: 'feature', text: 'Grupos de clientes da loja: leve uma audiência RFM (ex.: campeões) para um grupo como VIP, com prévia, confirmação, ritmo seguro e desfazer; cupom manual pode ser restrito a um grupo' },
+      { type: 'improvement', text: 'Compras atribuídas também pelo utm_campaign do pedido (cupom, UTM, clique e abertura, nessa ordem de confiança)' },
+      { type: 'fix', text: 'Ativar ou desativar cupons que não têm valor mínimo falhava na loja; corrigido' },
+      { type: 'fix', text: 'Eventos de webhook da loja eram marcados como falha mesmo depois de processados e não eram deduplicados; corrigido' },
+    ],
+  },
+  {
     version: '4.1.0',
     date: '04 Out 2026',
     items: [
