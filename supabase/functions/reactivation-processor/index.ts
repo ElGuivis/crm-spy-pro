@@ -2,11 +2,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { sendWhatsAppMessage, type WhatsAppConfig } from "../_shared/whatsapp-sender.ts";
 import { requireInternalAuth } from "../_shared/auth-guard.ts";
 import { liAuthHeader } from "../_shared/li-auth.ts";
+import { issueCoupon } from "../_shared/coupon-issuer.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { ensureAutomationConversation } from "../_shared/automation-conversation.ts";
 
-const LI_API_BASE = 'https://api.awsli.com.br/v1';
 const REACTIVATION_TOKEN_COST = 5;
 const PAGE_SIZE = 1000;
 
@@ -386,38 +386,20 @@ Deno.serve(async (req) => {
               ? currentStep.coupon_duration_days
               : config.coupon_duration_days;
 
-            // Generate coupon
-            const couponCode = generateCouponCode();
-
-            // Create coupon in LI
-            if (storeType === 'loja_integrada' && authHeader) {
+            // Cupom: loja integrada pelo emissor único (livro-razão, nova tentativa em 429, código sem colisão);
+            // outras lojas seguem só com o código sorteado, como antes.
+            let couponCode = generateCouponCode();
+            if (storeType === 'loja_integrada' && authHeader && config.store_integration?.id) {
               const expiresAt = new Date();
               expiresAt.setDate(expiresAt.getDate() + stepDuration);
-
-              const couponPayload = {
-                codigo: couponCode,
-                tipo: 'porcentagem',
-                valor: stepDiscount,
-                validade: expiresAt.toISOString().split('T')[0],
-                quantidade: 1,
-                quantidade_por_cliente: 1,
-                ativo: true,
-                aplicar_no_frete: false,
-                descricao: `Reativação - ${customer.name} - Ciclo ${currentStep.step_number}`,
-                condicao_cliente: 'todos_clientes',
-                condicao_produto: 'todos_produtos',
-              };
-
-              const response = await fetch(`${LI_API_BASE}/cupom`, {
-                method: 'POST',
-                headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
-                body: JSON.stringify(couponPayload),
+              const issued = await issueCoupon(supabase, {
+                tenantId, integrationId: config.store_integration.id, auth: authHeader,
+                origin: { type: 'reactivation', id: config.id, ref: `ciclo ${currentStep.step_number}` },
+                spec: { tipo: 'porcentagem', valor: stepDiscount, validade: expiresAt.toISOString().split('T')[0], quantidade: 1, quantidadePorCliente: 1, descricao: `Reativação - ${customer.name} - Ciclo ${currentStep.step_number}` },
+                codeFactory: generateCouponCode, recipient: { name: customer.name, email: customer.email, phone: customer.phone },
               });
-
-              if (!response.ok) {
-                const errorText = await response.text();
-                log.error(`[REACTIVATION] Failed to create coupon for ${customer.name}: ${response.status} - ${errorText}`);
-
+              if (!issued.ok) {
+                log.error(`[REACTIVATION] Failed to create coupon for ${customer.name}: ${issued.status} - ${issued.error}`);
                 await supabase.from('reactivation_executions').insert({
                   tenant_id: tenantId,
                   config_id: config.id,
@@ -428,12 +410,11 @@ Deno.serve(async (req) => {
                   last_order_date: customer.lastOrderDate,
                   days_inactive: customer.daysInactive,
                   status: 'failed',
-                  error_message: `Coupon creation failed: ${errorText}`,
+                  error_message: `Coupon creation failed: ${issued.error}`,
                 });
                 continue;
               }
-
-              await response.json();
+              couponCode = issued.code;
             }
 
             // Get the current step's message template

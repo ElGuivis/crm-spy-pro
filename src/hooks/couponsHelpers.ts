@@ -44,6 +44,9 @@ export function getCouponSource(source?: string): { label: string; className: st
     case "imported": return { label: "Campanha", className: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" };
     case "manual": return { label: "Criado aqui", className: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" };
     case "email": return { label: "E-mail marketing", className: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300" };
+    case "birthday": return { label: "Aniversário", className: "bg-pink-100 text-pink-700 dark:bg-pink-900 dark:text-pink-300" };
+    case "reactivation": return { label: "Reativação", className: "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300" };
+    case "loyalty": return { label: "Fidelidade", className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300" };
     default: return { label: "Cashback", className: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" };
   }
 }

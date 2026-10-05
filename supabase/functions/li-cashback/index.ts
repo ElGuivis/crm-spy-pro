@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { requireInternalAuth } from "../_shared/auth-guard.ts";
 import { liAuthHeader } from "../_shared/li-auth.ts";
+import { issueCoupon } from "../_shared/coupon-issuer.ts";
 
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger, type Logger } from "../_shared/correlation.ts";
@@ -11,7 +12,6 @@ import { sendEmail as sharedSendEmail, getEmailConfig } from "../_shared/email-s
 
 let log: Logger = createLogger("li-cashback", "init");
 
-const LI_API_BASE = 'https://api.awsli.com.br/v1';
 
 interface CashbackPayload {
   order_id: number;
@@ -175,122 +175,44 @@ Deno.serve(async (req) => {
       cashbackAmount = config.max_discount_value;
     }
 
-    // Generate unique 5-character coupon code
+    // Código de 5 caracteres (formato do cashback); a unicidade e as novas tentativas ficam por conta do emissor único
     const generateCode = () => {
       const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
       let code = '';
-      for (let i = 0; i < 5; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
+      for (let i = 0; i < 5; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
       return code;
     };
-
-    let couponCode = '';
-    let attempts = 0;
-    const maxAttempts = 10;
-
-    while (attempts < maxAttempts) {
-      couponCode = generateCode();
-      
-      const { data: existingCoupon } = await supabase
-        .from('generated_coupons')
-        .select('id')
-        .eq('coupon_code', couponCode)
-        .maybeSingle();
-
-      if (!existingCoupon) {
-        break;
-      }
-
-      log.info(`Code ${couponCode} already exists, retrying...`);
-      attempts++;
-    }
-
-    if (attempts >= maxAttempts) {
-      throw new Error('Failed to generate unique coupon code after multiple attempts');
-    }
 
     // Calculate expiration date
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + config.coupon_duration_days);
 
-    log.info(`Creating coupon: ${couponCode} with ${cashbackPercentage}% discount, expires: ${expiresAt.toISOString()}`);
-
-    // Create coupon in Loja Integrada
-    // FIX: Using fixed value (fixo) instead of percentage
-    // The cashbackAmount is the calculated fixed value (percentage of order total)
-    const couponPayload = {
-      codigo: couponCode,
-      tipo: 'fixo',  // LI API accepts 'fixo', 'porcentagem' or 'frete_gratis'
-      valor: cashbackAmount,  // Using the calculated fixed amount
-      validade: expiresAt.toISOString().split('T')[0],  // FIX: Correct field name is 'validade', not 'data_fim'
-      quantidade: 1,  // Total quantity of coupons available = 1
-      quantidade_por_cliente: 1,  // FIX: Max uses per customer (correct field name)
-      ativo: true,
-      aplicar_no_frete: false,
-      descricao: `Cashback do pedido #${payload.order_number}`,
-      // FIX: These fields are REQUIRED by the LI API
-      condicao_cliente: 'todos_clientes',
-      condicao_produto: 'todos_produtos'
-    };
-
-    log.info('Creating coupon in Loja Integrada:', couponPayload);
-
-    const createCouponResponse = await fetch(`${LI_API_BASE}/cupom`, {
-      method: 'POST',
-      headers: {
-        'Authorization': authHeader,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(couponPayload)
+    // Cria o cupom (valor fixo calculado pelo percentual do pedido) pelo emissor único: livro-razão, 429, colisão de código
+    const issued = await issueCoupon(supabase, {
+      tenantId, integrationId: integration.id, auth: authHeader,
+      origin: { type: 'cashback', id: config.id, ref: String(payload.order_number) },
+      spec: { tipo: 'fixo', valor: cashbackAmount, validade: expiresAt.toISOString().split('T')[0], quantidade: 1, quantidadePorCliente: 1, descricao: `Cashback do pedido #${payload.order_number}` },
+      codeFactory: generateCode, percentageForRecord: cashbackPercentage, orderRef: payload.order_number, cashbackConfigId: config.id,
+      recipient: { name: payload.customer_name, email: payload.customer_email, phone: payload.customer_phone, cpf: payload.customer_cpf || null },
     });
 
-    if (!createCouponResponse.ok) {
-      const errorText = await createCouponResponse.text();
-      log.error('Failed to create coupon:', createCouponResponse.status, errorText);
-      
+    if (!issued.ok) {
+      log.error('Failed to create coupon:', issued.status, issued.error);
       await supabase.from('cashback_executions').insert({
         config_id: config.id,
         order_id: String(payload.order_id),
         order_number: payload.order_number,
-        coupon_code: couponCode,
+        coupon_code: '',
         action_type: 'coupon_created',
         status: 'failed',
-        error_message: `Failed to create coupon in LI: ${createCouponResponse.status} - ${errorText}`,
+        error_message: `Failed to create coupon in LI: ${issued.status} - ${issued.error}`,
         tokens_used: 1
       });
-      
-      throw new Error(`Failed to create coupon: ${createCouponResponse.status} - ${errorText}`);
+      throw new Error(`Failed to create coupon: ${issued.status} - ${issued.error}`);
     }
-
-    const createdCoupon = await createCouponResponse.json();
-    log.info('Coupon created in Loja Integrada:', createdCoupon);
-
-    // Save coupon to database
-    const { data: savedCoupon, error: saveError } = await supabase
-      .from('generated_coupons')
-      .insert({
-        config_id: config.id,
-        integration_id: integration?.id || config.integration_id || null,
-        tenant_id: tenantId,
-        coupon_code: couponCode,
-        discount_percentage: cashbackPercentage,
-        coupon_value: cashbackAmount,
-        expires_at: expiresAt.toISOString(),
-        order_id: payload.order_number,
-        customer_name: payload.customer_name,
-        customer_email: payload.customer_email,
-        customer_phone: payload.customer_phone,
-        customer_cpf: payload.customer_cpf || null
-      })
-      .select()
-      .single();
-
-    if (saveError) {
-      log.error('Failed to save coupon to database:', saveError);
-    } else {
-      log.info('Coupon saved to database:', savedCoupon);
-    }
+    const couponCode = issued.code;
+    const savedCoupon = { id: issued.ledgerId };
+    log.info('Coupon created and recorded:', couponCode);
 
     // Deduct tokens from tenant
     if (tenantId) {

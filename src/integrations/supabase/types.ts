@@ -4504,6 +4504,10 @@ export type Database = {
           li_quantidade_usada: number | null
           li_quantidade_por_cliente: number | null
           li_valor_minimo: number | null
+          issue_status: string
+          origin_id: string | null
+          origin_ref: string | null
+          origin_type: string | null
           li_ativo: boolean | null
           li_cumulativo: boolean | null
           li_quantidade_uso_maximo: number | null
@@ -4535,6 +4539,10 @@ export type Database = {
           li_quantidade_usada?: number | null
           li_quantidade_por_cliente?: number | null
           li_valor_minimo?: number | null
+          issue_status?: string
+          origin_id?: string | null
+          origin_ref?: string | null
+          origin_type?: string | null
           li_ativo?: boolean | null
           li_cumulativo?: boolean | null
           li_quantidade_uso_maximo?: number | null
@@ -4566,6 +4574,10 @@ export type Database = {
           li_quantidade_usada?: number | null
           li_quantidade_por_cliente?: number | null
           li_valor_minimo?: number | null
+          issue_status?: string
+          origin_id?: string | null
+          origin_ref?: string | null
+          origin_type?: string | null
           li_ativo?: boolean | null
           li_cumulativo?: boolean | null
           li_quantidade_uso_maximo?: number | null
@@ -10762,6 +10774,21 @@ export type Database = {
           email: string | null
           li_customer_id: number
         }[]
+      }
+      get_coupon_performance: {
+        Args: { p_days?: number; p_tenant_id: string }
+        Returns: {
+          avg_ticket: number
+          discount_cost: number
+          issued: number
+          origin_type: string
+          redeemed: number
+          revenue: number
+        }[]
+      }
+      refresh_coupon_usage: {
+        Args: { p_tenant_id: string }
+        Returns: number
       }
       get_email_health: {
         Args: { p_days?: number; p_tenant_id: string }

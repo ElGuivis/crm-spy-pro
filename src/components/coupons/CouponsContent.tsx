@@ -16,6 +16,7 @@ import { InitialSyncProgress } from "@/components/common/InitialSyncProgress";
 import { SyncStatusBadge } from "@/components/common/SyncStatusBadge";
 import { CouponsStatsCards } from "./CouponsStatsCards";
 import { CouponsSalesDialog } from "./CouponsSalesDialog";
+import { CouponsByOrigin } from "./CouponsByOrigin";
 import { useCouponsData } from "@/hooks/useCouponsData";
 
 interface CouponsContentProps { integrationId: string; }
@@ -36,6 +37,8 @@ export const CouponsContent = ({ integrationId }: CouponsContentProps) => {
     manual: <Ticket className="h-3 w-3" />,
     cashback: <Gift className="h-3 w-3" />,
     email: <Mail className="h-3 w-3" />,
+    birthday: <Gift className="h-3 w-3" />,
+    reactivation: <RefreshCw className="h-3 w-3" />,
   };
   const canToggle = integrationType === "loja_integrada";
   const statusIconMap: Record<string, React.ReactNode> = {
@@ -92,6 +95,8 @@ export const CouponsContent = ({ integrationId }: CouponsContentProps) => {
 
       <CouponsStatsCards stats={stats} formatCurrency={formatCurrency} onClickValue={() => setShowSalesDialog(true)} />
 
+      <CouponsByOrigin />
+
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -102,7 +107,9 @@ export const CouponsContent = ({ integrationId }: CouponsContentProps) => {
           <SelectContent>
             <SelectItem value="campaign">Campanhas e manuais</SelectItem>
             <SelectItem value="cashback">Cashback (automáticos)</SelectItem>
-            <SelectItem value="email">E-mail marketing</SelectItem>
+            <SelectItem value="email">E-mail marketing e recuperação</SelectItem>
+            <SelectItem value="birthday">Aniversário</SelectItem>
+            <SelectItem value="reactivation">Reativação</SelectItem>
             <SelectItem value="all">Todos</SelectItem>
           </SelectContent>
         </Select>

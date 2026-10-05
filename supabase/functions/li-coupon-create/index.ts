@@ -4,7 +4,8 @@ import { requireResource } from "../_shared/resource-guard.ts";
 import { liAuthHeader } from "../_shared/li-auth.ts";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
-import { createLiCoupon, UNLIMITED_USES, type LiCouponKind } from "../_shared/li-coupons.ts";
+import { UNLIMITED_USES, type LiCouponKind } from "../_shared/li-coupons.ts";
+import { issueCoupon } from "../_shared/coupon-issuer.ts";
 
 const KINDS: LiCouponKind[] = ["porcentagem", "fixo", "frete_gratis"];
 
@@ -39,27 +40,17 @@ Deno.serve(async (req) => {
     const grupos = Array.isArray(b.grupoIds) ? b.grupoIds.map(Number).filter((n: number) => Number.isInteger(n) && n > 0) : [];
 
     log.info(`[COUPON-CREATE] ${codigo} (${tipo})`);
-    const created = await createLiCoupon(liAuthHeader(integration.api_key), {
-      codigo, tipo, valor: tipo === "frete_gratis" ? 0 : valor, validade, quantidade: max, quantidadePorCliente: perCustomer,
-      valorMinimo: minimo, cumulativo: !!b.cumulativo, descricao: b.descricao || undefined, grupos,
+    const created = await issueCoupon(supabase, {
+      tenantId: integration.tenant_id, integrationId: b.integrationId, auth: liAuthHeader(integration.api_key), origin: { type: "manual" },
+      spec: { codigo, tipo, valor: tipo === "frete_gratis" ? 0 : valor, validade, quantidade: max, quantidadePorCliente: perCustomer, valorMinimo: minimo, cumulativo: !!b.cumulativo, descricao: b.descricao || undefined, grupos },
     });
     if (!created.ok) {
-      log.error(`[COUPON-CREATE] LI recusou: ${created.status} ${created.error}`);
+      log.error(`[COUPON-CREATE] recusado: ${created.status} ${created.error}`);
       return json({ success: false, error: created.error }, created.status >= 400 && created.status < 600 ? created.status : 400);
     }
+    const { data: saved } = await supabase.from("generated_coupons").select("*").eq("id", created.ledgerId).single();
 
-    const row = {
-      tenant_id: integration.tenant_id, integration_id: b.integrationId, coupon_code: codigo, li_coupon_id: created.id || null,
-      discount_percentage: tipo === "porcentagem" ? valor : 0, coupon_value: tipo === "fixo" ? valor : null, source: "manual",
-      coupon_type: tipo, coupon_description: b.descricao || null, li_data_inicio: new Date().toISOString(),
-      li_data_fim: validade ? `${validade}T23:59:59-03:00` : null, expires_at: validade ? `${validade}T23:59:59-03:00` : null,
-      li_quantidade_uso_maximo: max < UNLIMITED_USES ? max : null, li_quantidade_usada: 0, li_quantidade_por_cliente: perCustomer,
-      li_valor_minimo: minimo, li_ativo: true, li_cumulativo: !!b.cumulativo,
-    };
-    const { data: saved, error: saveError } = await supabase.from("generated_coupons").upsert(row, { onConflict: "integration_id,coupon_code" }).select().single();
-    if (saveError) log.error("[COUPON-CREATE] criado na loja, mas não salvou local:", saveError); // o próximo Sincronizar traz
-
-    return json({ success: true, coupon: saved ?? row, liCouponId: created.id });
+    return json({ success: true, coupon: saved, liCouponId: created.liId });
   } catch (error: unknown) {
     if (error instanceof Response) return error;
     const message = error instanceof Error ? error.message : "Erro desconhecido";

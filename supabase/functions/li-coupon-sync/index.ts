@@ -59,6 +59,9 @@ Deno.serve(async (req) => {
       if (action === "check-new" && offset >= 200) break; // só os primeiros
     }
 
+    // uso do cupom (pedido e valor) a partir dos pedidos já sincronizados: alimenta o retorno por origem
+    await supabase.rpc("refresh_coupon_usage", { p_tenant_id: ctx.tenantId }).then(({ error }) => { if (error) log.error("[COUPON-SYNC] uso:", error.message); });
+
     if (syncLog?.id) {
       await supabase.from("li_sync_logs").update({
         status: errors.length ? "completed_with_errors" : "completed", records_synced: saved,

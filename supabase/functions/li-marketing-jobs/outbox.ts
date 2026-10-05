@@ -10,6 +10,8 @@ const BATCH = 40;
 
 /** Fila de chamadas para a loja (descadastro em duas vias). Cada item tem até 6 tentativas, com espera crescente. */
 export async function runOutbox(supabase: Supabase, log: { info: (...a: unknown[]) => void; error: (...a: unknown[]) => void }) {
+  // aproveita a rodada de 5 min: reservas de cupom esquecidas (queda no meio da emissão) viram emitidas ou somem
+  await supabase.rpc("cleanup_pending_coupons");
   const { data: jobs } = await supabase.from("li_marketing_outbox").select("id, tenant_id, integration_id, kind, payload, attempts")
     .eq("status", "pending").lte("next_attempt_at", new Date().toISOString()).order("created_at").limit(BATCH);
   if (!jobs?.length) return { processed: 0 };

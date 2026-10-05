@@ -3,11 +3,11 @@ import { sendWhatsAppMessage, type WhatsAppConfig } from "../_shared/whatsapp-se
 import { sendEmail, getEmailConfig } from "../_shared/email-sender.ts";
 import { requireInternalAuth } from "../_shared/auth-guard.ts";
 import { liAuthHeader } from "../_shared/li-auth.ts";
+import { issueCoupon } from "../_shared/coupon-issuer.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { ensureAutomationConversation } from "../_shared/automation-conversation.ts";
 
-const LI_API_BASE = 'https://api.awsli.com.br/v1';
 const BIRTHDAY_TOKEN_COST = 3;
 const PAGE_SIZE = 1000;
 
@@ -220,38 +220,20 @@ Deno.serve(async (req) => {
           }
 
           try {
-            // Generate coupon code
-            const couponCode = generateCouponCode();
-            
-            // Create coupon in store API (LI only for now)
-            if (storeType === 'loja_integrada' && authHeader) {
+            // Cupom: loja integrada pelo emissor único (livro-razão, nova tentativa em 429, código sem colisão);
+            // outras lojas seguem só com o código sorteado, como antes.
+            let couponCode = generateCouponCode();
+            if (storeType === 'loja_integrada' && authHeader && config.store_integration?.id) {
               const expiresAt = new Date();
               expiresAt.setDate(expiresAt.getDate() + config.coupon_duration_days);
-              
-              const couponPayload = {
-                codigo: couponCode,
-                tipo: 'porcentagem',
-                valor: config.coupon_discount_percent,
-                validade: expiresAt.toISOString().split('T')[0],
-                quantidade: 1,
-                quantidade_por_cliente: 1,
-                ativo: true,
-                aplicar_no_frete: false,
-                descricao: `Aniversário - ${customer.name}`,
-                condicao_cliente: 'todos_clientes',
-                condicao_produto: 'todos_produtos',
-              };
-
-              const response = await fetch(`${LI_API_BASE}/cupom`, {
-                method: 'POST',
-                headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
-                body: JSON.stringify(couponPayload),
+              const issued = await issueCoupon(supabase, {
+                tenantId, integrationId: config.store_integration.id, auth: authHeader,
+                origin: { type: 'birthday', id: config.id },
+                spec: { tipo: 'porcentagem', valor: config.coupon_discount_percent, validade: expiresAt.toISOString().split('T')[0], quantidade: 1, quantidadePorCliente: 1, descricao: `Aniversário - ${customer.name}` },
+                codeFactory: generateCouponCode, recipient: { name: customer.name, email: customer.email, phone: customer.phone },
               });
-
-              if (!response.ok) {
-                const errorText = await response.text();
-                log.error(`[BIRTHDAY] Failed to create coupon for ${customer.name}: ${response.status} - ${errorText}`);
-                
+              if (!issued.ok) {
+                log.error(`[BIRTHDAY] Failed to create coupon for ${customer.name}: ${issued.status} - ${issued.error}`);
                 await supabase.from('birthday_executions').insert({
                   tenant_id: tenantId,
                   config_id: config.id,
@@ -262,12 +244,11 @@ Deno.serve(async (req) => {
                   coupon_code: couponCode,
                   action_type: 'birthday_message',
                   status: 'failed',
-                  error_message: `Coupon creation failed: ${errorText}`,
+                  error_message: `Coupon creation failed: ${issued.error}`,
                 });
                 continue;
               }
-
-              await response.json(); // consume body
+              couponCode = issued.code;
             }
 
             // Build message — support both {{...}} and legacy {…} placeholders

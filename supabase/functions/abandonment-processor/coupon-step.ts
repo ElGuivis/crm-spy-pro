@@ -17,7 +17,7 @@ export async function issueStepCoupon(ctx: Ctx, flow: Flow, step: FlowStep, cand
   const auth = await getLiAuth(ctx.supabase, flow.tenant_id);
   if (!auth) return { coupon: NO_COUPON, error: "Cupom do fluxo precisa da Loja Integrada conectada." };
   const key = `${cand.recipient_email ?? cand.recipient_phone}#${cand.id.slice(0, 8)}`;
-  const r = await issueCoupons(ctx.supabase, { tenantId: flow.tenant_id, campaignId, campaignName: `Recuperação ${flow.kind} · ${step.id}`, cfg, auth }, [key]);
+  const r = await issueCoupons(ctx.supabase, { tenantId: flow.tenant_id, campaignId, campaignName: `Recuperação ${flow.kind} · ${step.id}`, cfg, auth, origin: flow.kind === "welcome" ? "welcome" : "recovery" }, [key]);
   const issued = r.issued.get(key);
   if (!issued) return { coupon: NO_COUPON, error: r.authError || r.failed.get(key) || "Cupom não criado.", abort: !!r.authError };
   return { coupon: issued };
