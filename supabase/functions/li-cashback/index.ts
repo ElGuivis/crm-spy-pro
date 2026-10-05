@@ -3,6 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { requireInternalAuth } from "../_shared/auth-guard.ts";
 import { liAuthHeader } from "../_shared/li-auth.ts";
 import { issueCoupon } from "../_shared/coupon-issuer.ts";
+import { canContact, recordTouches } from "../_shared/contact-policy.ts";
+import { unsubscribeFor, withHtmlFooter } from "../_shared/email-unsubscribe-link.ts";
 
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger, type Logger } from "../_shared/correlation.ts";
@@ -319,8 +321,12 @@ Deno.serve(async (req) => {
     let emailSent = false;
     let emailError: string | undefined;
 
+    // regra única de contato: e-mail suprimido ou telefone bloqueado não recebem (o cashback não conta no limite diário)
+    const waRule = payload.customer_phone ? await canContact(supabase, tenantId, { phone: payload.customer_phone }, 'cashback') : { ok: true as const };
+    const emRule = payload.customer_email ? await canContact(supabase, tenantId, { email: payload.customer_email }, 'cashback') : { ok: true as const };
+
     // Send WhatsApp message directly
-    if (config.send_via_whatsapp && payload.customer_phone && evolutionUrl && evolutionApiKey) {
+    if (config.send_via_whatsapp && payload.customer_phone && waRule.ok && evolutionUrl && evolutionApiKey) {
       const whatsappIntegration = config.whatsapp_integration;
       
       if (whatsappIntegration?.metadata) {
@@ -371,7 +377,7 @@ Deno.serve(async (req) => {
     }
 
     // Send Email directly if configured
-    if (config.send_via_email && payload.customer_email && emailIntegrationData) {
+    if (config.send_via_email && payload.customer_email && emRule.ok && emailIntegrationData) {
       const emailBodyText = (config.email_body_text || '')
         .replace(/\{\{cliente_nome\}\}/g, payload.customer_name)
         .replace(/\{\{cliente_primeiro_nome\}\}/g, customerFirstName)
@@ -395,11 +401,15 @@ Deno.serve(async (req) => {
       
       const { config: emailCfg, error: emailCfgErr } = await getEmailConfig(supabase, config.email_integration_id);
       if (emailCfg && !emailCfgErr) {
+        // link de descadastro (obrigatório): quem clicar entra na lista de supressão
+        const unsub = await unsubscribeFor(supabase, supabaseUrl, tenantId, 'cashback', payload.customer_email, payload.customer_name);
+        if (!unsub) log.error(`[LI-CASHBACK] não foi possível criar o link de descadastro para ${payload.customer_email}`);
         const result = await sharedSendEmail(emailCfg, {
           to: payload.customer_email,
           subject: emailSubject,
-          text: emailBodyText,
-          html: emailBodyHtml || undefined,
+          text: unsub ? emailBodyText + unsub.textFooter : emailBodyText,
+          html: emailBodyHtml ? (unsub ? withHtmlFooter(emailBodyHtml, unsub.htmlFooter) : emailBodyHtml) : undefined,
+          headers: unsub?.headers,
         });
         emailSent = result.success;
         emailError = result.error;
@@ -407,9 +417,13 @@ Deno.serve(async (req) => {
     }
 
     log.info(`[LI-CASHBACK] Notifications sent: WhatsApp=${whatsappSent}, Email=${emailSent}`);
+    await recordTouches(supabase, tenantId, [
+      ...(whatsappSent ? [{ target: { phone: payload.customer_phone, email: payload.customer_email }, channel: 'whatsapp' as const, purpose: 'cashback' as const, ref: config.id }] : []),
+      ...(emailSent ? [{ target: { email: payload.customer_email, phone: payload.customer_phone }, channel: 'email' as const, purpose: 'cashback' as const, ref: config.id }] : []),
+    ]);
 
     // Queue failed messages for retry
-    if (!whatsappSent && config.send_via_whatsapp && payload.customer_phone && config.whatsapp_integration_id) {
+    if (!whatsappSent && waRule.ok && config.send_via_whatsapp && payload.customer_phone && config.whatsapp_integration_id) {
       const messageTemplate = config.message_template || 'Olá {{cliente_nome}}! 🎉 Obrigado pela sua compra! Use o cupom {{cupom}} e ganhe {{valor_cupom}} de desconto na próxima compra. Válido até {{validade}}.';
       const formattedMessage = messageTemplate
         .replace(/\{\{cliente_nome\}\}/g, payload.customer_name)
@@ -431,7 +445,7 @@ Deno.serve(async (req) => {
       log.info(`[LI-CASHBACK] WhatsApp queued for retry`);
     }
 
-    if (!emailSent && config.send_via_email && payload.customer_email && config.email_integration_id) {
+    if (!emailSent && emRule.ok && config.send_via_email && payload.customer_email && config.email_integration_id) {
       const emailSubject = (config.email_subject || 'Seu cupom de desconto!')
         .replace(/\{\{cliente_nome\}\}/g, payload.customer_name)
         .replace(/\{\{cupom\}\}/g, couponCode);

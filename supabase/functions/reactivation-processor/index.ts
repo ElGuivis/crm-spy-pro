@@ -3,6 +3,7 @@ import { sendWhatsAppMessage, type WhatsAppConfig } from "../_shared/whatsapp-se
 import { requireInternalAuth } from "../_shared/auth-guard.ts";
 import { liAuthHeader } from "../_shared/li-auth.ts";
 import { issueCoupon } from "../_shared/coupon-issuer.ts";
+import { canContact, recordTouches } from "../_shared/contact-policy.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { ensureAutomationConversation } from "../_shared/automation-conversation.ts";
@@ -386,6 +387,15 @@ Deno.serve(async (req) => {
               ? currentStep.coupon_duration_days
               : config.coupon_duration_days;
 
+            // regra única de contato: telefone bloqueado ou limite diário atingido => não gera cupom agora (a pessoa continua elegível nas próximas rodadas)
+            if (whatsappConfig && customer.phone) {
+              const rule = await canContact(supabase, tenantId, { phone: customer.phone, email: customer.email }, 'reactivation');
+              if (!rule.ok) {
+                log.info(`[REACTIVATION] ${customer.name}: pulado pelas regras de contato (${rule.reason})`);
+                continue;
+              }
+            }
+
             // Cupom: loja integrada pelo emissor único (livro-razão, nova tentativa em 429, código sem colisão);
             // outras lojas seguem só com o código sorteado, como antes.
             let couponCode = generateCouponCode();
@@ -473,6 +483,7 @@ Deno.serve(async (req) => {
 
             // Deduct tokens ONLY when message was actually sent
             if (sent) {
+              await recordTouches(supabase, tenantId, [{ target: { phone: customer.phone, email: customer.email }, channel: 'whatsapp', purpose: 'reactivation', ref: config.id }]);
               await supabase.rpc('deduct_tokens', {
                 _tenant_id: tenantId,
                 _amount: REACTIVATION_TOKEN_COST,

@@ -9,6 +9,7 @@ import { NativePanel } from "./NativePanel";
 import { GroupsCard } from "./GroupsCard";
 import { NewsletterPanel } from "./NewsletterPanel";
 import { WaitlistPanel } from "./WaitlistPanel";
+import { ContactPolicyPanel } from "./ContactPolicyPanel";
 
 /** Aba "Recuperação": resultado, os fluxos (carrinho, navegação, pedido, boas-vindas), abandonos capturados, reposição, newsletter e a Loja Integrada (automação nativa, grupos). */
 export function RecoveryTab() {
@@ -23,6 +24,7 @@ export function RecoveryTab() {
         <TabsTrigger value="captured">Capturados</TabsTrigger>
         <TabsTrigger value="waitlist" className="gap-2">Reposição{restocked > 0 && <Badge className="px-1.5 text-xs bg-emerald-600">{restocked}</Badge>}</TabsTrigger>
         <TabsTrigger value="newsletter">Newsletter</TabsTrigger>
+        <TabsTrigger value="contact">Regras de contato</TabsTrigger>
         <TabsTrigger value="store">Loja Integrada</TabsTrigger>
       </TabsList>
       <TabsContent value="summary"><RecoverySummary /></TabsContent>
@@ -30,6 +32,7 @@ export function RecoveryTab() {
       <TabsContent value="captured"><CapturedList /></TabsContent>
       <TabsContent value="waitlist"><WaitlistPanel /></TabsContent>
       <TabsContent value="newsletter"><NewsletterPanel /></TabsContent>
+      <TabsContent value="contact"><ContactPolicyPanel /></TabsContent>
       <TabsContent value="store" className="space-y-4"><NativePanel /><GroupsCard /></TabsContent>
     </Tabs>
   );

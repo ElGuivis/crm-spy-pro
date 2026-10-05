@@ -12,6 +12,8 @@ const BATCH = 40;
 export async function runOutbox(supabase: Supabase, log: { info: (...a: unknown[]) => void; error: (...a: unknown[]) => void }) {
   // aproveita a rodada de 5 min: reservas de cupom esquecidas (queda no meio da emissão) viram emitidas ou somem
   await supabase.rpc("cleanup_pending_coupons");
+  await supabase.rpc("cleanup_customer_touches"); // toques com mais de 90 dias não influenciam nenhuma regra
+  await supabase.rpc("archive_orphan_flow_campaigns"); // etapas criadas e nunca usadas (cliques repetidos em "Criar etapas padrão")
   const { data: jobs } = await supabase.from("li_marketing_outbox").select("id, tenant_id, integration_id, kind, payload, attempts")
     .eq("status", "pending").lte("next_attempt_at", new Date().toISOString()).order("created_at").limit(BATCH);
   if (!jobs?.length) return { processed: 0 };

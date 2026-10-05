@@ -8,6 +8,7 @@ import { inQuietHours, nextDueStep, stepChannels, type FlowStep } from "../_shar
 import { closeEmailSessions, sendEmailStep } from "./email-step.ts";
 import { loadWhatsAppInstance, sendWhatsAppStep } from "./whatsapp-step.ts";
 import { issueStepCoupon, NO_COUPON } from "./coupon-step.ts";
+import { canContact, recordTouches, REASON_TEXT, type TouchPurpose } from "../_shared/contact-policy.ts";
 import {
   MAX_EMAILS_PER_RUN, MAX_WHATSAPP_PER_RUN, timeLeft,
   type Candidate, type Channel, type Ctx, type Flow, type Kind, type SendOutcome, type Supabase,
@@ -142,6 +143,7 @@ async function processFlow(ctx: Ctx, flow: Flow): Promise<Record<string, unknown
     }
 
     const pending = stepChannels(step).filter((c) => !done.has(`${step.id}:${c}`));
+    const purpose: TouchPurpose = flow.kind === "welcome" ? "welcome" : "recovery";
     const record = async (channel: Channel, status: "skipped" | "failed" | "sent", extra: Record<string, unknown> = {}) => {
       await supabase.from("abandonment_flow_sends").upsert(
         { tenant_id: flow.tenant_id, abandonment_id: cand.id, kind: flow.kind, step_id: step.id, channel, status, sent_at: status === "sent" ? new Date().toISOString() : null, ...extra },
@@ -160,6 +162,13 @@ async function processFlow(ctx: Ctx, flow: Flow): Promise<Record<string, unknown
         if (!cand.recipient_phone) { await record("whatsapp", "skipped", { reason: "sem telefone" }); stats.skipped++; continue; }
         if (!instance) { await record("whatsapp", "skipped", { reason: "WhatsApp do fluxo não está conectado" }); stats.skipped++; continue; }
         if (ctx.sent.whatsapp >= MAX_WHATSAPP_PER_RUN) continue;
+      }
+      // regra única de contato (supressão, telefone bloqueado, limite diário por pessoa): bloqueio permanente pula o canal; temporário adia a etapa
+      const rule = await canContact(supabase, flow.tenant_id, channel === "email" ? { email: cand.recipient_email } : { phone: cand.recipient_phone }, purpose);
+      if (!rule.ok) {
+        if (rule.permanent) { await record(channel, "skipped", { reason: REASON_TEXT[rule.reason] ?? rule.reason }); stats.skipped++; }
+        else stats.note = `adiado: ${REASON_TEXT[rule.reason] ?? rule.reason}`;
+        continue;
       }
       willSend.push(channel);
     }
@@ -195,7 +204,10 @@ async function processFlow(ctx: Ctx, flow: Flow): Promise<Record<string, unknown
         status: outcome.ok ? "sent" : "failed", reason: outcome.ok ? null : (outcome.error ?? "falha").slice(0, 300),
         coupon_code: outcome.coupon ?? null, flow_campaign_id: outcome.flowCampaignId ?? null, sent_at: outcome.ok ? new Date().toISOString() : null,
       }).eq("id", claimed.id);
-      if (outcome.ok) { stats[channel]++; ctx.sent[channel]++; } else stats.failed++;
+      if (outcome.ok) {
+        stats[channel]++; ctx.sent[channel]++;
+        await recordTouches(supabase, flow.tenant_id, [{ target: { email: cand.recipient_email, phone: cand.recipient_phone }, channel, purpose, ref: outcome.flowCampaignId ?? flow.kind }]);
+      } else stats.failed++;
       if (channel === "whatsapp") await sleep(4_000); // espaça as mensagens (proteção contra bloqueio do número)
     }
   }

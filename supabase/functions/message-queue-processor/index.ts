@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { requireInternalAuth } from "../_shared/auth-guard.ts";
 import { readSmtpPassword } from "../_shared/credential-helpers.ts";
 import { sendEmail as sharedSendEmail, getEmailConfig } from "../_shared/email-sender.ts";
+import { unsubscribeFor, withHtmlFooter, type SystemEmailKind } from "../_shared/email-unsubscribe-link.ts";
 import { sendWhatsAppMessage as sharedSendWhatsApp, type WhatsAppConfig } from "../_shared/whatsapp-sender.ts";
 import type { MessageQueueRecord, EmailIntegrationRecord } from "../_shared/supabase-types.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
@@ -190,11 +191,15 @@ Deno.serve(async (req) => {
         if (msg.email_integration_id) {
           const { config: emailCfg, error: emailCfgErr } = await getEmailConfig(supabase, msg.email_integration_id);
           if (emailCfg && !emailCfgErr) {
+            // e-mails de cashback (promocionais) que voltaram pela fila também levam o link de descadastro
+            const kind: SystemEmailKind | null = msg.reference_type === 'cashback' ? 'cashback' : msg.reference_type === 'cashback_reminder' ? 'cashback_reminder' : null;
+            const unsub = kind ? await unsubscribeFor(supabase, supabaseUrl, msg.tenant_id, kind, msg.recipient, (msg.metadata as Record<string, string> | null)?.customer_name) : null;
             result = await sharedSendEmail(emailCfg, {
               to: msg.recipient,
               subject: msg.subject || 'Notificação',
-              text: msg.message_content,
-              html: msg.html_content || undefined,
+              text: unsub ? msg.message_content + unsub.textFooter : msg.message_content,
+              html: msg.html_content ? (unsub ? withHtmlFooter(msg.html_content, unsub.htmlFooter) : msg.html_content) : undefined,
+              headers: unsub?.headers,
             });
           } else {
             result = { success: false, error: emailCfgErr || 'Email integration not found' };

@@ -6,6 +6,7 @@ import { replaceVariables } from "../_shared/email-variable-replacer.ts";
 import { injectTracking } from "./send-helpers.ts";
 import { queueProgress } from "./queue.ts";
 import { getLiAuth, issueCoupons, parseUniqueCoupon, type IssuedCoupon } from "./coupons.ts";
+import { recordTouches, type TouchRow } from "../_shared/contact-policy.ts";
 
 type Supabase = ReturnType<typeof createClient>;
 type Log = { info: (...a: unknown[]) => void; error: (...a: unknown[]) => void };
@@ -98,6 +99,7 @@ export async function processCampaign(supabase: Supabase, supabaseUrl: string, c
       }
 
       let next = 0;
+      const touches: TouchRow[] = [];
       await Promise.all(sessions.map(async (session) => {
         while (!abortMessage) {
           const row = sendRows[next++];
@@ -133,6 +135,7 @@ export async function processCampaign(supabase: Supabase, supabaseUrl: string, c
 
           const nowIso = new Date().toISOString();
           const ok = result.success;
+          if (ok) touches.push({ target: { email: row.recipient_email, phone: row.recipient_phone }, channel: "email", purpose: "campaign", ref: campaignId });
           await Promise.all([
             supabase.from("email_send_queue").update({ status: ok ? "sent" : "failed", error_message: ok ? null : (result.error ?? "Falha no envio"), processed_at: nowIso }).eq("id", row.id),
             supabase.from("email_campaign_logs").insert({
@@ -146,6 +149,7 @@ export async function processCampaign(supabase: Supabase, supabaseUrl: string, c
           ]);
         }
       }));
+      await recordTouches(supabase, tenantId, touches);
     }
 
     leaseReleased = await finishOrContinue(supabase, supabaseUrl, campaignId, abortMessage, log);

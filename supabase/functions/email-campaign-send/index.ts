@@ -11,6 +11,7 @@ import { getSuppressedEmailSet } from "./send-helpers.ts";
 import { buildQueue, queueCount, siblingRecipients, type Sender } from "./queue.ts";
 import { getLiAuth, parseUniqueCoupon } from "./coupons.ts";
 import { processCampaign } from "./processor.ts";
+import { blockedTargets, REASON_TEXT } from "../_shared/contact-policy.ts";
 
 declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
 
@@ -149,6 +150,20 @@ serve(async (req) => {
       log.info(`[A/B] variante=${campaign.ab_variant} fatia=[${start}, ${end}) de ${total}`);
     }
 
+    // Regras de contato (limite diário por pessoa e prioridade de quem recebeu mensagem automática há pouco): depois da fatia do A/B,
+    // para que as variantes continuem calculando as mesmas fatias
+    let skippedRules = 0;
+    const ruleReasons: Record<string, number> = {};
+    {
+      const blocked = await blockedTargets(supabase, tenantId, eligible.map((r) => ({ email: r.email })), "campaign");
+      if (blocked.size) {
+        skippedRules = blocked.size;
+        for (const reason of blocked.values()) ruleReasons[reason] = (ruleReasons[reason] ?? 0) + 1;
+        eligible = eligible.filter((_, i) => !blocked.has(i));
+        if (!eligible.length) return await fail(`Todos os destinatários foram pulados pelas regras de contato (${Object.entries(ruleReasons).map(([k, n]) => `${n}: ${REASON_TEXT[k] ?? k}`).join("; ")}). Ajuste as regras ou envie mais tarde.`);
+      }
+    }
+
     // Cota diária da integração (só envios reais)
     if (dailySendLimit && dailySendLimit > 0) {
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -161,15 +176,15 @@ serve(async (req) => {
     }
     if (!eligible.length) return await fail("Todos os destinatários estão na lista de supressão (descadastrados ou com endereço inválido).");
 
-    if (suppressed.size > 0 || skippedRecent > 0) {
-      await supabase.from("email_campaign_logs").insert({ tenant_id: tenantId, campaign_id: campaignId, event_type: "suppression_filtered", event_data: { total_candidates: recipients.length, suppressed: suppressed.size, skipped_recent: skippedRecent, eligible: eligible.length }, status: "info", is_test: false });
+    if (suppressed.size > 0 || skippedRecent > 0 || skippedRules > 0) {
+      await supabase.from("email_campaign_logs").insert({ tenant_id: tenantId, campaign_id: campaignId, event_type: "suppression_filtered", event_data: { total_candidates: recipients.length, suppressed: suppressed.size, skipped_recent: skippedRecent, skipped_contact_rules: skippedRules, contact_rule_reasons: ruleReasons, eligible: eligible.length }, status: "info", is_test: false });
     }
 
     const queued = await buildQueue(supabase, tenantId, campaignId, eligible, senders);
     await supabase.from("email_campaigns").update({ total_recipients: queued }).eq("id", campaignId);
 
     EdgeRuntime.waitUntil(processCampaign(supabase, supabaseUrl, campaignId, log));
-    return json({ success: true, queued, suppressed: suppressed.size, skipped_recent: skippedRecent }, 202);
+    return json({ success: true, queued, suppressed: suppressed.size, skipped_recent: skippedRecent, skipped_contact_rules: skippedRules }, 202);
   } catch (error: unknown) {
     if (error instanceof Response) return error;
     log.error("[EMAIL-CAMPAIGN-SEND]", error);

@@ -8,6 +8,8 @@ import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { ensureAutomationConversation } from "../_shared/automation-conversation.ts";
 import { sendWhatsAppMessage as sharedSendWhatsApp, type WhatsAppConfig } from "../_shared/whatsapp-sender.ts";
+import { canContact, recordTouches } from "../_shared/contact-policy.ts";
+import { unsubscribeFor } from "../_shared/email-unsubscribe-link.ts";
 
 // Module-level logger (overridden per-request with correlation ID)
 let log = createLogger("cashback-reminder-processor", "init");
@@ -24,7 +26,7 @@ function formatPhoneNumber(phone: string): string {
 async function sendEmail(
   smtpHost: string, smtpPort: number, smtpUser: string, smtpPass: string,
   senderName: string, senderEmail: string | undefined,
-  to: string, subject: string, text: string, html?: string
+  to: string, subject: string, text: string, html?: string, headers?: Record<string, string>
 ): Promise<{ success: boolean; error?: string }> {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
@@ -33,7 +35,7 @@ async function sendEmail(
       });
       await client.send(buildSafeMailOptions({
         from: senderEmail ? `${senderName} <${senderEmail}>` : `${senderName} <${smtpUser}>`,
-        to, subject, text, html: html || undefined,
+        to, subject, text, html: html || undefined, headers,
       }) as never);
       await client.close();
       log.info(`[EMAIL] ✅ Sent to ${to}`);
@@ -111,9 +113,12 @@ Deno.serve(async (req) => {
 
         let whatsappSent = false, emailSent = false;
         const config = reminder.config;
+        // regra única de contato: lembrete não entra no limite diário (o cupom está vencendo), mas respeita supressão e bloqueio
+        const waRule = reminder.coupon?.customer_phone ? await canContact(supabase, reminder.tenant_id, { phone: reminder.coupon.customer_phone }, 'cashback_reminder') : { ok: true as const };
+        const emRule = reminder.coupon?.customer_email ? await canContact(supabase, reminder.tenant_id, { email: reminder.coupon.customer_email }, 'cashback_reminder') : { ok: true as const };
 
         // Send WhatsApp directly
-        if (reminder.coupon?.customer_phone && evolutionUrl && evolutionApiKey && config?.whatsapp_integration?.metadata) {
+        if (reminder.coupon?.customer_phone && waRule.ok && evolutionUrl && evolutionApiKey && config?.whatsapp_integration?.metadata) {
           const metadata = config.whatsapp_integration.metadata as Record<string, unknown>;
           const instanceName = (metadata.instanceName || metadata.instance_name) as string;
           if (instanceName && reminder.message) {
@@ -139,17 +144,25 @@ Deno.serve(async (req) => {
         }
 
         // Send Email directly
-        if (reminder.coupon?.customer_email && config?.send_via_email && config?.email_integration_id) {
+        if (reminder.coupon?.customer_email && emRule.ok && config?.send_via_email && config?.email_integration_id) {
           const { data: emailInt } = await supabase.from('email_integrations').select('id, name, tenant_id, smtp_host, smtp_port, smtp_user, smtp_password_encrypted, smtp_secure, smtp_tls, sender_email, sender_name, reply_to, is_active').eq('id', config.email_integration_id).single();
           if (emailInt?.smtp_host) {
             const smtpPass = await readSmtpPassword(supabase, emailInt) || "";
-            const result = await sendEmail(emailInt.smtp_host, emailInt.smtp_port || 587, emailInt.smtp_user, smtpPass, emailInt.name || emailInt.sender_name || 'Loja', emailInt.sender_email, reminder.coupon.customer_email, `Lembrete: Seu cupom ${reminder.coupon.coupon_code} está expirando!`, reminder.message);
+            // link de descadastro (obrigatório): quem clicar entra na lista de supressão
+            const unsub = await unsubscribeFor(supabase, supabaseUrl, reminder.tenant_id, 'cashback_reminder', reminder.coupon.customer_email, reminder.coupon.customer_name);
+            if (!unsub) log.error(`[CASHBACK-REMINDER] não foi possível criar o link de descadastro para ${reminder.coupon.customer_email}`);
+            const result = await sendEmail(emailInt.smtp_host, emailInt.smtp_port || 587, emailInt.smtp_user, smtpPass, emailInt.name || emailInt.sender_name || 'Loja', emailInt.sender_email, reminder.coupon.customer_email, `Lembrete: Seu cupom ${reminder.coupon.coupon_code} está expirando!`, unsub ? reminder.message + unsub.textFooter : reminder.message, undefined, unsub?.headers);
             emailSent = result.success;
           }
         }
 
+        await recordTouches(supabase, reminder.tenant_id, [
+          ...(whatsappSent ? [{ target: { phone: reminder.coupon?.customer_phone, email: reminder.coupon?.customer_email }, channel: 'whatsapp' as const, purpose: 'cashback_reminder' as const, ref: reminder.id }] : []),
+          ...(emailSent ? [{ target: { email: reminder.coupon?.customer_email, phone: reminder.coupon?.customer_phone }, channel: 'email' as const, purpose: 'cashback_reminder' as const, ref: reminder.id }] : []),
+        ]);
+
         // Queue failed messages for retry
-        if (!whatsappSent && reminder.coupon?.customer_phone && config?.whatsapp_integration_id) {
+        if (!whatsappSent && waRule.ok && reminder.coupon?.customer_phone && config?.whatsapp_integration_id) {
           await supabase.from('message_queue').insert({
             tenant_id: tenantId,
             channel: 'whatsapp',
@@ -163,7 +176,7 @@ Deno.serve(async (req) => {
           log.info(`[CASHBACK-REMINDER] WhatsApp queued for retry - reminder ${reminder.id}`);
         }
 
-        if (!emailSent && reminder.coupon?.customer_email && config?.send_via_email && config?.email_integration_id) {
+        if (!emailSent && emRule.ok && reminder.coupon?.customer_email && config?.send_via_email && config?.email_integration_id) {
           await supabase.from('message_queue').insert({
             tenant_id: tenantId,
             channel: 'email',

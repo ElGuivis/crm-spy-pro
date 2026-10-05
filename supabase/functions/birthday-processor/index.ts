@@ -4,6 +4,8 @@ import { sendEmail, getEmailConfig } from "../_shared/email-sender.ts";
 import { requireInternalAuth } from "../_shared/auth-guard.ts";
 import { liAuthHeader } from "../_shared/li-auth.ts";
 import { issueCoupon } from "../_shared/coupon-issuer.ts";
+import { canContact, recordTouches } from "../_shared/contact-policy.ts";
+import { unsubscribeFor } from "../_shared/email-unsubscribe-link.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { ensureAutomationConversation } from "../_shared/automation-conversation.ts";
@@ -220,6 +222,16 @@ Deno.serve(async (req) => {
           }
 
           try {
+            // regra única de contato, por canal: e-mail suprimido ou telefone bloqueado não recebem; sem canal liberado, nem gera cupom
+            const dEmail = customer.email && config.email_enabled && config.email_integration_id ? await canContact(supabase, tenantId, { email: customer.email }, 'birthday') : null;
+            const dWa = customer.phone && whatsappConfig ? await canContact(supabase, tenantId, { phone: customer.phone }, 'birthday') : null;
+            const emailBlocked = !!dEmail && !dEmail.ok;
+            const waBlocked = !!dWa && !dWa.ok;
+            if ((dEmail || dWa) && (!dEmail || emailBlocked) && (!dWa || waBlocked)) {
+              log.info(`[BIRTHDAY] ${customer.name}: todos os canais bloqueados pelas regras de contato, pulando`);
+              continue;
+            }
+
             // Cupom: loja integrada pelo emissor único (livro-razão, nova tentativa em 429, código sem colisão);
             // outras lojas seguem só com o código sorteado, como antes.
             let couponCode = generateCouponCode();
@@ -271,13 +283,14 @@ Deno.serve(async (req) => {
               .replace(/\{validade\}/g, String(config.coupon_duration_days));
 
             let sent = false;
+            let waSent = false, emailSent = false;
             let errorMsg: string | null = null;
 
             // Send WhatsApp
-            if (whatsappConfig && customer.phone) {
+            if (whatsappConfig && customer.phone && !waBlocked) {
               const result = await sendWhatsAppMessage(whatsappConfig, customer.phone, message);
               if (result.success) {
-                sent = true;
+                sent = true; waSent = true;
                 log.info(`[BIRTHDAY] ✅ WhatsApp sent to ${customer.name}`);
 
                 // Create automation conversation to prevent bot from responding
@@ -303,7 +316,7 @@ Deno.serve(async (req) => {
             }
 
             // Send Email
-            if (config.email_enabled && config.email_integration_id && customer.email) {
+            if (config.email_enabled && config.email_integration_id && customer.email && !emailBlocked) {
               try {
                 const { config: emailConfig, error: emailErr } = await getEmailConfig(supabase, config.email_integration_id);
                 if (emailConfig && !emailErr) {
@@ -327,14 +340,18 @@ Deno.serve(async (req) => {
                     .replace(/\{cupom\}/g, couponCode)
                     .replace(/\{validade\}/g, String(config.coupon_duration_days));
 
+                  // link de descadastro (obrigatório): quem clicar entra na lista de supressão
+                  const unsub = await unsubscribeFor(supabase, supabaseUrl, tenantId, 'birthday', customer.email, customer.name);
+                  if (!unsub) log.error(`[BIRTHDAY] não foi possível criar o link de descadastro para ${customer.email}`);
                   const emailResult = await sendEmail(emailConfig, {
                     to: customer.email,
                     subject: emailSubject,
-                    text: emailBody,
+                    text: unsub ? emailBody + unsub.textFooter : emailBody,
+                    headers: unsub?.headers,
                   });
 
                   if (emailResult.success) {
-                    sent = true;
+                    sent = true; emailSent = true;
                     log.info(`[BIRTHDAY] ✅ Email sent to ${customer.name} (${customer.email})`);
                   } else {
                     log.error(`[BIRTHDAY] Email failed for ${customer.name}: ${emailResult.error}`);
@@ -344,6 +361,11 @@ Deno.serve(async (req) => {
                 log.error(`[BIRTHDAY] Email error for ${customer.name}:`, emailErr instanceof Error ? emailErr.message : emailErr);
               }
             }
+
+            await recordTouches(supabase, tenantId, [
+              ...(waSent ? [{ target: { phone: customer.phone, email: customer.email }, channel: 'whatsapp' as const, purpose: 'birthday' as const, ref: config.id }] : []),
+              ...(emailSent ? [{ target: { email: customer.email, phone: customer.phone }, channel: 'email' as const, purpose: 'birthday' as const, ref: config.id }] : []),
+            ]);
 
             // Deduct tokens ONLY when message was actually sent
             if (sent) {

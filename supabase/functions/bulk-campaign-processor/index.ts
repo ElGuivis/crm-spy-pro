@@ -4,6 +4,7 @@ import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
+import { canContact, recordTouches, REASON_TEXT } from "../_shared/contact-policy.ts";
 
 const TOKENS_PER_MESSAGE = 2;
 
@@ -239,6 +240,15 @@ serve(async (req) => {
         break;
       }
 
+      // regra única de contato (telefone bloqueado, limite diário, prioridade de quem recebeu mensagem automática há pouco)
+      const rule = await canContact(supabase, campaign.tenant_id, { phone: contact.phone }, "bulk");
+      if (!rule.ok) {
+        await supabase.from("campaign_contacts").update({ status: "failed", error_message: `Pulado pelas regras de contato: ${REASON_TEXT[rule.reason] ?? rule.reason}` }).eq("id", contact.id);
+        failedCount++;
+        await supabase.from("bulk_campaigns").update({ failed_count: (campaign.failed_count || 0) + failedCount }).eq("id", campaign_id);
+        continue;
+      }
+
       // Update status to sending
       await supabase.from("campaign_contacts").update({ status: "sending" }).eq("id", contact.id);
 
@@ -317,6 +327,7 @@ serve(async (req) => {
           });
 
           sentCount++;
+          await recordTouches(supabase, campaign.tenant_id, [{ target: { phone: contact.phone }, channel: "whatsapp", purpose: "bulk", ref: campaign_id }]);
           log.info(`✅ Sent to ${formattedPhone}`);
 
           // Update campaign stats immediately after each successful send

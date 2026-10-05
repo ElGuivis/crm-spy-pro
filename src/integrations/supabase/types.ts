@@ -3808,6 +3808,63 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_touches: {
+        Row: {
+          channel: string
+          email: string | null
+          id: string
+          module_ref: string | null
+          phone: string | null
+          purpose: string
+          sent_at: string
+          tenant_id: string
+        }
+        Insert: {
+          channel: string
+          email?: string | null
+          id?: string
+          module_ref?: string | null
+          phone?: string | null
+          purpose: string
+          sent_at?: string
+          tenant_id: string
+        }
+        Update: {
+          channel?: string
+          email?: string | null
+          id?: string
+          module_ref?: string | null
+          phone?: string | null
+          purpose?: string
+          sent_at?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
+      contact_policies: {
+        Row: {
+          broadcast_gap_hours: number
+          daily_cap: number
+          enabled: boolean
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          broadcast_gap_hours?: number
+          daily_cap?: number
+          enabled?: boolean
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          broadcast_gap_hours?: number
+          daily_cap?: number
+          enabled?: boolean
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       email_campaign_coupons: {
         Row: {
           campaign_id: string
@@ -10789,6 +10846,15 @@ export type Database = {
       refresh_coupon_usage: {
         Args: { p_tenant_id: string }
         Returns: number
+      }
+      get_touch_summary: {
+        Args: { p_days?: number; p_tenant_id: string }
+        Returns: {
+          channel: string
+          people: number
+          purpose: string
+          touches: number
+        }[]
       }
       get_email_health: {
         Args: { p_days?: number; p_tenant_id: string }
