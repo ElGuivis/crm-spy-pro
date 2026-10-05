@@ -10671,7 +10671,29 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      customer_rfm_latest: {
+        Row: {
+          aov: number | null
+          churn_risk: string | null
+          customer_email: string | null
+          customer_id: string | null
+          customer_key: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          first_purchase_date: string | null
+          last_order_date: string | null
+          orders_count: number | null
+          recency_days: number | null
+          reference_date: string | null
+          revenue_total: number | null
+          rfm_score: string | null
+          segment_action: string | null
+          segment_name: string | null
+          snapshot_id: string | null
+          tenant_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       add_message_to_buffer: {
@@ -10846,6 +10868,23 @@ export type Database = {
       refresh_coupon_usage: {
         Args: { p_tenant_id: string }
         Returns: number
+      }
+      get_customer_communication: {
+        Args: { p_email: string; p_limit?: number; p_phone?: string; p_tenant_id: string }
+        Returns: Json
+      }
+      get_message_performance: {
+        Args: { p_days?: number; p_tenant_id: string }
+        Returns: {
+          coupons_issued: number
+          coupons_redeemed: number
+          email_touches: number
+          people: number
+          purpose: string
+          revenue: number
+          touches: number
+          whatsapp_touches: number
+        }[]
       }
       get_touch_summary: {
         Args: { p_days?: number; p_tenant_id: string }

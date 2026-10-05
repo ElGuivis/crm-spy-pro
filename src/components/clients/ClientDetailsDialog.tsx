@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { ClientTimeline } from "./ClientTimeline";
 import { ClientLoyaltyPanel } from "./ClientLoyaltyPanel";
+import { ClientCommunicationPanel } from "./ClientCommunicationPanel";
 import type { Tables } from "@/integrations/supabase/types";
 
 interface ClientDetailsDialogProps {
@@ -42,10 +43,14 @@ const ClientDetailsDialog = ({ client, open, onOpenChange }: ClientDetailsDialog
   const { data: rfm } = useQuery({
     queryKey: ["client-rfm", client?.id],
     queryFn: async () => {
+      // último RFM da pessoa pela chave única (o customer_id do snapshot vem em dois formatos e há um snapshot por data)
+      const key = (client!.email || "").trim().toLowerCase();
+      if (!key.includes("@")) return null;
       const { data } = await supabase
-        .from("customer_rfm_snapshots")
+        .from("customer_rfm_latest")
         .select("segment_name, rfm_score")
-        .eq("customer_id", client!.id)
+        .eq("tenant_id", client!.tenant_id)
+        .eq("customer_key", key)
         .maybeSingle();
       return data;
     },
@@ -172,6 +177,7 @@ const ClientDetailsDialog = ({ client, open, onOpenChange }: ClientDetailsDialog
           <TabsList className="shrink-0">
             <TabsTrigger value="perfil">Perfil</TabsTrigger>
             <TabsTrigger value="timeline">Timeline</TabsTrigger>
+            <TabsTrigger value="comunicacao">Comunicação</TabsTrigger>
             <TabsTrigger value="pontos">
               <Star className="h-3.5 w-3.5 mr-1 text-yellow-500" />
               Pontos
@@ -306,6 +312,10 @@ const ClientDetailsDialog = ({ client, open, onOpenChange }: ClientDetailsDialog
             </TabsContent>
 
             {/* ── PONTOS ── */}
+            <TabsContent value="comunicacao" className="mt-0">
+              <ClientCommunicationPanel email={client.email} phone={client.phone} />
+            </TabsContent>
+
             <TabsContent value="pontos" className="mt-0">
               <ClientLoyaltyPanel integrationId={integrationId} customerExternalId={customerKey} />
             </TabsContent>

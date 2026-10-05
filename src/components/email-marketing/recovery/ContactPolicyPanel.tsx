@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useContactPolicy, useTouchSummary } from "@/hooks/useContactPolicy";
+import { useContactPolicy } from "@/hooks/useContactPolicy";
+import { useMessagePerformance } from "@/hooks/useCustomerCommunication";
 
 const PURPOSE: Record<string, string> = {
   campaign: "Campanhas de e-mail", bulk: "Disparo em massa (WhatsApp)", recovery: "Recuperação de abandono", welcome: "Boas-vindas",
@@ -17,7 +18,7 @@ const GAPS = [0, 6, 12, 24, 48, 72];
 export function ContactPolicyPanel() {
   const { policy, isLoading, save } = useContactPolicy();
   const [days, setDays] = useState(7);
-  const { data: summary } = useTouchSummary(days);
+  const { data: summary } = useMessagePerformance(days);
 
   return (
     <div className="space-y-4">
@@ -62,21 +63,23 @@ export function ContactPolicyPanel() {
 
       <Card>
         <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-base">O que foi enviado</CardTitle>
+          <CardTitle className="text-base">O que foi enviado e o retorno</CardTitle>
           <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
             <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-            <SelectContent>{[1, 7, 30].map((d) => <SelectItem key={d} value={String(d)}>{d === 1 ? "Últimas 24 h" : `Últimos ${d} dias`}</SelectItem>)}</SelectContent>
+            <SelectContent>{[1, 7, 30, 90].map((d) => <SelectItem key={d} value={String(d)}>{d === 1 ? "Últimas 24 h" : `Últimos ${d} dias`}</SelectItem>)}</SelectContent>
           </Select>
         </CardHeader>
         <CardContent>
           {!summary?.length ? <p className="text-sm text-muted-foreground">Nenhum envio registrado no período.</p> : (
             <Table>
-              <TableHeader><TableRow><TableHead>Finalidade</TableHead><TableHead>Canal</TableHead><TableHead className="text-right">Mensagens</TableHead><TableHead className="text-right">Pessoas</TableHead></TableRow></TableHeader>
+              <TableHeader><TableRow><TableHead>Finalidade</TableHead><TableHead className="text-right">E-mails</TableHead><TableHead className="text-right">WhatsApp</TableHead><TableHead className="text-right">Pessoas</TableHead><TableHead className="text-right">Cupons emitidos</TableHead><TableHead className="text-right">Cupons usados</TableHead><TableHead className="text-right">Receita</TableHead></TableRow></TableHeader>
               <TableBody>
                 {summary.map((r) => (
-                  <TableRow key={`${r.purpose}-${r.channel}`}>
-                    <TableCell>{PURPOSE[r.purpose] ?? r.purpose}</TableCell><TableCell>{r.channel === "email" ? "E-mail" : "WhatsApp"}</TableCell>
-                    <TableCell className="text-right">{r.touches}</TableCell><TableCell className="text-right">{r.people}</TableCell>
+                  <TableRow key={r.purpose}>
+                    <TableCell>{PURPOSE[r.purpose] ?? r.purpose}</TableCell>
+                    <TableCell className="text-right">{r.email_touches}</TableCell><TableCell className="text-right">{r.whatsapp_touches}</TableCell><TableCell className="text-right">{r.people}</TableCell>
+                    <TableCell className="text-right">{r.coupons_issued || "—"}</TableCell><TableCell className="text-right">{r.coupons_redeemed || "—"}</TableCell>
+                    <TableCell className="text-right">{r.revenue ? Number(r.revenue).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—"}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
