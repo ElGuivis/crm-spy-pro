@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWhiteLabel } from "@/hooks/useWhiteLabel";
 import { buildProductUrl, useStoreBaseUrl } from "@/hooks/useStoreBaseUrl";
+import { useFooterAddress } from "@/hooks/useFooterAddress";
 import { hdImageUrl } from "@/lib/product-images";
 import { rowsToCards, type ProductCard, type TemplateCtx } from "@/components/email-marketing/editor/templates";
 
@@ -14,6 +15,7 @@ export function useTemplateContext(enabled: boolean): { data: Omit<TemplateCtx, 
   const { tenantId } = useAuth();
   const { config } = useWhiteLabel();
   const { baseUrl } = useStoreBaseUrl();
+  const { address } = useFooterAddress();
 
   const { data, isLoading } = useQuery<Data>({
     queryKey: ["template-context", tenantId, baseUrl],
@@ -42,7 +44,7 @@ export function useTemplateContext(enabled: boolean): { data: Omit<TemplateCtx, 
     loading: false,
     data: {
       ...data, logoUrl: config?.logo_url || undefined, brandName: config?.company_name || undefined,
-      storeUrl: baseUrl || "https://example.com", deadline: format(addDays(new Date(), 3), "dd/MM"),
+      storeUrl: baseUrl || "https://example.com", address: address || undefined, deadline: format(addDays(new Date(), 3), "dd/MM"),
     },
   };
 }

@@ -18,6 +18,8 @@ export interface TemplateCtx {
   logoUrl?: string;
   brandName?: string;
   storeUrl: string;
+  /** endereço da empresa para o rodapé (Recuperação LI → Loja Integrada); sem ele sai o texto de exemplo, que o preflight avisa */
+  address?: string;
   /** pedidos já entregues pela loja (arredondado para baixo), para prova social; 0 = não mostrar */
   orders: number;
   /** data limite de exemplo (hoje + 3 dias), "dd/mm" */
@@ -165,7 +167,7 @@ export const divider = (p: Palette): EmailBlock => ({ type: "divider", color: p.
 
 /** Rodapé: identificação, endereço (troque o de exemplo) e descadastro (obrigatório). */
 export const footer = (p: Palette, c: TemplateCtx, reason = "Você recebeu este e-mail porque se cadastrou em nossa loja."): EmailBlock[] => [
-  { type: "footer", content: `${c.brandName || "Sua Empresa"}<br>Endereço da empresa — Cidade/UF<br>${reason}<br>Esta é uma mensagem automática: este endereço não recebe respostas.`, alignment: "center", color: p.muted, fontSize: "12px", backgroundColor: p.content, padding: "32px 28px 8px" },
+  { type: "footer", content: `${c.brandName || "Sua Empresa"}<br>${c.address || "Endereço da empresa — Cidade/UF"}<br>${reason}<br>Esta é uma mensagem automática: este endereço não recebe respostas.`, alignment: "center", color: p.muted, fontSize: "12px", backgroundColor: p.content, padding: "32px 28px 8px" },
   { type: "unsubscribe", text: "Não quer mais receber nossos e-mails?", linkText: "Cancelar inscrição", alignment: "center", fontSize: "12px", color: p.muted, backgroundColor: p.content, padding: "6px 24px 30px" },
 ];
 

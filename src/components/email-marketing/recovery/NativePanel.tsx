@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, Loader2, Store } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useFooterAddress } from "@/hooks/useFooterAddress";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -23,6 +24,8 @@ export function NativePanel() {
   const env = useRecoveryEnv();
   const { flows } = useRecoveryFlows();
   const [storeUrl, setStoreUrl] = useState("");
+  const footer = useFooterAddress();
+  const [addr, setAddr] = useState("");
   const [ack, setAck] = useState<{ kind: RecoveryKind; reason: string } | null>(null);
   const [pending, setPending] = useState<RecoveryKind | null>(null);
 
@@ -43,6 +46,10 @@ export function NativePanel() {
     if (ok) { toast.success("Endereço da loja salvo"); setStoreUrl(""); } else toast.error("Endereço inválido. Exemplo: https://www.sualoja.com.br");
   };
 
+  const saveAddr = async () => {
+    if (await footer.save(addr)) { toast.success("Endereço do rodapé salvo. Vale para as etapas criadas daqui para frente."); setAddr(""); } else toast.error("Informe o endereço completo (rua, número, cidade/UF).");
+  };
+
   return (
     <div className="space-y-4">
       <Card>
@@ -52,6 +59,11 @@ export function NativePanel() {
           <div className="flex gap-2 max-w-xl">
             <Input placeholder="https://www.sualoja.com.br" value={storeUrl} onChange={(e) => setStoreUrl(e.target.value)} />
             <Button onClick={saveUrl} disabled={!storeUrl.trim()}>Salvar</Button>
+          </div>
+          <p className="text-sm text-muted-foreground pt-3">Endereço da empresa no rodapé dos e-mails (exigido para e-mail comercial e ajuda na entrega). {footer.address ? <>Atual: <strong>{footer.address}</strong></> : <span className="text-destructive">Ainda não informado: os e-mails saem com um texto de exemplo.</span>}</p>
+          <div className="flex gap-2 max-w-xl">
+            <Input placeholder="Rua Exemplo, 123 - Bairro - Cidade/UF - CEP 00000-000" value={addr} onChange={(e) => setAddr(e.target.value)} />
+            <Button onClick={saveAddr} disabled={!addr.trim()}>Salvar</Button>
           </div>
         </CardContent>
       </Card>
