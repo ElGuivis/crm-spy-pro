@@ -39,7 +39,7 @@ export function htmlToText(html: string): string {
     .replace(/&#(\d+);/g, (_m, n: string) => String.fromCodePoint(Number(n)))
     .replace(/&([a-z]+);/gi, (m, name: string) => ENTITIES[name.toLowerCase()] ?? m);
   return t
-    .split("\n").map((l) => l.replace(/[ \t ͏]+/g, " ").trim()).join("\n")
+    .split("\n").map((l) => l.replace(/\u034F/g, " ").replace(/[ \t\u00A0]+/g, " ").trim()).join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }

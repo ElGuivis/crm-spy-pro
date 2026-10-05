@@ -7,7 +7,7 @@ CRM/ERP multi-tenant em produção (https://spypro.com.br) com integrações de 
 ## Stack
 
 - **Frontend**: Vite 5 + React 18 + TypeScript + shadcn/ui (Radix) + Tailwind + React Router 7 + TanStack Query 5. Build: `vite build`. Dev: `npm run dev`.
-- **Backend**: Supabase auto-hospedado (Postgres 17 + Auth + REST + Realtime + Storage + Edge Functions Deno). 103 edge functions, 166 tabelas com RLS, 394 policies, 39 cron jobs.
+- **Backend**: Supabase auto-hospedado (Postgres 17 + Auth + REST + Realtime + Storage + Edge Functions Deno). 105 edge functions, 170 tabelas com RLS, 404 policies, 40 cron jobs.
 - **Deploy**: frontend via EasyPanel (Dockerfile + nginx, rebuild manual, Build Args `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`). Edge functions: `powershell scripts/deploy-functions-vps.ps1 [-Only <nome>]` (copia para a VPS e reinicia o runtime; `supabase functions deploy` NÃO se aplica ao servidor novo).
 - **Owner / login dev**: `usechronic@gmail.com` (único usuário; cadastros bloqueados por trigger + `DISABLE_SIGNUP`).
 
@@ -83,7 +83,7 @@ src/
   integrations/supabase/ # client.ts (auto-gerado) + types.ts (tipos do DB, regenerar via gen types)
   contexts/              # AuthContext, etc.
 supabase/
-  functions/             # 103 edge functions Deno
+  functions/             # 105 edge functions Deno
     _shared/             # auth-guard.ts, li-sync-*.ts, melhor-envio-*.ts, ai-chat-*.ts, ...
     li-sync/             # sync de Loja Integrada (waitUntil + time budget 110s)
     li-job-processor/    # incremental sync recorrente (waitUntil)

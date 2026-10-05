@@ -40,7 +40,7 @@ function detectDelimiter(sample: string): string {
 }
 
 export function parseContactsFile(text: string, existing: Iterable<string> = []): ImportResult {
-  const clean = text.replace(/^﻿/, "");
+  const clean = text.replace(/^\uFEFF/, "");
   const lines = clean.split(/\r?\n/).filter((l) => l.trim());
   if (lines.length === 0) return { contacts: [], duplicates: 0, invalid: 0 };
 
@@ -49,7 +49,7 @@ export function parseContactsFile(text: string, existing: Iterable<string> = [])
 
   // cabeçalho: primeira linha sem nenhum e-mail e com uma coluna "e-mail"
   const header = rows[0].map((c) => c.toLowerCase());
-  const isEmailHead = (c: string) => /^(e-?mail|email|mail)/.test(c) || /e-?mail$/.test(c);
+  const isEmailHead = (c: string) => /^(e-?mail|email|mail)\b/.test(c) || /\be-?mail$/.test(c);
   const hasHeader = !rows[0].some((c) => EMAIL.test(c)) && header.some(isEmailHead);
   const emailCol = hasHeader ? header.findIndex(isEmailHead) : -1;
   const nameCol = hasHeader ? header.findIndex((c) => /^(nome|name|cliente|primeiro nome|first.?name)/.test(c)) : -1;

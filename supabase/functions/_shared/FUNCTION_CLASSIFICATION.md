@@ -38,6 +38,9 @@ All resource lookups MUST include `.eq('tenant_id', authTenantId)`.
 | instagram-upsert-welcome-ad-flow | User action |
 | li-coupon-create | User creates coupon |
 | li-coupon-sync | User syncs coupons |
+| li-coupon-update | User updates coupon
+| li-customer-groups | User changes store customer groups (preview/confirm/undo)
+| li-marketing | User reads/toggles the store native recovery automations
 | li-validate | User validates integration |
 | manage-credentials | Admin manages AI secrets |
 | manage-smtp | Admin manages SMTP credentials |
@@ -162,6 +165,11 @@ These are called by pg_cron or other edge functions, never directly by users.
 | instagram-validate-collected-data | Called by flow-runner |
 | instagram-webhook-worker | Called by webhook-ingest |
 | li-cashback | Cron: cashback processing |
+| abandonment-capture | Cron: captures store abandonments (10 min)
+| abandonment-processor | Cron: sends recovery flow steps (1 min)
+| domain-event-processor | Cron: delivers order events to consumers (1 min)
+| email-ab-winner | Cron: picks the A/B winner and sends the rest
+| li-marketing-jobs | Cron: newsletter sync, outbox, waitlist, group jobs
 | li-job-processor | Cron: process LI sync jobs |
 | message-queue-processor | Cron: process message queue |
 | process-outbound-queue | Cron: dispatch outbound messages |
