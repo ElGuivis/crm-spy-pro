@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict qk6dsfU3KnfZbY59yHzsnbN1OWJtZLtemR85Q5ulmUp7lPQhmS7lTE8Ur4WmxM6
+\restrict iCmiEL1PMa5f13ZpUJ3fGXPg6o7FCA8bEQTkDLfbFZuxydatJ3dJO3gcGnvctML
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -10374,13 +10374,6 @@ CREATE INDEX idx_contact_blocks_tenant ON public.contact_blocks USING btree (ten
 
 
 --
--- Name: idx_contacts_tenant_phone; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_contacts_tenant_phone ON public.contacts USING btree (tenant_id, phone);
-
-
---
 -- Name: idx_conv_events_conversation; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -10567,13 +10560,6 @@ CREATE INDEX idx_domain_events_ref ON public.domain_events USING btree (tenant_i
 --
 
 CREATE INDEX idx_email_campaign_coupons_code ON public.email_campaign_coupons USING btree (code);
-
-
---
--- Name: idx_email_campaign_logs_campaign; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_email_campaign_logs_campaign ON public.email_campaign_logs USING btree (campaign_id);
 
 
 --
@@ -11029,13 +11015,6 @@ CREATE INDEX idx_ig_flow_runs_contact ON public.instagram_flow_runs USING btree 
 --
 
 CREATE INDEX idx_ig_flow_runs_flow ON public.instagram_flow_runs USING btree (flow_id);
-
-
---
--- Name: idx_ig_flow_runs_idemp; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_ig_flow_runs_idemp ON public.instagram_flow_runs USING btree (idempotency_key);
 
 
 --
@@ -11543,13 +11522,6 @@ CREATE INDEX idx_me_shipments_bling_order_id ON public.me_shipments USING btree 
 
 
 --
--- Name: idx_me_shipments_external_order; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_me_shipments_external_order ON public.me_shipments USING btree (tenant_id, external_order_number);
-
-
---
 -- Name: idx_me_shipments_external_order_number; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -11876,13 +11848,6 @@ CREATE INDEX idx_profiles_active_tenant ON public.profiles USING btree (active_t
 --
 
 CREATE INDEX idx_reactivation_configs_tenant_id ON public.reactivation_configs USING btree (tenant_id);
-
-
---
--- Name: idx_reactivation_cycle_steps_config; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX idx_reactivation_cycle_steps_config ON public.reactivation_cycle_steps USING btree (config_id, step_number);
 
 
 --
@@ -15107,21 +15072,21 @@ ALTER TABLE ONLY public.whatsapp_channels
 -- Name: team_invites Admins can create invites; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Admins can create invites" ON public.team_invites FOR INSERT TO authenticated WITH CHECK (public.is_tenant_admin(auth.uid(), tenant_id));
+CREATE POLICY "Admins can create invites" ON public.team_invites FOR INSERT TO authenticated WITH CHECK (public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id));
 
 
 --
 -- Name: team_invites Admins can delete invites; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Admins can delete invites" ON public.team_invites FOR DELETE TO authenticated USING (public.is_tenant_admin(auth.uid(), tenant_id));
+CREATE POLICY "Admins can delete invites" ON public.team_invites FOR DELETE TO authenticated USING (public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id));
 
 
 --
 -- Name: team_members Admins can delete team members; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Admins can delete team members" ON public.team_members FOR DELETE USING (public.is_tenant_admin(auth.uid(), tenant_id));
+CREATE POLICY "Admins can delete team members" ON public.team_members FOR DELETE USING (public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id));
 
 
 --
@@ -15130,35 +15095,35 @@ CREATE POLICY "Admins can delete team members" ON public.team_members FOR DELETE
 
 CREATE POLICY "Admins can manage permissions" ON public.member_permissions USING ((EXISTS ( SELECT 1
    FROM public.team_members tm
-  WHERE ((tm.id = member_permissions.team_member_id) AND public.is_tenant_admin(auth.uid(), tm.tenant_id)))));
+  WHERE ((tm.id = member_permissions.team_member_id) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tm.tenant_id)))));
 
 
 --
 -- Name: team_members Admins can manage team members; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Admins can manage team members" ON public.team_members FOR INSERT WITH CHECK (public.is_tenant_admin(auth.uid(), tenant_id));
+CREATE POLICY "Admins can manage team members" ON public.team_members FOR INSERT WITH CHECK (public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id));
 
 
 --
 -- Name: team_invites Admins can update invites; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Admins can update invites" ON public.team_invites FOR UPDATE TO authenticated USING (public.is_tenant_admin(auth.uid(), tenant_id));
+CREATE POLICY "Admins can update invites" ON public.team_invites FOR UPDATE TO authenticated USING (public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id));
 
 
 --
 -- Name: team_members Admins can update team members; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Admins can update team members" ON public.team_members FOR UPDATE USING (public.is_tenant_admin(auth.uid(), tenant_id));
+CREATE POLICY "Admins can update team members" ON public.team_members FOR UPDATE USING (public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id));
 
 
 --
 -- Name: team_invites Admins can view tenant invites; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Admins can view tenant invites" ON public.team_invites FOR SELECT TO authenticated USING (public.is_tenant_admin(auth.uid(), tenant_id));
+CREATE POLICY "Admins can view tenant invites" ON public.team_invites FOR SELECT TO authenticated USING (public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id));
 
 
 --
@@ -15179,14 +15144,14 @@ CREATE POLICY "Authenticated can insert email events" ON public.email_events FOR
 -- Name: tenants Owners can update their tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Owners can update their tenant" ON public.tenants FOR UPDATE USING ((owner_id = auth.uid()));
+CREATE POLICY "Owners can update their tenant" ON public.tenants FOR UPDATE USING ((owner_id = ( SELECT auth.uid() AS uid)));
 
 
 --
 -- Name: order_notification_executions Service role can insert order_notification_executions; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Service role can insert order_notification_executions" ON public.order_notification_executions FOR INSERT TO authenticated WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Service role can insert order_notification_executions" ON public.order_notification_executions FOR INSERT TO authenticated WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -15207,7 +15172,7 @@ CREATE POLICY "Service role full access on webhook deliveries" ON public.instagr
 -- Name: me_auto_sync_configs Service role full access to ME auto-sync configs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Service role full access to ME auto-sync configs" ON public.me_auto_sync_configs USING ((auth.role() = 'service_role'::text));
+CREATE POLICY "Service role full access to ME auto-sync configs" ON public.me_auto_sync_configs USING ((( SELECT auth.role() AS role) = 'service_role'::text));
 
 
 --
@@ -15221,245 +15186,245 @@ CREATE POLICY "Service role full access to bling_situacoes" ON public.bling_situ
 -- Name: email_campaign_logs System can create logs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "System can create logs" ON public.email_campaign_logs FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "System can create logs" ON public.email_campaign_logs FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: ai_assistant_configs Tenant admins can manage ai_assistant_configs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage ai_assistant_configs" ON public.ai_assistant_configs USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.is_tenant_admin(auth.uid(), tenant_id)));
+CREATE POLICY "Tenant admins can manage ai_assistant_configs" ON public.ai_assistant_configs USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id)));
 
 
 --
 -- Name: bling_connections Tenant admins can manage bling_connections; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage bling_connections" ON public.bling_connections TO authenticated USING (public.is_tenant_admin(auth.uid(), tenant_id)) WITH CHECK (public.is_tenant_admin(auth.uid(), tenant_id));
+CREATE POLICY "Tenant admins can manage bling_connections" ON public.bling_connections TO authenticated USING (public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id)) WITH CHECK (public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id));
 
 
 --
 -- Name: business_hours Tenant admins can manage business hours; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage business hours" ON public.business_hours USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.is_tenant_admin(auth.uid(), tenant_id)));
+CREATE POLICY "Tenant admins can manage business hours" ON public.business_hours USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id)));
 
 
 --
 -- Name: cashback_configs Tenant admins can manage cashback_configs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage cashback_configs" ON public.cashback_configs USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'automations'::public.module_permission, true)));
+CREATE POLICY "Tenant admins can manage cashback_configs" ON public.cashback_configs USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'automations'::public.module_permission, true) AS has_module_permission)));
 
 
 --
 -- Name: cashback_executions Tenant admins can manage cashback_executions; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage cashback_executions" ON public.cashback_executions USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'automations'::public.module_permission, true)));
+CREATE POLICY "Tenant admins can manage cashback_executions" ON public.cashback_executions USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'automations'::public.module_permission, true) AS has_module_permission)));
 
 
 --
 -- Name: cashback_reminders Tenant admins can manage cashback_reminders; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage cashback_reminders" ON public.cashback_reminders USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'automations'::public.module_permission, true)));
+CREATE POLICY "Tenant admins can manage cashback_reminders" ON public.cashback_reminders USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'automations'::public.module_permission, true) AS has_module_permission)));
 
 
 --
 -- Name: whatsapp_channels Tenant admins can manage channels; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage channels" ON public.whatsapp_channels USING (public.is_tenant_admin(auth.uid(), tenant_id));
+CREATE POLICY "Tenant admins can manage channels" ON public.whatsapp_channels USING (public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id));
 
 
 --
 -- Name: contacts Tenant admins can manage contacts; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage contacts" ON public.contacts TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid())) AND public.is_tenant_admin(auth.uid(), tenant_id))) WITH CHECK (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid())) AND public.is_tenant_admin(auth.uid(), tenant_id)));
+CREATE POLICY "Tenant admins can manage contacts" ON public.contacts TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id))) WITH CHECK (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id)));
 
 
 --
 -- Name: email_integrations Tenant admins can manage email_integrations; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage email_integrations" ON public.email_integrations TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'integrations'::public.module_permission, true))) WITH CHECK (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'integrations'::public.module_permission, true)));
+CREATE POLICY "Tenant admins can manage email_integrations" ON public.email_integrations TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'integrations'::public.module_permission, true) AS has_module_permission))) WITH CHECK (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'integrations'::public.module_permission, true) AS has_module_permission)));
 
 
 --
 -- Name: generated_coupons Tenant admins can manage generated_coupons; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage generated_coupons" ON public.generated_coupons TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'coupons'::public.module_permission, true))) WITH CHECK (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'coupons'::public.module_permission, true)));
+CREATE POLICY "Tenant admins can manage generated_coupons" ON public.generated_coupons TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'coupons'::public.module_permission, true) AS has_module_permission))) WITH CHECK (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'coupons'::public.module_permission, true) AS has_module_permission)));
 
 
 --
 -- Name: inboxes Tenant admins can manage inboxes; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage inboxes" ON public.inboxes USING (public.is_tenant_admin(auth.uid(), tenant_id));
+CREATE POLICY "Tenant admins can manage inboxes" ON public.inboxes USING (public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id));
 
 
 --
 -- Name: instagram_channel_capabilities Tenant admins can manage instagram capabilities; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage instagram capabilities" ON public.instagram_channel_capabilities USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.is_tenant_admin(auth.uid(), tenant_id))) WITH CHECK (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.is_tenant_admin(auth.uid(), tenant_id)));
+CREATE POLICY "Tenant admins can manage instagram capabilities" ON public.instagram_channel_capabilities USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id))) WITH CHECK (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id)));
 
 
 --
 -- Name: instagram_channels Tenant admins can manage instagram channels; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage instagram channels" ON public.instagram_channels USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.is_tenant_admin(auth.uid(), tenant_id))) WITH CHECK (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.is_tenant_admin(auth.uid(), tenant_id)));
+CREATE POLICY "Tenant admins can manage instagram channels" ON public.instagram_channels USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id))) WITH CHECK (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id)));
 
 
 --
 -- Name: integrations Tenant admins can manage integrations; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage integrations" ON public.integrations TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'integrations'::public.module_permission, true))) WITH CHECK (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'integrations'::public.module_permission, true)));
+CREATE POLICY "Tenant admins can manage integrations" ON public.integrations TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'integrations'::public.module_permission, true) AS has_module_permission))) WITH CHECK (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'integrations'::public.module_permission, true) AS has_module_permission)));
 
 
 --
 -- Name: kanban_columns Tenant admins can manage kanban_columns; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage kanban_columns" ON public.kanban_columns USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.is_tenant_admin(auth.uid(), tenant_id)));
+CREATE POLICY "Tenant admins can manage kanban_columns" ON public.kanban_columns USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id)));
 
 
 --
 -- Name: me_shipments Tenant admins can manage me_shipments; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage me_shipments" ON public.me_shipments USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'sales'::public.module_permission, true)));
+CREATE POLICY "Tenant admins can manage me_shipments" ON public.me_shipments USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'sales'::public.module_permission, true) AS has_module_permission)));
 
 
 --
 -- Name: melhor_envio_tokens Tenant admins can manage melhor_envio_tokens; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage melhor_envio_tokens" ON public.melhor_envio_tokens USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.is_tenant_admin(auth.uid(), tenant_id)));
+CREATE POLICY "Tenant admins can manage melhor_envio_tokens" ON public.melhor_envio_tokens USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id)));
 
 
 --
 -- Name: message_queue Tenant admins can manage message queue; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage message queue" ON public.message_queue TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid())) AND public.is_tenant_admin(auth.uid(), tenant_id))) WITH CHECK (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid())) AND public.is_tenant_admin(auth.uid(), tenant_id)));
+CREATE POLICY "Tenant admins can manage message queue" ON public.message_queue TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id))) WITH CHECK (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id)));
 
 
 --
 -- Name: order_notification_configs Tenant admins can manage order_notification_configs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage order_notification_configs" ON public.order_notification_configs USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'automations'::public.module_permission, true)));
+CREATE POLICY "Tenant admins can manage order_notification_configs" ON public.order_notification_configs USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'automations'::public.module_permission, true) AS has_module_permission)));
 
 
 --
 -- Name: order_notification_executions Tenant admins can manage order_notification_executions; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage order_notification_executions" ON public.order_notification_executions USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'automations'::public.module_permission, true)));
+CREATE POLICY "Tenant admins can manage order_notification_executions" ON public.order_notification_executions USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'automations'::public.module_permission, true) AS has_module_permission)));
 
 
 --
 -- Name: order_notification_status_rules Tenant admins can manage order_notification_status_rules; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage order_notification_status_rules" ON public.order_notification_status_rules USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'automations'::public.module_permission, true)));
+CREATE POLICY "Tenant admins can manage order_notification_status_rules" ON public.order_notification_status_rules USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'automations'::public.module_permission, true) AS has_module_permission)));
 
 
 --
 -- Name: tenant_tokens Tenant admins can manage token balance; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage token balance" ON public.tenant_tokens USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.is_tenant_admin(auth.uid(), tenant_id)));
+CREATE POLICY "Tenant admins can manage token balance" ON public.tenant_tokens USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id)));
 
 
 --
 -- Name: token_transactions Tenant admins can manage token transactions; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can manage token transactions" ON public.token_transactions USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.is_tenant_admin(auth.uid(), tenant_id)));
+CREATE POLICY "Tenant admins can manage token transactions" ON public.token_transactions USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id)));
 
 
 --
 -- Name: whatsapp_channels Tenant admins can view channels; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can view channels" ON public.whatsapp_channels FOR SELECT TO authenticated USING (public.is_tenant_admin(auth.uid(), tenant_id));
+CREATE POLICY "Tenant admins can view channels" ON public.whatsapp_channels FOR SELECT TO authenticated USING (public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id));
 
 
 --
 -- Name: circuit_breaker_state Tenant admins can view circuit breaker state; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can view circuit breaker state" ON public.circuit_breaker_state FOR SELECT TO authenticated USING (public.is_tenant_admin(auth.uid(), tenant_id));
+CREATE POLICY "Tenant admins can view circuit breaker state" ON public.circuit_breaker_state FOR SELECT TO authenticated USING (public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id));
 
 
 --
 -- Name: dead_letter_queue Tenant admins can view dead letters; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can view dead letters" ON public.dead_letter_queue FOR SELECT TO authenticated USING (public.is_tenant_admin(auth.uid(), tenant_id));
+CREATE POLICY "Tenant admins can view dead letters" ON public.dead_letter_queue FOR SELECT TO authenticated USING (public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id));
 
 
 --
 -- Name: function_metrics Tenant admins can view function metrics; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant admins can view function metrics" ON public.function_metrics FOR SELECT TO authenticated USING (((tenant_id IS NULL) OR public.is_tenant_admin(auth.uid(), tenant_id)));
+CREATE POLICY "Tenant admins can view function metrics" ON public.function_metrics FOR SELECT TO authenticated USING (((tenant_id IS NULL) OR public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id)));
 
 
 --
 -- Name: abandonment_flows Tenant isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation" ON public.abandonment_flows TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation" ON public.abandonment_flows TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: cashback_configs Tenant isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation" ON public.cashback_configs TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation" ON public.cashback_configs TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: contact_custom_field_values Tenant isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation" ON public.contact_custom_field_values TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation" ON public.contact_custom_field_values TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: contact_custom_fields Tenant isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation" ON public.contact_custom_fields TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation" ON public.contact_custom_fields TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: contact_merges Tenant isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation" ON public.contact_merges TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation" ON public.contact_merges TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: contact_policies Tenant isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation" ON public.contact_policies TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation" ON public.contact_policies TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: crm_segments Tenant isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation" ON public.crm_segments TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation" ON public.crm_segments TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -15473,203 +15438,203 @@ CREATE POLICY "Tenant isolation" ON public.email_campaign_conversions FOR SELECT
 -- Name: email_campaign_logs Tenant isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation" ON public.email_campaign_logs TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation" ON public.email_campaign_logs TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: email_campaigns Tenant isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation" ON public.email_campaigns TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation" ON public.email_campaigns TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: email_events Tenant isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation" ON public.email_events TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation" ON public.email_events TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: email_suppression_list Tenant isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation" ON public.email_suppression_list TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation" ON public.email_suppression_list TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: email_templates Tenant isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation" ON public.email_templates TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation" ON public.email_templates TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: generated_coupons Tenant isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation" ON public.generated_coupons TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation" ON public.generated_coupons TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: inbox_routing_rules Tenant isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation" ON public.inbox_routing_rules TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation" ON public.inbox_routing_rules TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: li_marketing_settings Tenant isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation" ON public.li_marketing_settings TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation" ON public.li_marketing_settings TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: tenant_api_keys Tenant isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation" ON public.tenant_api_keys TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation" ON public.tenant_api_keys TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: tenant_webhooks Tenant isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation" ON public.tenant_webhooks TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation" ON public.tenant_webhooks TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: tenant_whitelabel Tenant isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation" ON public.tenant_whitelabel TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation" ON public.tenant_whitelabel TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: email_integration_senders Tenant isolation for email_integration_senders; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation for email_integration_senders" ON public.email_integration_senders TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation for email_integration_senders" ON public.email_integration_senders TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: reactivation_configs Tenant isolation for reactivation_configs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation for reactivation_configs" ON public.reactivation_configs TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation for reactivation_configs" ON public.reactivation_configs TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: reactivation_executions Tenant isolation for reactivation_executions; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation for reactivation_executions" ON public.reactivation_executions TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation for reactivation_executions" ON public.reactivation_executions TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_blocked_users Tenant isolation on instagram_blocked_users; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation on instagram_blocked_users" ON public.instagram_blocked_users USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation on instagram_blocked_users" ON public.instagram_blocked_users USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_channel_insights Tenant isolation on instagram_channel_insights; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation on instagram_channel_insights" ON public.instagram_channel_insights USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation on instagram_channel_insights" ON public.instagram_channel_insights USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_comment_queue Tenant isolation on instagram_comment_queue; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation on instagram_comment_queue" ON public.instagram_comment_queue USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation on instagram_comment_queue" ON public.instagram_comment_queue USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_content Tenant isolation on instagram_content; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation on instagram_content" ON public.instagram_content USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation on instagram_content" ON public.instagram_content USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_media_insights Tenant isolation on instagram_media_insights; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation on instagram_media_insights" ON public.instagram_media_insights USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation on instagram_media_insights" ON public.instagram_media_insights USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_metrics_daily Tenant isolation on instagram_metrics_daily; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation on instagram_metrics_daily" ON public.instagram_metrics_daily USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation on instagram_metrics_daily" ON public.instagram_metrics_daily USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_term_blacklist Tenant isolation on instagram_term_blacklist; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant isolation on instagram_term_blacklist" ON public.instagram_term_blacklist USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant isolation on instagram_term_blacklist" ON public.instagram_term_blacklist USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: notification_settings Tenant members can create notification settings; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can create notification settings" ON public.notification_settings FOR INSERT TO authenticated WITH CHECK (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Tenant members can create notification settings" ON public.notification_settings FOR INSERT TO authenticated WITH CHECK (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: customer_rfm_category_snapshots Tenant members can delete category RFM snapshots; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can delete category RFM snapshots" ON public.customer_rfm_category_snapshots FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can delete category RFM snapshots" ON public.customer_rfm_category_snapshots FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: reactivation_cycle_steps Tenant members can delete cycle steps; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can delete cycle steps" ON public.reactivation_cycle_steps FOR DELETE TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can delete cycle steps" ON public.reactivation_cycle_steps FOR DELETE TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: customer_rfm_category_snapshots Tenant members can insert category RFM snapshots; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can insert category RFM snapshots" ON public.customer_rfm_category_snapshots FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can insert category RFM snapshots" ON public.customer_rfm_category_snapshots FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: reactivation_cycle_steps Tenant members can insert cycle steps; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can insert cycle steps" ON public.reactivation_cycle_steps FOR INSERT TO authenticated WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can insert cycle steps" ON public.reactivation_cycle_steps FOR INSERT TO authenticated WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_outbox Tenant members can insert into instagram outbox; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can insert into instagram outbox" ON public.instagram_outbox FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can insert into instagram outbox" ON public.instagram_outbox FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: contact_blocks Tenant members can manage blocks; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can manage blocks" ON public.contact_blocks USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can manage blocks" ON public.contact_blocks USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: conversation_events Tenant members can manage conversation events; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can manage conversation events" ON public.conversation_events USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can manage conversation events" ON public.conversation_events USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -15678,119 +15643,119 @@ CREATE POLICY "Tenant members can manage conversation events" ON public.conversa
 
 CREATE POLICY "Tenant members can manage conversation tags" ON public.conversation_tags USING ((EXISTS ( SELECT 1
    FROM public.conversations c
-  WHERE ((c.id = conversation_tags.conversation_id) AND (c.tenant_id = public.get_user_tenant_id(auth.uid()))))));
+  WHERE ((c.id = conversation_tags.conversation_id) AND (c.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))))));
 
 
 --
 -- Name: conversations Tenant members can manage conversations; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can manage conversations" ON public.conversations USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can manage conversations" ON public.conversations USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_contacts Tenant members can manage instagram contacts; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can manage instagram contacts" ON public.instagram_contacts USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can manage instagram contacts" ON public.instagram_contacts USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_messages Tenant members can manage instagram messages; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can manage instagram messages" ON public.instagram_messages USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can manage instagram messages" ON public.instagram_messages USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_threads Tenant members can manage instagram threads; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can manage instagram threads" ON public.instagram_threads USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can manage instagram threads" ON public.instagram_threads USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: messages Tenant members can manage messages; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can manage messages" ON public.messages USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid())))) WITH CHECK (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Tenant members can manage messages" ON public.messages USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))) WITH CHECK (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: tags Tenant members can manage tags; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can manage tags" ON public.tags USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can manage tags" ON public.tags USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: leads Tenant members can manage their leads; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can manage their leads" ON public.leads TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid())))) WITH CHECK (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Tenant members can manage their leads" ON public.leads TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))) WITH CHECK (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: reactivation_cycle_steps Tenant members can update cycle steps; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can update cycle steps" ON public.reactivation_cycle_steps FOR UPDATE TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can update cycle steps" ON public.reactivation_cycle_steps FOR UPDATE TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: notification_settings Tenant members can update notification settings; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can update notification settings" ON public.notification_settings FOR UPDATE TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Tenant members can update notification settings" ON public.notification_settings FOR UPDATE TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: ai_assistant_configs Tenant members can view ai_assistant_configs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view ai_assistant_configs" ON public.ai_assistant_configs FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can view ai_assistant_configs" ON public.ai_assistant_configs FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: contact_blocks Tenant members can view blocks; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view blocks" ON public.contact_blocks FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can view blocks" ON public.contact_blocks FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: cashback_configs Tenant members can view cashback_configs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view cashback_configs" ON public.cashback_configs FOR SELECT USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'automations'::public.module_permission)));
+CREATE POLICY "Tenant members can view cashback_configs" ON public.cashback_configs FOR SELECT USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'automations'::public.module_permission) AS has_module_permission)));
 
 
 --
 -- Name: cashback_executions Tenant members can view cashback_executions; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view cashback_executions" ON public.cashback_executions FOR SELECT USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'automations'::public.module_permission)));
+CREATE POLICY "Tenant members can view cashback_executions" ON public.cashback_executions FOR SELECT USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'automations'::public.module_permission) AS has_module_permission)));
 
 
 --
 -- Name: cashback_reminders Tenant members can view cashback_reminders; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view cashback_reminders" ON public.cashback_reminders FOR SELECT USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'automations'::public.module_permission)));
+CREATE POLICY "Tenant members can view cashback_reminders" ON public.cashback_reminders FOR SELECT USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'automations'::public.module_permission) AS has_module_permission)));
 
 
 --
 -- Name: customer_rfm_category_snapshots Tenant members can view category RFM snapshots; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view category RFM snapshots" ON public.customer_rfm_category_snapshots FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can view category RFM snapshots" ON public.customer_rfm_category_snapshots FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: contacts Tenant members can view contacts; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view contacts" ON public.contacts FOR SELECT TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Tenant members can view contacts" ON public.contacts FOR SELECT TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
@@ -15799,133 +15764,133 @@ CREATE POLICY "Tenant members can view contacts" ON public.contacts FOR SELECT T
 
 CREATE POLICY "Tenant members can view conversation tags" ON public.conversation_tags FOR SELECT USING ((EXISTS ( SELECT 1
    FROM public.conversations c
-  WHERE ((c.id = conversation_tags.conversation_id) AND (c.tenant_id = public.get_user_tenant_id(auth.uid()))))));
+  WHERE ((c.id = conversation_tags.conversation_id) AND (c.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))))));
 
 
 --
 -- Name: conversations Tenant members can view conversations; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view conversations" ON public.conversations FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can view conversations" ON public.conversations FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: reactivation_cycle_steps Tenant members can view cycle steps; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view cycle steps" ON public.reactivation_cycle_steps FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can view cycle steps" ON public.reactivation_cycle_steps FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: generated_coupons Tenant members can view generated_coupons; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view generated_coupons" ON public.generated_coupons FOR SELECT TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'coupons'::public.module_permission)));
+CREATE POLICY "Tenant members can view generated_coupons" ON public.generated_coupons FOR SELECT TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'coupons'::public.module_permission) AS has_module_permission)));
 
 
 --
 -- Name: instagram_channel_capabilities Tenant members can view instagram capabilities; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view instagram capabilities" ON public.instagram_channel_capabilities FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can view instagram capabilities" ON public.instagram_channel_capabilities FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_channels Tenant members can view instagram channels; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view instagram channels" ON public.instagram_channels FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can view instagram channels" ON public.instagram_channels FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_contacts Tenant members can view instagram contacts; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view instagram contacts" ON public.instagram_contacts FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can view instagram contacts" ON public.instagram_contacts FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_messages Tenant members can view instagram messages; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view instagram messages" ON public.instagram_messages FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can view instagram messages" ON public.instagram_messages FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_outbox Tenant members can view instagram outbox; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view instagram outbox" ON public.instagram_outbox FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can view instagram outbox" ON public.instagram_outbox FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_threads Tenant members can view instagram threads; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view instagram threads" ON public.instagram_threads FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can view instagram threads" ON public.instagram_threads FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: integrations Tenant members can view integrations; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view integrations" ON public.integrations FOR SELECT TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'integrations'::public.module_permission)));
+CREATE POLICY "Tenant members can view integrations" ON public.integrations FOR SELECT TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'integrations'::public.module_permission) AS has_module_permission)));
 
 
 --
 -- Name: kanban_columns Tenant members can view kanban_columns; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view kanban_columns" ON public.kanban_columns FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can view kanban_columns" ON public.kanban_columns FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: me_shipments Tenant members can view me_shipments; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view me_shipments" ON public.me_shipments FOR SELECT USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'sales'::public.module_permission)));
+CREATE POLICY "Tenant members can view me_shipments" ON public.me_shipments FOR SELECT USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'sales'::public.module_permission) AS has_module_permission)));
 
 
 --
 -- Name: messages Tenant members can view messages; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view messages" ON public.messages FOR SELECT TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Tenant members can view messages" ON public.messages FOR SELECT TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: notification_settings Tenant members can view notification settings; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view notification settings" ON public.notification_settings FOR SELECT TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Tenant members can view notification settings" ON public.notification_settings FOR SELECT TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: order_notification_configs Tenant members can view order_notification_configs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view order_notification_configs" ON public.order_notification_configs FOR SELECT USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'automations'::public.module_permission)));
+CREATE POLICY "Tenant members can view order_notification_configs" ON public.order_notification_configs FOR SELECT USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'automations'::public.module_permission) AS has_module_permission)));
 
 
 --
 -- Name: order_notification_executions Tenant members can view order_notification_executions; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view order_notification_executions" ON public.order_notification_executions FOR SELECT USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'automations'::public.module_permission)));
+CREATE POLICY "Tenant members can view order_notification_executions" ON public.order_notification_executions FOR SELECT USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'automations'::public.module_permission) AS has_module_permission)));
 
 
 --
 -- Name: order_notification_status_rules Tenant members can view order_notification_status_rules; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view order_notification_status_rules" ON public.order_notification_status_rules FOR SELECT USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND public.has_module_permission(auth.uid(), 'automations'::public.module_permission)));
+CREATE POLICY "Tenant members can view order_notification_status_rules" ON public.order_notification_status_rules FOR SELECT USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'automations'::public.module_permission) AS has_module_permission)));
 
 
 --
 -- Name: outbound_queue Tenant members can view outbound queue; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view outbound queue" ON public.outbound_queue FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can view outbound queue" ON public.outbound_queue FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -15934,70 +15899,70 @@ CREATE POLICY "Tenant members can view outbound queue" ON public.outbound_queue 
 
 CREATE POLICY "Tenant members can view permissions" ON public.member_permissions FOR SELECT USING ((EXISTS ( SELECT 1
    FROM public.team_members tm
-  WHERE ((tm.id = member_permissions.team_member_id) AND (tm.tenant_id = public.get_user_tenant_id(auth.uid()))))));
+  WHERE ((tm.id = member_permissions.team_member_id) AND (tm.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))))));
 
 
 --
 -- Name: tags Tenant members can view tags; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view tags" ON public.tags FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can view tags" ON public.tags FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: team_members Tenant members can view team; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view team" ON public.team_members FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can view team" ON public.team_members FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: inboxes Tenant members can view their inboxes; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view their inboxes" ON public.inboxes FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can view their inboxes" ON public.inboxes FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: message_queue Tenant members can view their message queue; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view their message queue" ON public.message_queue FOR SELECT TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Tenant members can view their message queue" ON public.message_queue FOR SELECT TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: tenant_tokens Tenant members can view their token balance; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view their token balance" ON public.tenant_tokens FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can view their token balance" ON public.tenant_tokens FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: token_transactions Tenant members can view their token transactions; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view their token transactions" ON public.token_transactions FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can view their token transactions" ON public.token_transactions FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: webhook_events Tenant members can view webhook events; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant members can view webhook events" ON public.webhook_events FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant members can view webhook events" ON public.webhook_events FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: abandonment_flow_sends Tenant select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant select" ON public.abandonment_flow_sends FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant select" ON public.abandonment_flow_sends FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: customer_touches Tenant select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant select" ON public.customer_touches FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant select" ON public.customer_touches FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -16006,133 +15971,133 @@ CREATE POLICY "Tenant select" ON public.customer_touches FOR SELECT TO authentic
 
 CREATE POLICY "Tenant select" ON public.domain_event_deliveries FOR SELECT TO authenticated USING ((EXISTS ( SELECT 1
    FROM public.domain_events e
-  WHERE ((e.id = domain_event_deliveries.event_id) AND (e.tenant_id = public.get_user_tenant_id(auth.uid()))))));
+  WHERE ((e.id = domain_event_deliveries.event_id) AND (e.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))))));
 
 
 --
 -- Name: domain_events Tenant select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant select" ON public.domain_events FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant select" ON public.domain_events FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: li_abandonment_campaigns Tenant select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant select" ON public.li_abandonment_campaigns FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant select" ON public.li_abandonment_campaigns FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: li_group_job_items Tenant select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant select" ON public.li_group_job_items FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant select" ON public.li_group_job_items FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: li_group_jobs Tenant select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant select" ON public.li_group_jobs FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant select" ON public.li_group_jobs FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: li_marketing_outbox Tenant select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant select" ON public.li_marketing_outbox FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant select" ON public.li_marketing_outbox FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: li_native_toggle_log Tenant select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant select" ON public.li_native_toggle_log FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant select" ON public.li_native_toggle_log FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: li_newsletter_scan_state Tenant select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant select" ON public.li_newsletter_scan_state FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant select" ON public.li_newsletter_scan_state FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: li_newsletter_subscribers Tenant select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant select" ON public.li_newsletter_subscribers FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant select" ON public.li_newsletter_subscribers FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: li_waitlist_snapshots Tenant select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant select" ON public.li_waitlist_snapshots FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant select" ON public.li_waitlist_snapshots FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: ai_agent_column_assignments Tenant users can create agent assignments; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant users can create agent assignments" ON public.ai_agent_column_assignments FOR INSERT TO authenticated WITH CHECK (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Tenant users can create agent assignments" ON public.ai_agent_column_assignments FOR INSERT TO authenticated WITH CHECK (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: ai_agent_column_assignments Tenant users can delete agent assignments; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant users can delete agent assignments" ON public.ai_agent_column_assignments FOR DELETE TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Tenant users can delete agent assignments" ON public.ai_agent_column_assignments FOR DELETE TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: instagram_event_log Tenant users can read own event logs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant users can read own event logs" ON public.instagram_event_log FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenant users can read own event logs" ON public.instagram_event_log FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: ai_agent_column_assignments Tenant users can update agent assignments; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant users can update agent assignments" ON public.ai_agent_column_assignments FOR UPDATE TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Tenant users can update agent assignments" ON public.ai_agent_column_assignments FOR UPDATE TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: ai_agent_column_assignments Tenant users can view agent assignments; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenant users can view agent assignments" ON public.ai_agent_column_assignments FOR SELECT TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Tenant users can view agent assignments" ON public.ai_agent_column_assignments FOR SELECT TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: tenant_ai_credentials Tenants can delete their own AI credentials; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenants can delete their own AI credentials" ON public.tenant_ai_credentials FOR DELETE TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Tenants can delete their own AI credentials" ON public.tenant_ai_credentials FOR DELETE TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: tenant_ai_credentials Tenants can insert their own AI credentials; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenants can insert their own AI credentials" ON public.tenant_ai_credentials FOR INSERT TO authenticated WITH CHECK (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Tenants can insert their own AI credentials" ON public.tenant_ai_credentials FOR INSERT TO authenticated WITH CHECK (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: ai_usage_logs Tenants can insert their own AI usage logs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenants can insert their own AI usage logs" ON public.ai_usage_logs FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenants can insert their own AI usage logs" ON public.ai_usage_logs FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: tenant_ai_credentials Tenants can update their own AI credentials; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenants can update their own AI credentials" ON public.tenant_ai_credentials FOR UPDATE TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Tenants can update their own AI credentials" ON public.tenant_ai_credentials FOR UPDATE TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
@@ -16146,7 +16111,7 @@ CREATE POLICY "Tenants can view their cashback balances" ON public.cashback_bala
 -- Name: ai_usage_logs Tenants can view their own AI usage logs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Tenants can view their own AI usage logs" ON public.ai_usage_logs FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Tenants can view their own AI usage logs" ON public.ai_usage_logs FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -16155,9 +16120,9 @@ CREATE POLICY "Tenants can view their own AI usage logs" ON public.ai_usage_logs
 
 CREATE POLICY "Tenants can view their own provider health" ON public.ai_provider_health FOR SELECT USING (((tenant_id IN ( SELECT team_members.tenant_id
    FROM public.team_members
-  WHERE (team_members.user_id = auth.uid()))) OR (tenant_id IN ( SELECT tenants.id
+  WHERE (team_members.user_id = ( SELECT auth.uid() AS uid)))) OR (tenant_id IN ( SELECT tenants.id
    FROM public.tenants
-  WHERE (tenants.owner_id = auth.uid())))));
+  WHERE (tenants.owner_id = ( SELECT auth.uid() AS uid))))));
 
 
 --
@@ -16166,70 +16131,70 @@ CREATE POLICY "Tenants can view their own provider health" ON public.ai_provider
 
 CREATE POLICY "Users can create AI agents for their tenant" ON public.ai_agents FOR INSERT WITH CHECK ((tenant_id IN ( SELECT team_members.tenant_id
    FROM public.team_members
-  WHERE (team_members.user_id = auth.uid()))));
+  WHERE (team_members.user_id = ( SELECT auth.uid() AS uid)))));
 
 
 --
 -- Name: ai_agents Users can create ai_agents for their tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can create ai_agents for their tenant" ON public.ai_agents FOR INSERT TO authenticated WITH CHECK (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Users can create ai_agents for their tenant" ON public.ai_agents FOR INSERT TO authenticated WITH CHECK (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: campaign_contacts Users can create campaign contacts for their tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can create campaign contacts for their tenant" ON public.campaign_contacts FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can create campaign contacts for their tenant" ON public.campaign_contacts FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bulk_campaigns Users can create campaigns for their tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can create campaigns for their tenant" ON public.bulk_campaigns FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can create campaigns for their tenant" ON public.bulk_campaigns FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: email_campaigns Users can create campaigns in their tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can create campaigns in their tenant" ON public.email_campaigns FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can create campaigns in their tenant" ON public.email_campaigns FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: email_templates Users can create templates in their tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can create templates in their tenant" ON public.email_templates FOR INSERT WITH CHECK (((tenant_id = public.get_user_tenant_id(auth.uid())) AND (is_system = false)));
+CREATE POLICY "Users can create templates in their tenant" ON public.email_templates FOR INSERT WITH CHECK (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND (is_system = false)));
 
 
 --
 -- Name: tenants Users can create their tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can create their tenant" ON public.tenants FOR INSERT WITH CHECK ((owner_id = auth.uid()));
+CREATE POLICY "Users can create their tenant" ON public.tenants FOR INSERT WITH CHECK ((owner_id = ( SELECT auth.uid() AS uid)));
 
 
 --
 -- Name: email_campaigns Users can delete campaigns in their tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete campaigns in their tenant" ON public.email_campaigns FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can delete campaigns in their tenant" ON public.email_campaigns FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: me_auto_sync_configs Users can delete own ME auto-sync configs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete own ME auto-sync configs" ON public.me_auto_sync_configs FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can delete own ME auto-sync configs" ON public.me_auto_sync_configs FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: customer_rfm_snapshots Users can delete own tenant RFM data; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete own tenant RFM data" ON public.customer_rfm_snapshots FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can delete own tenant RFM data" ON public.customer_rfm_snapshots FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -16250,91 +16215,91 @@ CREATE POLICY "Users can delete own tenant suppression" ON public.email_suppress
 -- Name: ai_agents Users can delete their tenant ai_agents; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete their tenant ai_agents" ON public.ai_agents FOR DELETE TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Users can delete their tenant ai_agents" ON public.ai_agents FOR DELETE TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: auto_messages Users can delete their tenant auto messages; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete their tenant auto messages" ON public.auto_messages FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can delete their tenant auto messages" ON public.auto_messages FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: birthday_configs Users can delete their tenant birthday configs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete their tenant birthday configs" ON public.birthday_configs FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can delete their tenant birthday configs" ON public.birthday_configs FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_customers Users can delete their tenant bling_customers; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete their tenant bling_customers" ON public.bling_customers FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can delete their tenant bling_customers" ON public.bling_customers FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_order_items Users can delete their tenant bling_order_items; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete their tenant bling_order_items" ON public.bling_order_items FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can delete their tenant bling_order_items" ON public.bling_order_items FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_orders Users can delete their tenant bling_orders; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete their tenant bling_orders" ON public.bling_orders FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can delete their tenant bling_orders" ON public.bling_orders FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_products Users can delete their tenant bling_products; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete their tenant bling_products" ON public.bling_products FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can delete their tenant bling_products" ON public.bling_products FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: campaign_contacts Users can delete their tenant campaign contacts; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete their tenant campaign contacts" ON public.campaign_contacts FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can delete their tenant campaign contacts" ON public.campaign_contacts FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bulk_campaigns Users can delete their tenant campaigns; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete their tenant campaigns" ON public.bulk_campaigns FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can delete their tenant campaigns" ON public.bulk_campaigns FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: quick_replies Users can delete their tenant quick replies; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete their tenant quick replies" ON public.quick_replies FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can delete their tenant quick replies" ON public.quick_replies FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: receptionist_configs Users can delete their tenant receptionist config; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete their tenant receptionist config" ON public.receptionist_configs FOR DELETE TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Users can delete their tenant receptionist config" ON public.receptionist_configs FOR DELETE TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: rfm_audiences Users can delete their tenant rfm_audiences; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete their tenant rfm_audiences" ON public.rfm_audiences FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can delete their tenant rfm_audiences" ON public.rfm_audiences FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: email_templates Users can delete their tenant templates; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can delete their tenant templates" ON public.email_templates FOR DELETE USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND (is_system = false)));
+CREATE POLICY "Users can delete their tenant templates" ON public.email_templates FOR DELETE USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND (is_system = false)));
 
 
 --
@@ -16343,7 +16308,7 @@ CREATE POLICY "Users can delete their tenant templates" ON public.email_template
 
 CREATE POLICY "Users can delete their tenant's AI agents" ON public.ai_agents FOR DELETE USING ((tenant_id IN ( SELECT team_members.tenant_id
    FROM public.team_members
-  WHERE (team_members.user_id = auth.uid()))));
+  WHERE (team_members.user_id = ( SELECT auth.uid() AS uid)))));
 
 
 --
@@ -16357,35 +16322,35 @@ CREATE POLICY "Users can delete their tenant's bling connections" ON public.blin
 -- Name: auto_messages Users can insert auto messages for their tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert auto messages for their tenant" ON public.auto_messages FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can insert auto messages for their tenant" ON public.auto_messages FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: birthday_executions Users can insert birthday executions for their tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert birthday executions for their tenant" ON public.birthday_executions FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can insert birthday executions for their tenant" ON public.birthday_executions FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: me_sync_jobs Users can insert me_sync_jobs for their tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert me_sync_jobs for their tenant" ON public.me_sync_jobs FOR INSERT WITH CHECK (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Users can insert me_sync_jobs for their tenant" ON public.me_sync_jobs FOR INSERT WITH CHECK (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: me_auto_sync_configs Users can insert own ME auto-sync configs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert own ME auto-sync configs" ON public.me_auto_sync_configs FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can insert own ME auto-sync configs" ON public.me_auto_sync_configs FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: customer_rfm_snapshots Users can insert own tenant RFM data; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert own tenant RFM data" ON public.customer_rfm_snapshots FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can insert own tenant RFM data" ON public.customer_rfm_snapshots FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -16408,7 +16373,7 @@ CREATE POLICY "Users can insert own tenant segments" ON public.crm_segments FOR 
 
 CREATE POLICY "Users can insert own tenant situacoes" ON public.bling_situacoes FOR INSERT WITH CHECK ((tenant_id IN ( SELECT team_members.tenant_id
    FROM public.team_members
-  WHERE (team_members.user_id = auth.uid()))));
+  WHERE (team_members.user_id = ( SELECT auth.uid() AS uid)))));
 
 
 --
@@ -16422,77 +16387,77 @@ CREATE POLICY "Users can insert own tenant suppression" ON public.email_suppress
 -- Name: quick_replies Users can insert quick replies for their tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert quick replies for their tenant" ON public.quick_replies FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can insert quick replies for their tenant" ON public.quick_replies FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: profiles Users can insert their own profile; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert their own profile" ON public.profiles FOR INSERT WITH CHECK ((auth.uid() = user_id));
+CREATE POLICY "Users can insert their own profile" ON public.profiles FOR INSERT WITH CHECK ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: birthday_configs Users can insert their tenant birthday configs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert their tenant birthday configs" ON public.birthday_configs FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can insert their tenant birthday configs" ON public.birthday_configs FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_customers Users can insert their tenant bling_customers; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert their tenant bling_customers" ON public.bling_customers FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can insert their tenant bling_customers" ON public.bling_customers FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_order_items Users can insert their tenant bling_order_items; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert their tenant bling_order_items" ON public.bling_order_items FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can insert their tenant bling_order_items" ON public.bling_order_items FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_orders Users can insert their tenant bling_orders; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert their tenant bling_orders" ON public.bling_orders FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can insert their tenant bling_orders" ON public.bling_orders FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_products Users can insert their tenant bling_products; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert their tenant bling_products" ON public.bling_products FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can insert their tenant bling_products" ON public.bling_products FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_sync_jobs Users can insert their tenant bling_sync_jobs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert their tenant bling_sync_jobs" ON public.bling_sync_jobs FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can insert their tenant bling_sync_jobs" ON public.bling_sync_jobs FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_sync_logs Users can insert their tenant bling_sync_logs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert their tenant bling_sync_logs" ON public.bling_sync_logs FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can insert their tenant bling_sync_logs" ON public.bling_sync_logs FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: receptionist_configs Users can insert their tenant receptionist config; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert their tenant receptionist config" ON public.receptionist_configs FOR INSERT TO authenticated WITH CHECK (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Users can insert their tenant receptionist config" ON public.receptionist_configs FOR INSERT TO authenticated WITH CHECK (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: rfm_audiences Users can insert their tenant rfm_audiences; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can insert their tenant rfm_audiences" ON public.rfm_audiences FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can insert their tenant rfm_audiences" ON public.rfm_audiences FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -16506,21 +16471,21 @@ CREATE POLICY "Users can insert their tenant's bling connections" ON public.blin
 -- Name: oauth_states Users can manage their own oauth_states; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can manage their own oauth_states" ON public.oauth_states TO authenticated USING ((user_id = auth.uid()));
+CREATE POLICY "Users can manage their own oauth_states" ON public.oauth_states TO authenticated USING ((user_id = ( SELECT auth.uid() AS uid)));
 
 
 --
 -- Name: me_sync_jobs Users can manage their tenant me_sync_jobs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can manage their tenant me_sync_jobs" ON public.me_sync_jobs TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can manage their tenant me_sync_jobs" ON public.me_sync_jobs TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: order_notification_configs Users can manage their tenant order_notification_configs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can manage their tenant order_notification_configs" ON public.order_notification_configs TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can manage their tenant order_notification_configs" ON public.order_notification_configs TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -16529,14 +16494,14 @@ CREATE POLICY "Users can manage their tenant order_notification_configs" ON publ
 
 CREATE POLICY "Users can manage their tenant order_notification_status_rules" ON public.order_notification_status_rules TO authenticated USING ((config_id IN ( SELECT order_notification_configs.id
    FROM public.order_notification_configs
-  WHERE (order_notification_configs.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (order_notification_configs.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
 -- Name: rfm_audience_members Users can manage their tenant rfm_audience_members; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can manage their tenant rfm_audience_members" ON public.rfm_audience_members USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can manage their tenant rfm_audience_members" ON public.rfm_audience_members USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -16550,28 +16515,28 @@ CREATE POLICY "Users can manage their tenant segments" ON public.crm_segments US
 -- Name: birthday_executions Users can update birthday executions for their tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update birthday executions for their tenant" ON public.birthday_executions FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can update birthday executions for their tenant" ON public.birthday_executions FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: email_campaigns Users can update campaigns in their tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update campaigns in their tenant" ON public.email_campaigns FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can update campaigns in their tenant" ON public.email_campaigns FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: me_auto_sync_configs Users can update own ME auto-sync configs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update own ME auto-sync configs" ON public.me_auto_sync_configs FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can update own ME auto-sync configs" ON public.me_auto_sync_configs FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: customer_rfm_snapshots Users can update own tenant RFM data; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update own tenant RFM data" ON public.customer_rfm_snapshots FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can update own tenant RFM data" ON public.customer_rfm_snapshots FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -16587,7 +16552,7 @@ CREATE POLICY "Users can update own tenant segments" ON public.crm_segments FOR 
 
 CREATE POLICY "Users can update own tenant situacoes" ON public.bling_situacoes FOR UPDATE USING ((tenant_id IN ( SELECT team_members.tenant_id
    FROM public.team_members
-  WHERE (team_members.user_id = auth.uid()))));
+  WHERE (team_members.user_id = ( SELECT auth.uid() AS uid)))));
 
 
 --
@@ -16601,126 +16566,126 @@ CREATE POLICY "Users can update own tenant suppression" ON public.email_suppress
 -- Name: profiles Users can update their own profile; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update their own profile" ON public.profiles FOR UPDATE USING ((auth.uid() = user_id));
+CREATE POLICY "Users can update their own profile" ON public.profiles FOR UPDATE USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: ai_agents Users can update their tenant ai_agents; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update their tenant ai_agents" ON public.ai_agents FOR UPDATE TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Users can update their tenant ai_agents" ON public.ai_agents FOR UPDATE TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: auto_messages Users can update their tenant auto messages; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update their tenant auto messages" ON public.auto_messages FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can update their tenant auto messages" ON public.auto_messages FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: birthday_configs Users can update their tenant birthday configs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update their tenant birthday configs" ON public.birthday_configs FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can update their tenant birthday configs" ON public.birthday_configs FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_customers Users can update their tenant bling_customers; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update their tenant bling_customers" ON public.bling_customers FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can update their tenant bling_customers" ON public.bling_customers FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_order_items Users can update their tenant bling_order_items; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update their tenant bling_order_items" ON public.bling_order_items FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can update their tenant bling_order_items" ON public.bling_order_items FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_orders Users can update their tenant bling_orders; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update their tenant bling_orders" ON public.bling_orders FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can update their tenant bling_orders" ON public.bling_orders FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_products Users can update their tenant bling_products; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update their tenant bling_products" ON public.bling_products FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can update their tenant bling_products" ON public.bling_products FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_sync_jobs Users can update their tenant bling_sync_jobs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update their tenant bling_sync_jobs" ON public.bling_sync_jobs FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can update their tenant bling_sync_jobs" ON public.bling_sync_jobs FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_sync_logs Users can update their tenant bling_sync_logs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update their tenant bling_sync_logs" ON public.bling_sync_logs FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can update their tenant bling_sync_logs" ON public.bling_sync_logs FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: campaign_contacts Users can update their tenant campaign contacts; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update their tenant campaign contacts" ON public.campaign_contacts FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can update their tenant campaign contacts" ON public.campaign_contacts FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bulk_campaigns Users can update their tenant campaigns; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update their tenant campaigns" ON public.bulk_campaigns FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can update their tenant campaigns" ON public.bulk_campaigns FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: me_sync_jobs Users can update their tenant me_sync_jobs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update their tenant me_sync_jobs" ON public.me_sync_jobs FOR UPDATE USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Users can update their tenant me_sync_jobs" ON public.me_sync_jobs FOR UPDATE USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: quick_replies Users can update their tenant quick replies; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update their tenant quick replies" ON public.quick_replies FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can update their tenant quick replies" ON public.quick_replies FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: receptionist_configs Users can update their tenant receptionist config; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update their tenant receptionist config" ON public.receptionist_configs FOR UPDATE TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Users can update their tenant receptionist config" ON public.receptionist_configs FOR UPDATE TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: rfm_alerts Users can update their tenant rfm_alerts; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update their tenant rfm_alerts" ON public.rfm_alerts FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can update their tenant rfm_alerts" ON public.rfm_alerts FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: rfm_audiences Users can update their tenant rfm_audiences; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update their tenant rfm_audiences" ON public.rfm_audiences FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can update their tenant rfm_audiences" ON public.rfm_audiences FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: email_templates Users can update their tenant templates; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can update their tenant templates" ON public.email_templates FOR UPDATE USING (((tenant_id = public.get_user_tenant_id(auth.uid())) AND (is_system = false)));
+CREATE POLICY "Users can update their tenant templates" ON public.email_templates FOR UPDATE USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND (is_system = false)));
 
 
 --
@@ -16729,7 +16694,7 @@ CREATE POLICY "Users can update their tenant templates" ON public.email_template
 
 CREATE POLICY "Users can update their tenant's AI agents" ON public.ai_agents FOR UPDATE USING ((tenant_id IN ( SELECT team_members.tenant_id
    FROM public.team_members
-  WHERE (team_members.user_id = auth.uid()))));
+  WHERE (team_members.user_id = ( SELECT auth.uid() AS uid)))));
 
 
 --
@@ -16743,28 +16708,28 @@ CREATE POLICY "Users can update their tenant's bling connections" ON public.blin
 -- Name: email_campaigns Users can view campaigns in their tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view campaigns in their tenant" ON public.email_campaigns FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view campaigns in their tenant" ON public.email_campaigns FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: email_campaign_logs Users can view logs in their tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view logs in their tenant" ON public.email_campaign_logs FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view logs in their tenant" ON public.email_campaign_logs FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: me_auto_sync_configs Users can view own ME auto-sync configs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view own ME auto-sync configs" ON public.me_auto_sync_configs FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view own ME auto-sync configs" ON public.me_auto_sync_configs FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: customer_rfm_snapshots Users can view own tenant RFM data; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view own tenant RFM data" ON public.customer_rfm_snapshots FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view own tenant RFM data" ON public.customer_rfm_snapshots FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -16787,7 +16752,7 @@ CREATE POLICY "Users can view own tenant segments" ON public.crm_segments FOR SE
 
 CREATE POLICY "Users can view own tenant situacoes" ON public.bling_situacoes FOR SELECT USING ((tenant_id IN ( SELECT team_members.tenant_id
    FROM public.team_members
-  WHERE (team_members.user_id = auth.uid()))));
+  WHERE (team_members.user_id = ( SELECT auth.uid() AS uid)))));
 
 
 --
@@ -16801,112 +16766,112 @@ CREATE POLICY "Users can view own tenant suppression list" ON public.email_suppr
 -- Name: email_templates Users can view templates in their tenant or system templates; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view templates in their tenant or system templates" ON public.email_templates FOR SELECT USING (((tenant_id = public.get_user_tenant_id(auth.uid())) OR (is_system = true)));
+CREATE POLICY "Users can view templates in their tenant or system templates" ON public.email_templates FOR SELECT USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) OR (is_system = true)));
 
 
 --
 -- Name: profiles Users can view their own profile; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their own profile" ON public.profiles FOR SELECT USING ((auth.uid() = user_id));
+CREATE POLICY "Users can view their own profile" ON public.profiles FOR SELECT USING ((( SELECT auth.uid() AS uid) = user_id));
 
 
 --
 -- Name: tenants Users can view their tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant" ON public.tenants FOR SELECT USING (((owner_id = auth.uid()) OR (id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Users can view their tenant" ON public.tenants FOR SELECT USING (((owner_id = ( SELECT auth.uid() AS uid)) OR (id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: ai_agents Users can view their tenant ai_agents; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant ai_agents" ON public.ai_agents FOR SELECT TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Users can view their tenant ai_agents" ON public.ai_agents FOR SELECT TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: auto_messages Users can view their tenant auto messages; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant auto messages" ON public.auto_messages FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view their tenant auto messages" ON public.auto_messages FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: birthday_configs Users can view their tenant birthday configs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant birthday configs" ON public.birthday_configs FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view their tenant birthday configs" ON public.birthday_configs FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: birthday_executions Users can view their tenant birthday executions; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant birthday executions" ON public.birthday_executions FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view their tenant birthday executions" ON public.birthday_executions FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_customers Users can view their tenant bling_customers; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant bling_customers" ON public.bling_customers FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view their tenant bling_customers" ON public.bling_customers FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_order_items Users can view their tenant bling_order_items; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant bling_order_items" ON public.bling_order_items FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view their tenant bling_order_items" ON public.bling_order_items FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_orders Users can view their tenant bling_orders; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant bling_orders" ON public.bling_orders FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view their tenant bling_orders" ON public.bling_orders FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_products Users can view their tenant bling_products; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant bling_products" ON public.bling_products FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view their tenant bling_products" ON public.bling_products FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_sync_jobs Users can view their tenant bling_sync_jobs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant bling_sync_jobs" ON public.bling_sync_jobs FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view their tenant bling_sync_jobs" ON public.bling_sync_jobs FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_sync_logs Users can view their tenant bling_sync_logs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant bling_sync_logs" ON public.bling_sync_logs FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view their tenant bling_sync_logs" ON public.bling_sync_logs FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_webhook_events Users can view their tenant bling_webhook_events; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant bling_webhook_events" ON public.bling_webhook_events FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view their tenant bling_webhook_events" ON public.bling_webhook_events FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: campaign_contacts Users can view their tenant campaign contacts; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant campaign contacts" ON public.campaign_contacts FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view their tenant campaign contacts" ON public.campaign_contacts FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bulk_campaigns Users can view their tenant campaigns; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant campaigns" ON public.bulk_campaigns FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view their tenant campaigns" ON public.bulk_campaigns FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -16920,21 +16885,21 @@ CREATE POLICY "Users can view their tenant email events" ON public.email_events 
 -- Name: me_sync_jobs Users can view their tenant me_sync_jobs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant me_sync_jobs" ON public.me_sync_jobs FOR SELECT USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Users can view their tenant me_sync_jobs" ON public.me_sync_jobs FOR SELECT USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: order_notification_configs Users can view their tenant order_notification_configs; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant order_notification_configs" ON public.order_notification_configs FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view their tenant order_notification_configs" ON public.order_notification_configs FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: order_notification_executions Users can view their tenant order_notification_executions; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant order_notification_executions" ON public.order_notification_executions FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view their tenant order_notification_executions" ON public.order_notification_executions FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -16943,42 +16908,42 @@ CREATE POLICY "Users can view their tenant order_notification_executions" ON pub
 
 CREATE POLICY "Users can view their tenant order_notification_status_rules" ON public.order_notification_status_rules FOR SELECT TO authenticated USING ((config_id IN ( SELECT order_notification_configs.id
    FROM public.order_notification_configs
-  WHERE (order_notification_configs.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (order_notification_configs.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
 -- Name: quick_replies Users can view their tenant quick replies; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant quick replies" ON public.quick_replies FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view their tenant quick replies" ON public.quick_replies FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: receptionist_configs Users can view their tenant receptionist config; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant receptionist config" ON public.receptionist_configs FOR SELECT TO authenticated USING (((auth.uid() IS NOT NULL) AND (tenant_id = public.get_user_tenant_id(auth.uid()))));
+CREATE POLICY "Users can view their tenant receptionist config" ON public.receptionist_configs FOR SELECT TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))));
 
 
 --
 -- Name: rfm_alerts Users can view their tenant rfm_alerts; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant rfm_alerts" ON public.rfm_alerts FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view their tenant rfm_alerts" ON public.rfm_alerts FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: rfm_audience_members Users can view their tenant rfm_audience_members; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant rfm_audience_members" ON public.rfm_audience_members FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view their tenant rfm_audience_members" ON public.rfm_audience_members FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: rfm_audiences Users can view their tenant rfm_audiences; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant rfm_audiences" ON public.rfm_audiences FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view their tenant rfm_audiences" ON public.rfm_audiences FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -16994,14 +16959,14 @@ CREATE POLICY "Users can view their tenant segments" ON public.crm_segments FOR 
 
 CREATE POLICY "Users can view their tenant's AI agents" ON public.ai_agents FOR SELECT USING ((tenant_id IN ( SELECT team_members.tenant_id
    FROM public.team_members
-  WHERE (team_members.user_id = auth.uid()))));
+  WHERE (team_members.user_id = ( SELECT auth.uid() AS uid)))));
 
 
 --
 -- Name: business_hours Users can view their tenant's business hours; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY "Users can view their tenant's business hours" ON public.business_hours FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY "Users can view their tenant's business hours" ON public.business_hours FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -17020,21 +16985,21 @@ ALTER TABLE public.abandonment_flows ENABLE ROW LEVEL SECURITY;
 -- Name: tenant_ai_credentials admin_only_ai_credentials_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY admin_only_ai_credentials_select ON public.tenant_ai_credentials FOR SELECT TO authenticated USING (public.is_tenant_admin(auth.uid(), tenant_id));
+CREATE POLICY admin_only_ai_credentials_select ON public.tenant_ai_credentials FOR SELECT TO authenticated USING (public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id));
 
 
 --
 -- Name: bling_connections admin_only_bling_connections_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY admin_only_bling_connections_select ON public.bling_connections FOR SELECT TO authenticated USING (public.is_tenant_admin(auth.uid(), tenant_id));
+CREATE POLICY admin_only_bling_connections_select ON public.bling_connections FOR SELECT TO authenticated USING (public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id));
 
 
 --
 -- Name: email_integrations admin_only_email_integrations_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY admin_only_email_integrations_select ON public.email_integrations FOR SELECT TO authenticated USING (public.is_tenant_admin(auth.uid(), tenant_id));
+CREATE POLICY admin_only_email_integrations_select ON public.email_integrations FOR SELECT TO authenticated USING (public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id));
 
 
 --
@@ -17102,28 +17067,28 @@ ALTER TABLE public.bling_code_mappings ENABLE ROW LEVEL SECURITY;
 -- Name: bling_code_mappings bling_code_mappings_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY bling_code_mappings_delete ON public.bling_code_mappings FOR DELETE TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY bling_code_mappings_delete ON public.bling_code_mappings FOR DELETE TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_code_mappings bling_code_mappings_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY bling_code_mappings_insert ON public.bling_code_mappings FOR INSERT TO authenticated WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY bling_code_mappings_insert ON public.bling_code_mappings FOR INSERT TO authenticated WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_code_mappings bling_code_mappings_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY bling_code_mappings_select ON public.bling_code_mappings FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY bling_code_mappings_select ON public.bling_code_mappings FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: bling_code_mappings bling_code_mappings_update; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY bling_code_mappings_update ON public.bling_code_mappings FOR UPDATE TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY bling_code_mappings_update ON public.bling_code_mappings FOR UPDATE TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -17232,28 +17197,28 @@ ALTER TABLE public.chatbot_flow_edges ENABLE ROW LEVEL SECURITY;
 -- Name: chatbot_flow_edges chatbot_flow_edges_all; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY chatbot_flow_edges_all ON public.chatbot_flow_edges USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY chatbot_flow_edges_all ON public.chatbot_flow_edges USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: chatbot_flow_edges chatbot_flow_edges_del; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY chatbot_flow_edges_del ON public.chatbot_flow_edges FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY chatbot_flow_edges_del ON public.chatbot_flow_edges FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: chatbot_flow_edges chatbot_flow_edges_ins; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY chatbot_flow_edges_ins ON public.chatbot_flow_edges FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY chatbot_flow_edges_ins ON public.chatbot_flow_edges FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: chatbot_flow_edges chatbot_flow_edges_upd; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY chatbot_flow_edges_upd ON public.chatbot_flow_edges FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY chatbot_flow_edges_upd ON public.chatbot_flow_edges FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -17266,28 +17231,28 @@ ALTER TABLE public.chatbot_flow_nodes ENABLE ROW LEVEL SECURITY;
 -- Name: chatbot_flow_nodes chatbot_flow_nodes_all; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY chatbot_flow_nodes_all ON public.chatbot_flow_nodes USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY chatbot_flow_nodes_all ON public.chatbot_flow_nodes USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: chatbot_flow_nodes chatbot_flow_nodes_del; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY chatbot_flow_nodes_del ON public.chatbot_flow_nodes FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY chatbot_flow_nodes_del ON public.chatbot_flow_nodes FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: chatbot_flow_nodes chatbot_flow_nodes_ins; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY chatbot_flow_nodes_ins ON public.chatbot_flow_nodes FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY chatbot_flow_nodes_ins ON public.chatbot_flow_nodes FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: chatbot_flow_nodes chatbot_flow_nodes_upd; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY chatbot_flow_nodes_upd ON public.chatbot_flow_nodes FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY chatbot_flow_nodes_upd ON public.chatbot_flow_nodes FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -17306,28 +17271,28 @@ ALTER TABLE public.chatbot_flows ENABLE ROW LEVEL SECURITY;
 -- Name: chatbot_flows chatbot_flows_all; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY chatbot_flows_all ON public.chatbot_flows USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY chatbot_flows_all ON public.chatbot_flows USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: chatbot_flows chatbot_flows_del; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY chatbot_flows_del ON public.chatbot_flows FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY chatbot_flows_del ON public.chatbot_flows FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: chatbot_flows chatbot_flows_ins; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY chatbot_flows_ins ON public.chatbot_flows FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY chatbot_flows_ins ON public.chatbot_flows FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: chatbot_flows chatbot_flows_upd; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY chatbot_flows_upd ON public.chatbot_flows FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY chatbot_flows_upd ON public.chatbot_flows FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -17346,28 +17311,28 @@ ALTER TABLE public.churn_campaign_triggers ENABLE ROW LEVEL SECURITY;
 -- Name: churn_campaign_configs churn_configs_tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY churn_configs_tenant ON public.churn_campaign_configs USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY churn_configs_tenant ON public.churn_campaign_configs USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: churn_campaign_configs churn_configs_tenant_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY churn_configs_tenant_insert ON public.churn_campaign_configs FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY churn_configs_tenant_insert ON public.churn_campaign_configs FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: churn_campaign_configs churn_configs_tenant_update; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY churn_configs_tenant_update ON public.churn_campaign_configs FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY churn_configs_tenant_update ON public.churn_campaign_configs FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: churn_campaign_triggers churn_triggers_tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY churn_triggers_tenant ON public.churn_campaign_triggers USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY churn_triggers_tenant ON public.churn_campaign_triggers USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -17458,7 +17423,7 @@ ALTER TABLE public.customer_tags ENABLE ROW LEVEL SECURITY;
 -- Name: customer_tags customer_tags_tenant_all; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY customer_tags_tenant_all ON public.customer_tags TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY customer_tags_tenant_all ON public.customer_tags TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -17501,7 +17466,7 @@ ALTER TABLE public.email_campaign_coupons ENABLE ROW LEVEL SECURITY;
 -- Name: email_campaign_coupons email_campaign_coupons_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY email_campaign_coupons_select ON public.email_campaign_coupons FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY email_campaign_coupons_select ON public.email_campaign_coupons FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -17562,21 +17527,21 @@ ALTER TABLE public.email_unsubscribe_tokens ENABLE ROW LEVEL SECURITY;
 -- Name: email_unsubscribe_tokens email_unsubscribe_tokens_tenant_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY email_unsubscribe_tokens_tenant_insert ON public.email_unsubscribe_tokens FOR INSERT TO authenticated WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY email_unsubscribe_tokens_tenant_insert ON public.email_unsubscribe_tokens FOR INSERT TO authenticated WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: email_unsubscribe_tokens email_unsubscribe_tokens_tenant_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY email_unsubscribe_tokens_tenant_select ON public.email_unsubscribe_tokens FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY email_unsubscribe_tokens_tenant_select ON public.email_unsubscribe_tokens FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: email_unsubscribe_tokens email_unsubscribe_tokens_tenant_update; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY email_unsubscribe_tokens_tenant_update ON public.email_unsubscribe_tokens FOR UPDATE TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY email_unsubscribe_tokens_tenant_update ON public.email_unsubscribe_tokens FOR UPDATE TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -17883,14 +17848,14 @@ ALTER TABLE public.li_customers ENABLE ROW LEVEL SECURITY;
 -- Name: li_customers li_customers_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY li_customers_delete ON public.li_customers FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY li_customers_delete ON public.li_customers FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: li_customers li_customers_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY li_customers_select ON public.li_customers FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY li_customers_select ON public.li_customers FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -17945,14 +17910,14 @@ ALTER TABLE public.li_order_items ENABLE ROW LEVEL SECURITY;
 -- Name: li_order_items li_order_items_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY li_order_items_delete ON public.li_order_items FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY li_order_items_delete ON public.li_order_items FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: li_order_items li_order_items_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY li_order_items_select ON public.li_order_items FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY li_order_items_select ON public.li_order_items FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -17965,14 +17930,14 @@ ALTER TABLE public.li_orders ENABLE ROW LEVEL SECURITY;
 -- Name: li_orders li_orders_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY li_orders_delete ON public.li_orders FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY li_orders_delete ON public.li_orders FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: li_orders li_orders_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY li_orders_select ON public.li_orders FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY li_orders_select ON public.li_orders FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -17985,14 +17950,14 @@ ALTER TABLE public.li_products ENABLE ROW LEVEL SECURITY;
 -- Name: li_products li_products_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY li_products_delete ON public.li_products FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY li_products_delete ON public.li_products FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: li_products li_products_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY li_products_select ON public.li_products FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY li_products_select ON public.li_products FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18005,14 +17970,14 @@ ALTER TABLE public.li_sync_state ENABLE ROW LEVEL SECURITY;
 -- Name: li_sync_state li_sync_state_all; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY li_sync_state_all ON public.li_sync_state USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY li_sync_state_all ON public.li_sync_state USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: li_sync_state li_sync_state_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY li_sync_state_select ON public.li_sync_state FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY li_sync_state_select ON public.li_sync_state FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18033,7 +17998,7 @@ ALTER TABLE public.li_webhook_events ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY li_webhook_events_select ON public.li_webhook_events FOR SELECT USING ((tenant_id IN ( SELECT team_members.tenant_id
    FROM public.team_members
-  WHERE (team_members.user_id = auth.uid()))));
+  WHERE (team_members.user_id = ( SELECT auth.uid() AS uid)))));
 
 
 --
@@ -18046,14 +18011,14 @@ ALTER TABLE public.loyalty_points ENABLE ROW LEVEL SECURITY;
 -- Name: loyalty_points loyalty_points_tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY loyalty_points_tenant ON public.loyalty_points USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY loyalty_points_tenant ON public.loyalty_points USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: loyalty_points loyalty_points_tenant_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY loyalty_points_tenant_insert ON public.loyalty_points FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY loyalty_points_tenant_insert ON public.loyalty_points FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18066,21 +18031,21 @@ ALTER TABLE public.loyalty_programs ENABLE ROW LEVEL SECURITY;
 -- Name: loyalty_programs loyalty_programs_tenant; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY loyalty_programs_tenant ON public.loyalty_programs USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY loyalty_programs_tenant ON public.loyalty_programs USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: loyalty_programs loyalty_programs_tenant_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY loyalty_programs_tenant_insert ON public.loyalty_programs FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY loyalty_programs_tenant_insert ON public.loyalty_programs FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: loyalty_programs loyalty_programs_tenant_update; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY loyalty_programs_tenant_update ON public.loyalty_programs FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY loyalty_programs_tenant_update ON public.loyalty_programs FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18141,7 +18106,7 @@ ALTER TABLE public.nuvemshop_connections ENABLE ROW LEVEL SECURITY;
 -- Name: nuvemshop_connections nuvemshop_connections_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY nuvemshop_connections_tenant_isolation ON public.nuvemshop_connections TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY nuvemshop_connections_tenant_isolation ON public.nuvemshop_connections TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18154,7 +18119,7 @@ ALTER TABLE public.nuvemshop_customers ENABLE ROW LEVEL SECURITY;
 -- Name: nuvemshop_customers nuvemshop_customers_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY nuvemshop_customers_tenant_isolation ON public.nuvemshop_customers TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY nuvemshop_customers_tenant_isolation ON public.nuvemshop_customers TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18167,7 +18132,7 @@ ALTER TABLE public.nuvemshop_lgpd_events ENABLE ROW LEVEL SECURITY;
 -- Name: nuvemshop_lgpd_events nuvemshop_lgpd_events_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY nuvemshop_lgpd_events_tenant_isolation ON public.nuvemshop_lgpd_events TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY nuvemshop_lgpd_events_tenant_isolation ON public.nuvemshop_lgpd_events TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18180,7 +18145,7 @@ ALTER TABLE public.nuvemshop_order_items ENABLE ROW LEVEL SECURITY;
 -- Name: nuvemshop_order_items nuvemshop_order_items_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY nuvemshop_order_items_tenant_isolation ON public.nuvemshop_order_items TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY nuvemshop_order_items_tenant_isolation ON public.nuvemshop_order_items TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18193,7 +18158,7 @@ ALTER TABLE public.nuvemshop_orders ENABLE ROW LEVEL SECURITY;
 -- Name: nuvemshop_orders nuvemshop_orders_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY nuvemshop_orders_tenant_isolation ON public.nuvemshop_orders TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY nuvemshop_orders_tenant_isolation ON public.nuvemshop_orders TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18206,7 +18171,7 @@ ALTER TABLE public.nuvemshop_products ENABLE ROW LEVEL SECURITY;
 -- Name: nuvemshop_products nuvemshop_products_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY nuvemshop_products_tenant_isolation ON public.nuvemshop_products TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY nuvemshop_products_tenant_isolation ON public.nuvemshop_products TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18219,7 +18184,7 @@ ALTER TABLE public.nuvemshop_sync_state ENABLE ROW LEVEL SECURITY;
 -- Name: nuvemshop_sync_state nuvemshop_sync_state_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY nuvemshop_sync_state_tenant_isolation ON public.nuvemshop_sync_state TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY nuvemshop_sync_state_tenant_isolation ON public.nuvemshop_sync_state TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18232,7 +18197,7 @@ ALTER TABLE public.nuvemshop_webhook_events ENABLE ROW LEVEL SECURITY;
 -- Name: nuvemshop_webhook_events nuvemshop_webhook_events_tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY nuvemshop_webhook_events_tenant_isolation ON public.nuvemshop_webhook_events TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY nuvemshop_webhook_events_tenant_isolation ON public.nuvemshop_webhook_events TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18432,7 +18397,7 @@ ALTER TABLE public.tenant_api_keys ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY tenant_delete ON public.instagram_ad_welcome_flows FOR DELETE TO authenticated USING ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
@@ -18441,7 +18406,7 @@ CREATE POLICY tenant_delete ON public.instagram_ad_welcome_flows FOR DELETE TO a
 
 CREATE POLICY tenant_delete ON public.instagram_deep_links FOR DELETE TO authenticated USING ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
@@ -18450,7 +18415,7 @@ CREATE POLICY tenant_delete ON public.instagram_deep_links FOR DELETE TO authent
 
 CREATE POLICY tenant_delete ON public.instagram_media_watchlist FOR DELETE TO authenticated USING ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
@@ -18459,7 +18424,7 @@ CREATE POLICY tenant_delete ON public.instagram_media_watchlist FOR DELETE TO au
 
 CREATE POLICY tenant_delete ON public.instagram_share_dm_configs FOR DELETE TO authenticated USING ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
@@ -18468,21 +18433,21 @@ CREATE POLICY tenant_delete ON public.instagram_share_dm_configs FOR DELETE TO a
 
 CREATE POLICY tenant_insert ON public.instagram_ad_welcome_flows FOR INSERT TO authenticated WITH CHECK ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
 -- Name: instagram_content tenant_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_insert ON public.instagram_content FOR INSERT TO authenticated WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_insert ON public.instagram_content FOR INSERT TO authenticated WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_feature_flags tenant_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_insert ON public.instagram_feature_flags FOR INSERT TO authenticated WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_insert ON public.instagram_feature_flags FOR INSERT TO authenticated WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18491,7 +18456,7 @@ CREATE POLICY tenant_insert ON public.instagram_feature_flags FOR INSERT TO auth
 
 CREATE POLICY tenant_insert ON public.instagram_follow_dm_configs FOR INSERT TO authenticated WITH CHECK ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
@@ -18500,7 +18465,7 @@ CREATE POLICY tenant_insert ON public.instagram_follow_dm_configs FOR INSERT TO 
 
 CREATE POLICY tenant_insert ON public.instagram_media_watchlist FOR INSERT TO authenticated WITH CHECK ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
@@ -18509,119 +18474,119 @@ CREATE POLICY tenant_insert ON public.instagram_media_watchlist FOR INSERT TO au
 
 CREATE POLICY tenant_insert ON public.instagram_share_dm_configs FOR INSERT TO authenticated WITH CHECK ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
 -- Name: instagram_ad_welcome_flows tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation ON public.instagram_ad_welcome_flows USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_isolation ON public.instagram_ad_welcome_flows USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_comment_replies_log tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation ON public.instagram_comment_replies_log USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_isolation ON public.instagram_comment_replies_log USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_contact_pauses tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation ON public.instagram_contact_pauses USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_isolation ON public.instagram_contact_pauses USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_contact_tags tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation ON public.instagram_contact_tags USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_isolation ON public.instagram_contact_tags USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_deep_links tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation ON public.instagram_deep_links USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_isolation ON public.instagram_deep_links USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_flow_edges tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation ON public.instagram_flow_edges USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_isolation ON public.instagram_flow_edges USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_flow_nodes tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation ON public.instagram_flow_nodes USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_isolation ON public.instagram_flow_nodes USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_flow_run_steps tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation ON public.instagram_flow_run_steps USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_isolation ON public.instagram_flow_run_steps USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_flow_runs tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation ON public.instagram_flow_runs USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_isolation ON public.instagram_flow_runs USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_flow_versions tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation ON public.instagram_flow_versions USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_isolation ON public.instagram_flow_versions USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_flows tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation ON public.instagram_flows USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_isolation ON public.instagram_flows USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_ice_breakers tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation ON public.instagram_ice_breakers USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_isolation ON public.instagram_ice_breakers USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_media_watchlist tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation ON public.instagram_media_watchlist USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_isolation ON public.instagram_media_watchlist USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_persistent_menu_items tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation ON public.instagram_persistent_menu_items USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_isolation ON public.instagram_persistent_menu_items USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_tags tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation ON public.instagram_tags USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_isolation ON public.instagram_tags USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_trigger_rules tenant_isolation; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation ON public.instagram_trigger_rules USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_isolation ON public.instagram_trigger_rules USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18656,14 +18621,14 @@ CREATE POLICY tenant_isolation_data_events ON public.instagram_data_collection_e
 -- Name: chatbot_flow_sessions tenant_isolation_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation_delete ON public.chatbot_flow_sessions FOR DELETE USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_isolation_delete ON public.chatbot_flow_sessions FOR DELETE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: chatbot_flow_sessions tenant_isolation_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation_insert ON public.chatbot_flow_sessions FOR INSERT WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_isolation_insert ON public.chatbot_flow_sessions FOR INSERT WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18677,14 +18642,14 @@ CREATE POLICY tenant_isolation_installs ON public.instagram_quick_automation_ins
 -- Name: chatbot_flow_sessions tenant_isolation_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation_select ON public.chatbot_flow_sessions FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_isolation_select ON public.chatbot_flow_sessions FOR SELECT USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: chatbot_flow_sessions tenant_isolation_update; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_isolation_update ON public.chatbot_flow_sessions FOR UPDATE USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_isolation_update ON public.chatbot_flow_sessions FOR UPDATE USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id))) WITH CHECK ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18693,7 +18658,7 @@ CREATE POLICY tenant_isolation_update ON public.chatbot_flow_sessions FOR UPDATE
 
 CREATE POLICY tenant_rfm_snapshots_select ON public.customer_rfm_snapshots FOR SELECT TO authenticated USING ((integration_id IN ( SELECT integrations.id
    FROM public.integrations
-  WHERE (integrations.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (integrations.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
@@ -18702,7 +18667,7 @@ CREATE POLICY tenant_rfm_snapshots_select ON public.customer_rfm_snapshots FOR S
 
 CREATE POLICY tenant_select ON public.instagram_ad_welcome_flows FOR SELECT TO authenticated USING ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
@@ -18711,56 +18676,56 @@ CREATE POLICY tenant_select ON public.instagram_ad_welcome_flows FOR SELECT TO a
 
 CREATE POLICY tenant_select ON public.instagram_channel_capabilities FOR SELECT TO authenticated USING ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
 -- Name: instagram_channels tenant_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_select ON public.instagram_channels FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_select ON public.instagram_channels FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_comment_queue tenant_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_select ON public.instagram_comment_queue FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_select ON public.instagram_comment_queue FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_comment_replies_log tenant_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_select ON public.instagram_comment_replies_log FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_select ON public.instagram_comment_replies_log FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_contacts tenant_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_select ON public.instagram_contacts FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_select ON public.instagram_contacts FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_content tenant_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_select ON public.instagram_content FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_select ON public.instagram_content FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_cta_link_clicks tenant_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_select ON public.instagram_cta_link_clicks FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_select ON public.instagram_cta_link_clicks FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_cta_links tenant_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_select ON public.instagram_cta_links FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_select ON public.instagram_cta_links FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18769,35 +18734,35 @@ CREATE POLICY tenant_select ON public.instagram_cta_links FOR SELECT TO authenti
 
 CREATE POLICY tenant_select ON public.instagram_deep_links FOR SELECT TO authenticated USING ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
 -- Name: instagram_event_log tenant_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_select ON public.instagram_event_log FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_select ON public.instagram_event_log FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_experimental_executions tenant_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_select ON public.instagram_experimental_executions FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_select ON public.instagram_experimental_executions FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_feature_flags tenant_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_select ON public.instagram_feature_flags FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_select ON public.instagram_feature_flags FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_flow_runs tenant_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_select ON public.instagram_flow_runs FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_select ON public.instagram_flow_runs FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18808,7 +18773,7 @@ CREATE POLICY tenant_select ON public.instagram_flow_versions FOR SELECT TO auth
    FROM public.instagram_flows
   WHERE (instagram_flows.channel_id IN ( SELECT instagram_channels.id
            FROM public.instagram_channels
-          WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))))));
+          WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))))));
 
 
 --
@@ -18817,7 +18782,7 @@ CREATE POLICY tenant_select ON public.instagram_flow_versions FOR SELECT TO auth
 
 CREATE POLICY tenant_select ON public.instagram_flows FOR SELECT TO authenticated USING ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
@@ -18826,7 +18791,7 @@ CREATE POLICY tenant_select ON public.instagram_flows FOR SELECT TO authenticate
 
 CREATE POLICY tenant_select ON public.instagram_follow_dm_configs FOR SELECT TO authenticated USING ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
@@ -18835,7 +18800,7 @@ CREATE POLICY tenant_select ON public.instagram_follow_dm_configs FOR SELECT TO 
 
 CREATE POLICY tenant_select ON public.instagram_ice_breakers FOR SELECT TO authenticated USING ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
@@ -18844,14 +18809,14 @@ CREATE POLICY tenant_select ON public.instagram_ice_breakers FOR SELECT TO authe
 
 CREATE POLICY tenant_select ON public.instagram_media_watchlist FOR SELECT TO authenticated USING ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
 -- Name: instagram_messages tenant_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_select ON public.instagram_messages FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_select ON public.instagram_messages FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18860,14 +18825,14 @@ CREATE POLICY tenant_select ON public.instagram_messages FOR SELECT TO authentic
 
 CREATE POLICY tenant_select ON public.instagram_metrics_daily FOR SELECT TO authenticated USING ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
 -- Name: instagram_outbox tenant_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_select ON public.instagram_outbox FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_select ON public.instagram_outbox FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18876,7 +18841,7 @@ CREATE POLICY tenant_select ON public.instagram_outbox FOR SELECT TO authenticat
 
 CREATE POLICY tenant_select ON public.instagram_persistent_menu_items FOR SELECT TO authenticated USING ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
@@ -18885,14 +18850,14 @@ CREATE POLICY tenant_select ON public.instagram_persistent_menu_items FOR SELECT
 
 CREATE POLICY tenant_select ON public.instagram_share_dm_configs FOR SELECT TO authenticated USING ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
 -- Name: instagram_threads tenant_select; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_select ON public.instagram_threads FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_select ON public.instagram_threads FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18907,21 +18872,21 @@ ALTER TABLE public.tenant_tokens ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY tenant_update ON public.instagram_ad_welcome_flows FOR UPDATE TO authenticated USING ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
 -- Name: instagram_content tenant_update; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_update ON public.instagram_content FOR UPDATE TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_update ON public.instagram_content FOR UPDATE TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
 -- Name: instagram_feature_flags tenant_update; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY tenant_update ON public.instagram_feature_flags FOR UPDATE TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+CREATE POLICY tenant_update ON public.instagram_feature_flags FOR UPDATE TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)));
 
 
 --
@@ -18930,7 +18895,7 @@ CREATE POLICY tenant_update ON public.instagram_feature_flags FOR UPDATE TO auth
 
 CREATE POLICY tenant_update ON public.instagram_follow_dm_configs FOR UPDATE TO authenticated USING ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
@@ -18939,7 +18904,7 @@ CREATE POLICY tenant_update ON public.instagram_follow_dm_configs FOR UPDATE TO 
 
 CREATE POLICY tenant_update ON public.instagram_media_watchlist FOR UPDATE TO authenticated USING ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
@@ -18948,7 +18913,7 @@ CREATE POLICY tenant_update ON public.instagram_media_watchlist FOR UPDATE TO au
 
 CREATE POLICY tenant_update ON public.instagram_share_dm_configs FOR UPDATE TO authenticated USING ((channel_id IN ( SELECT instagram_channels.id
    FROM public.instagram_channels
-  WHERE (instagram_channels.tenant_id = public.get_user_tenant_id(auth.uid())))));
+  WHERE (instagram_channels.tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)))));
 
 
 --
@@ -18997,5 +18962,5 @@ ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict qk6dsfU3KnfZbY59yHzsnbN1OWJtZLtemR85Q5ulmUp7lPQhmS7lTE8Ur4WmxM6
+\unrestrict iCmiEL1PMa5f13ZpUJ3fGXPg6o7FCA8bEQTkDLfbFZuxydatJ3dJO3gcGnvctML
 

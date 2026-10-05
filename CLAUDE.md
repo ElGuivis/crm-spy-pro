@@ -242,6 +242,7 @@ ssh -i ~/.ssh/spypro_vps root@37.148.134.55 "cd /opt/supabase && sh run.sh statu
 - `20261005000001-002`: registro único de contatos (`customer_touches`, `contact_policies`, `get_contact_blockers`, `get_touch_summary`) e arquivamento de etapas de fluxo órfãs
 - `20261004000016-017`: livro-razão de cupons (`origin_*`, `issue_status`, gatilho `mark_coupon_redeemed`, `get_coupon_performance`, `refresh_coupon_usage`, `cleanup_pending_coupons`)
 - `20261005000004`: evento único de pedido (`domain_events`, `domain_event_deliveries`, gatilho em `li_orders`, `claim_domain_events`, cron `domain-event-processor`)
+- `20261003000008` e `20261005000007`: RLS initplan (chamadas de `auth.uid()`/`get_user_tenant_id`/`has_module_permission` envolvidas em `(SELECT ...)` para avaliar uma vez por consulta, com prova de equivalência dentro da migration; aplicar com `psql --single-transaction`) e 5 índices duplicados removidos. Medido em produção: `me_shipments` (4.178 linhas) de 57–70 ms para 12 ms; paginação 15 → 3 ms
 - `20261005000006`: painéis cruzados (`get_customer_communication`, `get_message_performance`)
 - `20261005000005`: identidade do cliente (`customer_key(email, telefone)`, view `customer_rfm_latest`, correção de `get_rfm_audience_li_customers`)
 - `20261004000015`: grupos de clientes da loja (`li_group_jobs`, `li_group_job_items`, `get_rfm_audience_li_customers`, cron `li-group-jobs`)
