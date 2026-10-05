@@ -208,7 +208,10 @@ function extractSnapshotFunctionNames(content: string): string[] {
   let m: RegExpExecArray | null;
   while ((m = createRe.exec(content)) !== null) {
     // Funções de trigger (RETURNS trigger) não aparecem em Functions do types.ts: ignora
-    const header = content.slice(m.index, m.index + 600);
+    // só o cabeçalho desta função (até LANGUAGE ou AS $): olhar 600 caracteres adiante pegava o RETURNS trigger da função seguinte
+    const rest = content.slice(m.index, m.index + 600);
+    const stop = rest.search(/\bLANGUAGE\b|\bAS\s+\$/i);
+    const header = stop > 0 ? rest.slice(0, stop) : rest;
     if (/\)\s*RETURNS\s+trigger\b/i.test(header)) continue;
     alive.add(m[1].toLowerCase());
   }

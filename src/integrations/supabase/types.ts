@@ -7,38 +7,151 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
+      abandonment_flow_sends: {
+        Row: {
+          abandonment_id: string
+          channel: string
+          coupon_code: string | null
+          created_at: string
+          flow_campaign_id: string | null
+          id: string
+          kind: string
+          reason: string | null
+          sent_at: string | null
+          status: string
+          step_id: string
+          tenant_id: string
+        }
+        Insert: {
+          abandonment_id: string
+          channel: string
+          coupon_code?: string | null
+          created_at?: string
+          flow_campaign_id?: string | null
+          id?: string
+          kind: string
+          reason?: string | null
+          sent_at?: string | null
+          status: string
+          step_id: string
+          tenant_id: string
+        }
+        Update: {
+          abandonment_id?: string
+          channel?: string
+          coupon_code?: string | null
+          created_at?: string
+          flow_campaign_id?: string | null
+          id?: string
+          kind?: string
+          reason?: string | null
+          sent_at?: string | null
+          status?: string
+          step_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "abandonment_flow_sends_abandonment_id_fkey"
+            columns: ["abandonment_id"]
+            isOneToOne: false
+            referencedRelation: "li_abandonment_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "abandonment_flow_sends_flow_campaign_id_fkey"
+            columns: ["flow_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "abandonment_flow_sends_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      abandonment_flows: {
+        Row: {
+          cooldown_days: number
+          created_at: string
+          email_integration_id: string | null
+          enabled: boolean
+          enabled_at: string | null
+          kind: string
+          max_event_age_hours: number
+          min_value: number
+          opt_out_native: boolean
+          quiet_end: string
+          quiet_start: string
+          steps: Json
+          tenant_id: string
+          updated_at: string
+          whatsapp_integration_id: string | null
+        }
+        Insert: {
+          cooldown_days?: number
+          created_at?: string
+          email_integration_id?: string | null
+          enabled?: boolean
+          enabled_at?: string | null
+          kind: string
+          max_event_age_hours?: number
+          min_value?: number
+          opt_out_native?: boolean
+          quiet_end?: string
+          quiet_start?: string
+          steps?: Json
+          tenant_id: string
+          updated_at?: string
+          whatsapp_integration_id?: string | null
+        }
+        Update: {
+          cooldown_days?: number
+          created_at?: string
+          email_integration_id?: string | null
+          enabled?: boolean
+          enabled_at?: string | null
+          kind?: string
+          max_event_age_hours?: number
+          min_value?: number
+          opt_out_native?: boolean
+          quiet_end?: string
+          quiet_start?: string
+          steps?: Json
+          tenant_id?: string
+          updated_at?: string
+          whatsapp_integration_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "abandonment_flows_email_integration_id_fkey"
+            columns: ["email_integration_id"]
+            isOneToOne: false
+            referencedRelation: "email_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "abandonment_flows_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "abandonment_flows_whatsapp_integration_id_fkey"
+            columns: ["whatsapp_integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_agent_column_assignments: {
         Row: {
           agent_id: string
@@ -2672,6 +2785,38 @@ export type Database = {
           },
         ]
       }
+      contact_policies: {
+        Row: {
+          broadcast_gap_hours: number
+          daily_cap: number
+          enabled: boolean
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          broadcast_gap_hours?: number
+          daily_cap?: number
+          enabled?: boolean
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          broadcast_gap_hours?: number
+          daily_cap?: number
+          enabled?: boolean
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_policies_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           avatar_url: string | null
@@ -3254,6 +3399,47 @@ export type Database = {
           },
         ]
       }
+      customer_touches: {
+        Row: {
+          channel: string
+          email: string | null
+          id: string
+          module_ref: string | null
+          phone: string | null
+          purpose: string
+          sent_at: string
+          tenant_id: string
+        }
+        Insert: {
+          channel: string
+          email?: string | null
+          id?: string
+          module_ref?: string | null
+          phone?: string | null
+          purpose: string
+          sent_at?: string
+          tenant_id: string
+        }
+        Update: {
+          channel?: string
+          email?: string | null
+          id?: string
+          module_ref?: string | null
+          phone?: string | null
+          purpose?: string
+          sent_at?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_touches_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dead_letter_queue: {
         Row: {
           attempts: number
@@ -3319,551 +3505,147 @@ export type Database = {
           },
         ]
       }
-      abandonment_flows: {
+      domain_event_deliveries: {
         Row: {
-          cooldown_days: number
-          created_at: string
-          email_integration_id: string | null
-          enabled: boolean
-          enabled_at: string | null
-          kind: string
-          max_event_age_hours: number
-          min_value: number
-          opt_out_native: boolean
-          quiet_end: string
-          quiet_start: string
-          steps: Json
-          tenant_id: string
-          updated_at: string
-          whatsapp_integration_id: string | null
+          consumer: string
+          detail: string | null
+          event_id: string
+          processed_at: string
+          status: string
         }
         Insert: {
-          cooldown_days?: number
-          created_at?: string
-          email_integration_id?: string | null
-          enabled?: boolean
-          enabled_at?: string | null
-          kind: string
-          max_event_age_hours?: number
-          min_value?: number
-          opt_out_native?: boolean
-          quiet_end?: string
-          quiet_start?: string
-          steps?: Json
-          tenant_id: string
-          updated_at?: string
-          whatsapp_integration_id?: string | null
-        }
-        Update: {
-          cooldown_days?: number
-          created_at?: string
-          email_integration_id?: string | null
-          enabled?: boolean
-          enabled_at?: string | null
-          kind?: string
-          max_event_age_hours?: number
-          min_value?: number
-          opt_out_native?: boolean
-          quiet_end?: string
-          quiet_start?: string
-          steps?: Json
-          tenant_id?: string
-          updated_at?: string
-          whatsapp_integration_id?: string | null
-        }
-        Relationships: []
-      }
-      abandonment_flow_sends: {
-        Row: {
-          abandonment_id: string
-          channel: string
-          coupon_code: string | null
-          created_at: string
-          flow_campaign_id: string | null
-          id: string
-          kind: string
-          reason: string | null
-          sent_at: string | null
-          status: string
-          step_id: string
-          tenant_id: string
-        }
-        Insert: {
-          abandonment_id: string
-          channel: string
-          coupon_code?: string | null
-          created_at?: string
-          flow_campaign_id?: string | null
-          id?: string
-          kind: string
-          reason?: string | null
-          sent_at?: string | null
-          status: string
-          step_id: string
-          tenant_id: string
-        }
-        Update: {
-          abandonment_id?: string
-          channel?: string
-          coupon_code?: string | null
-          created_at?: string
-          flow_campaign_id?: string | null
-          id?: string
-          kind?: string
-          reason?: string | null
-          sent_at?: string | null
+          consumer: string
+          detail?: string | null
+          event_id: string
+          processed_at?: string
           status?: string
-          step_id?: string
-          tenant_id?: string
-        }
-        Relationships: []
-      }
-      li_abandonment_campaigns: {
-        Row: {
-          automation_id: number
-          cart_json: Json | null
-          captured_at: string
-          client_id: number | null
-          details_fetched_at: string | null
-          event_at: string | null
-          flow_status: string
-          gone_at: string | null
-          id: string
-          integration_id: string
-          items: Json
-          kind: string
-          last_seen_at: string
-          li_campaign_id: number
-          li_last_sent_at: string | null
-          li_status: string | null
-          native_optout_at: string | null
-          product_ids: number[]
-          recipient_email: string | null
-          recipient_name: string | null
-          recipient_phone: string | null
-          recovered_at: string | null
-          recovered_order_id: string | null
-          recovered_total: number | null
-          recovered_via: string | null
-          rule_id: number | null
-          tenant_id: string
-          value: number
-        }
-        Insert: {
-          automation_id: number
-          cart_json?: Json | null
-          captured_at?: string
-          client_id?: number | null
-          details_fetched_at?: string | null
-          event_at?: string | null
-          flow_status?: string
-          gone_at?: string | null
-          id?: string
-          integration_id: string
-          items?: Json
-          kind: string
-          last_seen_at?: string
-          li_campaign_id: number
-          li_last_sent_at?: string | null
-          li_status?: string | null
-          native_optout_at?: string | null
-          product_ids?: number[]
-          recipient_email?: string | null
-          recipient_name?: string | null
-          recipient_phone?: string | null
-          recovered_at?: string | null
-          recovered_order_id?: string | null
-          recovered_total?: number | null
-          recovered_via?: string | null
-          rule_id?: number | null
-          tenant_id: string
-          value?: number
         }
         Update: {
-          automation_id?: number
-          cart_json?: Json | null
-          captured_at?: string
-          client_id?: number | null
-          details_fetched_at?: string | null
-          event_at?: string | null
-          flow_status?: string
-          gone_at?: string | null
-          id?: string
-          integration_id?: string
-          items?: Json
-          kind?: string
-          last_seen_at?: string
-          li_campaign_id?: number
-          li_last_sent_at?: string | null
-          li_status?: string | null
-          native_optout_at?: string | null
-          product_ids?: number[]
-          recipient_email?: string | null
-          recipient_name?: string | null
-          recipient_phone?: string | null
-          recovered_at?: string | null
-          recovered_order_id?: string | null
-          recovered_total?: number | null
-          recovered_via?: string | null
-          rule_id?: number | null
-          tenant_id?: string
-          value?: number
+          consumer?: string
+          detail?: string | null
+          event_id?: string
+          processed_at?: string
+          status?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "domain_event_deliveries_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "domain_events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
-      li_native_toggle_log: {
-        Row: {
-          created_at: string
-          from_state: boolean | null
-          id: string
-          snapshot: Json | null
-          tenant_id: string
-          to_state: boolean
-          toggle_key: string
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string
-          from_state?: boolean | null
-          id?: string
-          snapshot?: Json | null
-          tenant_id: string
-          to_state: boolean
-          toggle_key: string
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string
-          from_state?: boolean | null
-          id?: string
-          snapshot?: Json | null
-          tenant_id?: string
-          to_state?: boolean
-          toggle_key?: string
-          user_id?: string | null
-        }
-        Relationships: []
-      }
-      li_marketing_settings: {
-        Row: {
-          sync_unsubscribes: boolean
-          tenant_id: string
-          updated_at: string
-          waitlist_alert: boolean
-        }
-        Insert: {
-          sync_unsubscribes?: boolean
-          tenant_id: string
-          updated_at?: string
-          waitlist_alert?: boolean
-        }
-        Update: {
-          sync_unsubscribes?: boolean
-          tenant_id?: string
-          updated_at?: string
-          waitlist_alert?: boolean
-        }
-        Relationships: []
-      }
-      li_marketing_outbox: {
+      domain_events: {
         Row: {
           attempts: number
           created_at: string
-          done_at: string | null
+          event_type: string
           id: string
-          integration_id: string
-          kind: string
           last_error: string | null
-          next_attempt_at: string
+          locked_until: string | null
           payload: Json
-          status: string
+          processed_at: string | null
+          ref_id: string
           tenant_id: string
         }
         Insert: {
           attempts?: number
           created_at?: string
-          done_at?: string | null
+          event_type: string
           id?: string
-          integration_id: string
-          kind: string
           last_error?: string | null
-          next_attempt_at?: string
-          payload: Json
-          status?: string
-          tenant_id: string
-        }
-        Update: {
-          attempts?: number
-          created_at?: string
-          done_at?: string | null
-          id?: string
-          integration_id?: string
-          kind?: string
-          last_error?: string | null
-          next_attempt_at?: string
+          locked_until?: string | null
           payload?: Json
-          status?: string
-          tenant_id?: string
-        }
-        Relationships: []
-      }
-      li_newsletter_subscribers: {
-        Row: {
-          email: string
-          first_seen_at: string
-          integration_id: string
-          is_baseline: boolean
-          is_customer: boolean
-          last_scan: number
-          li_id: number
-          removed_at: string | null
-          tenant_id: string
-        }
-        Insert: {
-          email: string
-          first_seen_at?: string
-          integration_id: string
-          is_baseline?: boolean
-          is_customer?: boolean
-          last_scan?: number
-          li_id: number
-          removed_at?: string | null
+          processed_at?: string | null
+          ref_id: string
           tenant_id: string
         }
         Update: {
-          email?: string
-          first_seen_at?: string
-          integration_id?: string
-          is_baseline?: boolean
-          is_customer?: boolean
-          last_scan?: number
-          li_id?: number
-          removed_at?: string | null
+          attempts?: number
+          created_at?: string
+          event_type?: string
+          id?: string
+          last_error?: string | null
+          locked_until?: string | null
+          payload?: Json
+          processed_at?: string | null
+          ref_id?: string
           tenant_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "domain_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
-      li_newsletter_scan_state: {
+      email_campaign_conversions: {
         Row: {
-          baseline_done: boolean
-          integration_id: string
-          last_check_at: string | null
-          last_full_scan_at: string | null
-          next_offset: number
-          scan_no: number
-          scanning: boolean
-          tenant_id: string
-          total: number
-          updated_at: string
-        }
-        Insert: {
-          baseline_done?: boolean
-          integration_id: string
-          last_check_at?: string | null
-          last_full_scan_at?: string | null
-          next_offset?: number
-          scan_no?: number
-          scanning?: boolean
-          tenant_id: string
-          total?: number
-          updated_at?: string
-        }
-        Update: {
-          baseline_done?: boolean
-          integration_id?: string
-          last_check_at?: string | null
-          last_full_scan_at?: string | null
-          next_offset?: number
-          scan_no?: number
-          scanning?: boolean
-          tenant_id?: string
-          total?: number
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      li_waitlist_snapshots: {
-        Row: {
-          integration_id: string
-          name: string | null
-          parent_id: number | null
-          product_id: number
-          sku: string | null
-          snapshot_date: string
-          stock: number | null
-          subscribers: number
-          tenant_id: string
-        }
-        Insert: {
-          integration_id: string
-          name?: string | null
-          parent_id?: number | null
-          product_id: number
-          sku?: string | null
-          snapshot_date: string
-          stock?: number | null
-          subscribers?: number
-          tenant_id: string
-        }
-        Update: {
-          integration_id?: string
-          name?: string | null
-          parent_id?: number | null
-          product_id?: number
-          sku?: string | null
-          snapshot_date?: string
-          stock?: number | null
-          subscribers?: number
-          tenant_id?: string
-        }
-        Relationships: []
-      }
-      li_group_jobs: {
-        Row: {
+          attribution_type: string
+          campaign_id: string
+          coupon_code: string | null
           created_at: string
-          created_by: string | null
-          done: number
-          failed: number
-          finished_at: string | null
+          customer_email: string | null
           id: string
-          integration_id: string
-          label: string
-          skipped: number
-          status: string
-          target_group: string | null
+          order_id: string
+          order_number: string | null
+          order_total: number
+          ordered_at: string
+          platform: string
           tenant_id: string
-          total: number
-          undo_of: string | null
-          undone_at: string | null
+          touch_at: string | null
         }
         Insert: {
+          attribution_type: string
+          campaign_id: string
+          coupon_code?: string | null
           created_at?: string
-          created_by?: string | null
-          done?: number
-          failed?: number
-          finished_at?: string | null
+          customer_email?: string | null
           id?: string
-          integration_id: string
-          label: string
-          skipped?: number
-          status?: string
-          target_group?: string | null
+          order_id: string
+          order_number?: string | null
+          order_total?: number
+          ordered_at: string
+          platform: string
           tenant_id: string
-          total?: number
-          undo_of?: string | null
-          undone_at?: string | null
+          touch_at?: string | null
         }
         Update: {
+          attribution_type?: string
+          campaign_id?: string
+          coupon_code?: string | null
           created_at?: string
-          created_by?: string | null
-          done?: number
-          failed?: number
-          finished_at?: string | null
+          customer_email?: string | null
           id?: string
-          integration_id?: string
-          label?: string
-          skipped?: number
-          status?: string
-          target_group?: string | null
+          order_id?: string
+          order_number?: string | null
+          order_total?: number
+          ordered_at?: string
+          platform?: string
           tenant_id?: string
-          total?: number
-          undo_of?: string | null
-          undone_at?: string | null
+          touch_at?: string | null
         }
-        Relationships: []
-      }
-      li_group_job_items: {
-        Row: {
-          done_at: string | null
-          email: string | null
-          error: string | null
-          job_id: string
-          li_customer_id: number
-          new_group: string | null
-          previous_group: string | null
-          status: string
-          tenant_id: string
-        }
-        Insert: {
-          done_at?: string | null
-          email?: string | null
-          error?: string | null
-          job_id: string
-          li_customer_id: number
-          new_group?: string | null
-          previous_group?: string | null
-          status?: string
-          tenant_id: string
-        }
-        Update: {
-          done_at?: string | null
-          email?: string | null
-          error?: string | null
-          job_id?: string
-          li_customer_id?: number
-          new_group?: string | null
-          previous_group?: string | null
-          status?: string
-          tenant_id?: string
-        }
-        Relationships: []
-      }
-      customer_touches: {
-        Row: {
-          channel: string
-          email: string | null
-          id: string
-          module_ref: string | null
-          phone: string | null
-          purpose: string
-          sent_at: string
-          tenant_id: string
-        }
-        Insert: {
-          channel: string
-          email?: string | null
-          id?: string
-          module_ref?: string | null
-          phone?: string | null
-          purpose: string
-          sent_at?: string
-          tenant_id: string
-        }
-        Update: {
-          channel?: string
-          email?: string | null
-          id?: string
-          module_ref?: string | null
-          phone?: string | null
-          purpose?: string
-          sent_at?: string
-          tenant_id?: string
-        }
-        Relationships: []
-      }
-      contact_policies: {
-        Row: {
-          broadcast_gap_hours: number
-          daily_cap: number
-          enabled: boolean
-          tenant_id: string
-          updated_at: string
-        }
-        Insert: {
-          broadcast_gap_hours?: number
-          daily_cap?: number
-          enabled?: boolean
-          tenant_id: string
-          updated_at?: string
-        }
-        Update: {
-          broadcast_gap_hours?: number
-          daily_cap?: number
-          enabled?: boolean
-          tenant_id?: string
-          updated_at?: string
-        }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "email_campaign_conversions_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_campaign_conversions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       email_campaign_coupons: {
         Row: {
@@ -3893,7 +3675,22 @@ export type Database = {
           recipient_email?: string
           tenant_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "email_campaign_coupons_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_campaign_coupons_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       email_campaign_logs: {
         Row: {
@@ -3963,32 +3760,30 @@ export type Database = {
       }
       email_campaigns: {
         Row: {
+          ab_auto_winner: boolean
           ab_offset_pct: number | null
           ab_split_pct: number | null
           ab_test_id: string | null
           ab_variant: string | null
+          ab_winner_decided_at: string | null
+          ab_winner_detail: Json | null
+          ab_winner_hours: number | null
+          ab_winner_variant: string | null
+          attribution_refreshed_at: string | null
+          attribution_window_days: number
           audience_reference: string | null
           audience_type: string | null
           campaign_type: Database["public"]["Enums"]["email_campaign_type"]
-          attribution_refreshed_at: string | null
-          attribution_window_days: number
-          skip_recent_days: number | null
-          unique_coupon: Json | null
-          ab_auto_winner: boolean
-          ab_winner_hours: number | null
-          ab_winner_variant: string | null
-          ab_winner_decided_at: string | null
-          ab_winner_detail: Json | null
-          flow_kind: string | null
-          flow_step: string | null
-          coupon_codes: string[]
           completed_at: string | null
           compliance_checked_at: string | null
           content_html: string | null
           content_json: Json | null
+          coupon_codes: string[]
           created_at: string
           email_integration_id: string | null
           error_message: string | null
+          flow_kind: string | null
+          flow_step: string | null
           has_unsubscribe_link: boolean | null
           id: string
           internal_name: string
@@ -3996,10 +3791,11 @@ export type Database = {
           preheader: string | null
           reply_to: string | null
           scheduled_at: string | null
+          send_lease_until: string | null
           sender_email: string
           sender_name: string
           sent_at: string | null
-          send_lease_until: string | null
+          skip_recent_days: number | null
           started_at: string | null
           status: Database["public"]["Enums"]["email_campaign_status"]
           subject: string
@@ -4014,36 +3810,35 @@ export type Database = {
           total_sent: number | null
           total_unsubscribed: number | null
           unique_clicks: number
+          unique_coupon: Json | null
           unique_opens: number
           updated_at: string
         }
         Insert: {
+          ab_auto_winner?: boolean
           ab_offset_pct?: number | null
           ab_split_pct?: number | null
           ab_test_id?: string | null
           ab_variant?: string | null
+          ab_winner_decided_at?: string | null
+          ab_winner_detail?: Json | null
+          ab_winner_hours?: number | null
+          ab_winner_variant?: string | null
+          attribution_refreshed_at?: string | null
+          attribution_window_days?: number
           audience_reference?: string | null
           audience_type?: string | null
           campaign_type: Database["public"]["Enums"]["email_campaign_type"]
-          attribution_refreshed_at?: string | null
-          attribution_window_days?: number
-          skip_recent_days?: number | null
-          unique_coupon?: Json | null
-          ab_auto_winner?: boolean
-          ab_winner_hours?: number | null
-          ab_winner_variant?: string | null
-          ab_winner_decided_at?: string | null
-          ab_winner_detail?: Json | null
-          flow_kind?: string | null
-          flow_step?: string | null
-          coupon_codes?: string[]
           completed_at?: string | null
           compliance_checked_at?: string | null
           content_html?: string | null
           content_json?: Json | null
+          coupon_codes?: string[]
           created_at?: string
           email_integration_id?: string | null
           error_message?: string | null
+          flow_kind?: string | null
+          flow_step?: string | null
           has_unsubscribe_link?: boolean | null
           id?: string
           internal_name: string
@@ -4051,10 +3846,11 @@ export type Database = {
           preheader?: string | null
           reply_to?: string | null
           scheduled_at?: string | null
+          send_lease_until?: string | null
           sender_email: string
           sender_name: string
           sent_at?: string | null
-          send_lease_until?: string | null
+          skip_recent_days?: number | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["email_campaign_status"]
           subject: string
@@ -4069,36 +3865,35 @@ export type Database = {
           total_sent?: number | null
           total_unsubscribed?: number | null
           unique_clicks?: number
+          unique_coupon?: Json | null
           unique_opens?: number
           updated_at?: string
         }
         Update: {
+          ab_auto_winner?: boolean
           ab_offset_pct?: number | null
           ab_split_pct?: number | null
           ab_test_id?: string | null
           ab_variant?: string | null
+          ab_winner_decided_at?: string | null
+          ab_winner_detail?: Json | null
+          ab_winner_hours?: number | null
+          ab_winner_variant?: string | null
+          attribution_refreshed_at?: string | null
+          attribution_window_days?: number
           audience_reference?: string | null
           audience_type?: string | null
           campaign_type?: Database["public"]["Enums"]["email_campaign_type"]
-          attribution_refreshed_at?: string | null
-          attribution_window_days?: number
-          skip_recent_days?: number | null
-          unique_coupon?: Json | null
-          ab_auto_winner?: boolean
-          ab_winner_hours?: number | null
-          ab_winner_variant?: string | null
-          ab_winner_decided_at?: string | null
-          ab_winner_detail?: Json | null
-          flow_kind?: string | null
-          flow_step?: string | null
-          coupon_codes?: string[]
           completed_at?: string | null
           compliance_checked_at?: string | null
           content_html?: string | null
           content_json?: Json | null
+          coupon_codes?: string[]
           created_at?: string
           email_integration_id?: string | null
           error_message?: string | null
+          flow_kind?: string | null
+          flow_step?: string | null
           has_unsubscribe_link?: boolean | null
           id?: string
           internal_name?: string
@@ -4106,10 +3901,11 @@ export type Database = {
           preheader?: string | null
           reply_to?: string | null
           scheduled_at?: string | null
+          send_lease_until?: string | null
           sender_email?: string
           sender_name?: string
           sent_at?: string | null
-          send_lease_until?: string | null
+          skip_recent_days?: number | null
           started_at?: string | null
           status?: Database["public"]["Enums"]["email_campaign_status"]
           subject?: string
@@ -4124,6 +3920,7 @@ export type Database = {
           total_sent?: number | null
           total_unsubscribed?: number | null
           unique_clicks?: number
+          unique_coupon?: Json | null
           unique_opens?: number
           updated_at?: string
         }
@@ -4331,6 +4128,72 @@ export type Database = {
           },
         ]
       }
+      email_send_queue: {
+        Row: {
+          attempts: number
+          campaign_id: string
+          claimed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          processed_at: string | null
+          recipient_email: string
+          recipient_name: string | null
+          recipient_phone: string | null
+          sender_email: string | null
+          sender_name: string | null
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          attempts?: number
+          campaign_id: string
+          claimed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          processed_at?: string | null
+          recipient_email: string
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          sender_email?: string | null
+          sender_name?: string | null
+          status?: string
+          tenant_id: string
+        }
+        Update: {
+          attempts?: number
+          campaign_id?: string
+          claimed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          processed_at?: string | null
+          recipient_email?: string
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          sender_email?: string | null
+          sender_name?: string | null
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_send_queue_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "email_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_send_queue_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_suppression_list: {
         Row: {
           campaign_id: string | null
@@ -4440,6 +4303,7 @@ export type Database = {
           campaign_id: string
           created_at: string
           id: string
+          is_test: boolean
           last_clicked_at: string | null
           last_opened_at: string | null
           recipient_email: string
@@ -4451,6 +4315,7 @@ export type Database = {
           campaign_id: string
           created_at?: string
           id?: string
+          is_test?: boolean
           last_clicked_at?: string | null
           last_opened_at?: string | null
           recipient_email: string
@@ -4462,6 +4327,7 @@ export type Database = {
           campaign_id?: string
           created_at?: string
           id?: string
+          is_test?: boolean
           last_clicked_at?: string | null
           last_opened_at?: string | null
           recipient_email?: string
@@ -4555,20 +4421,20 @@ export type Database = {
           expires_at: string
           id: string
           integration_id: string | null
+          issue_status: string
+          li_ativo: boolean | null
           li_coupon_id: number | null
+          li_cumulativo: boolean | null
           li_data_fim: string | null
           li_data_inicio: string | null
-          li_quantidade_usada: number | null
           li_quantidade_por_cliente: number | null
+          li_quantidade_usada: number | null
+          li_quantidade_uso_maximo: number | null
           li_valor_minimo: number | null
-          issue_status: string
+          order_id: string | null
           origin_id: string | null
           origin_ref: string | null
           origin_type: string | null
-          li_ativo: boolean | null
-          li_cumulativo: boolean | null
-          li_quantidade_uso_maximo: number | null
-          order_id: string | null
           source: string | null
           tenant_id: string | null
           used_at: string | null
@@ -4590,20 +4456,20 @@ export type Database = {
           expires_at: string
           id?: string
           integration_id?: string | null
+          issue_status?: string
+          li_ativo?: boolean | null
           li_coupon_id?: number | null
+          li_cumulativo?: boolean | null
           li_data_fim?: string | null
           li_data_inicio?: string | null
-          li_quantidade_usada?: number | null
           li_quantidade_por_cliente?: number | null
+          li_quantidade_usada?: number | null
+          li_quantidade_uso_maximo?: number | null
           li_valor_minimo?: number | null
-          issue_status?: string
+          order_id?: string | null
           origin_id?: string | null
           origin_ref?: string | null
           origin_type?: string | null
-          li_ativo?: boolean | null
-          li_cumulativo?: boolean | null
-          li_quantidade_uso_maximo?: number | null
-          order_id?: string | null
           source?: string | null
           tenant_id?: string | null
           used_at?: string | null
@@ -4625,20 +4491,20 @@ export type Database = {
           expires_at?: string
           id?: string
           integration_id?: string | null
+          issue_status?: string
+          li_ativo?: boolean | null
           li_coupon_id?: number | null
+          li_cumulativo?: boolean | null
           li_data_fim?: string | null
           li_data_inicio?: string | null
-          li_quantidade_usada?: number | null
           li_quantidade_por_cliente?: number | null
+          li_quantidade_usada?: number | null
+          li_quantidade_uso_maximo?: number | null
           li_valor_minimo?: number | null
-          issue_status?: string
+          order_id?: string | null
           origin_id?: string | null
           origin_ref?: string | null
           origin_type?: string | null
-          li_ativo?: boolean | null
-          li_cumulativo?: boolean | null
-          li_quantidade_uso_maximo?: number | null
-          order_id?: string | null
           source?: string | null
           tenant_id?: string | null
           used_at?: string | null
@@ -7630,6 +7496,114 @@ export type Database = {
           },
         ]
       }
+      li_abandonment_campaigns: {
+        Row: {
+          automation_id: number
+          captured_at: string
+          cart_json: Json | null
+          client_id: number | null
+          details_fetched_at: string | null
+          event_at: string | null
+          flow_status: string
+          gone_at: string | null
+          id: string
+          integration_id: string
+          items: Json
+          kind: string
+          last_seen_at: string
+          li_campaign_id: number
+          li_last_sent_at: string | null
+          li_status: string | null
+          native_optout_at: string | null
+          product_ids: number[]
+          recipient_email: string | null
+          recipient_name: string | null
+          recipient_phone: string | null
+          recovered_at: string | null
+          recovered_order_id: string | null
+          recovered_total: number | null
+          recovered_via: string | null
+          rule_id: number | null
+          tenant_id: string
+          value: number
+        }
+        Insert: {
+          automation_id: number
+          captured_at?: string
+          cart_json?: Json | null
+          client_id?: number | null
+          details_fetched_at?: string | null
+          event_at?: string | null
+          flow_status?: string
+          gone_at?: string | null
+          id?: string
+          integration_id: string
+          items?: Json
+          kind: string
+          last_seen_at?: string
+          li_campaign_id: number
+          li_last_sent_at?: string | null
+          li_status?: string | null
+          native_optout_at?: string | null
+          product_ids?: number[]
+          recipient_email?: string | null
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          recovered_at?: string | null
+          recovered_order_id?: string | null
+          recovered_total?: number | null
+          recovered_via?: string | null
+          rule_id?: number | null
+          tenant_id: string
+          value?: number
+        }
+        Update: {
+          automation_id?: number
+          captured_at?: string
+          cart_json?: Json | null
+          client_id?: number | null
+          details_fetched_at?: string | null
+          event_at?: string | null
+          flow_status?: string
+          gone_at?: string | null
+          id?: string
+          integration_id?: string
+          items?: Json
+          kind?: string
+          last_seen_at?: string
+          li_campaign_id?: number
+          li_last_sent_at?: string | null
+          li_status?: string | null
+          native_optout_at?: string | null
+          product_ids?: number[]
+          recipient_email?: string | null
+          recipient_name?: string | null
+          recipient_phone?: string | null
+          recovered_at?: string | null
+          recovered_order_id?: string | null
+          recovered_total?: number | null
+          recovered_via?: string | null
+          rule_id?: number | null
+          tenant_id?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "li_abandonment_campaigns_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "li_abandonment_campaigns_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       li_customers: {
         Row: {
           address_json: Json | null
@@ -7683,6 +7657,365 @@ export type Database = {
           },
           {
             foreignKeyName: "li_customers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      li_group_job_items: {
+        Row: {
+          done_at: string | null
+          email: string | null
+          error: string | null
+          job_id: string
+          li_customer_id: number
+          new_group: string | null
+          previous_group: string | null
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          done_at?: string | null
+          email?: string | null
+          error?: string | null
+          job_id: string
+          li_customer_id: number
+          new_group?: string | null
+          previous_group?: string | null
+          status?: string
+          tenant_id: string
+        }
+        Update: {
+          done_at?: string | null
+          email?: string | null
+          error?: string | null
+          job_id?: string
+          li_customer_id?: number
+          new_group?: string | null
+          previous_group?: string | null
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "li_group_job_items_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "li_group_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "li_group_job_items_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      li_group_jobs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          done: number
+          failed: number
+          finished_at: string | null
+          id: string
+          integration_id: string
+          label: string
+          skipped: number
+          status: string
+          target_group: string | null
+          tenant_id: string
+          total: number
+          undo_of: string | null
+          undone_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          done?: number
+          failed?: number
+          finished_at?: string | null
+          id?: string
+          integration_id: string
+          label: string
+          skipped?: number
+          status?: string
+          target_group?: string | null
+          tenant_id: string
+          total?: number
+          undo_of?: string | null
+          undone_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          done?: number
+          failed?: number
+          finished_at?: string | null
+          id?: string
+          integration_id?: string
+          label?: string
+          skipped?: number
+          status?: string
+          target_group?: string | null
+          tenant_id?: string
+          total?: number
+          undo_of?: string | null
+          undone_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "li_group_jobs_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "li_group_jobs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "li_group_jobs_undo_of_fkey"
+            columns: ["undo_of"]
+            isOneToOne: false
+            referencedRelation: "li_group_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      li_marketing_outbox: {
+        Row: {
+          attempts: number
+          created_at: string
+          done_at: string | null
+          id: string
+          integration_id: string
+          kind: string
+          last_error: string | null
+          next_attempt_at: string
+          payload: Json
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          done_at?: string | null
+          id?: string
+          integration_id: string
+          kind: string
+          last_error?: string | null
+          next_attempt_at?: string
+          payload: Json
+          status?: string
+          tenant_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          done_at?: string | null
+          id?: string
+          integration_id?: string
+          kind?: string
+          last_error?: string | null
+          next_attempt_at?: string
+          payload?: Json
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "li_marketing_outbox_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "li_marketing_outbox_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      li_marketing_settings: {
+        Row: {
+          sync_unsubscribes: boolean
+          tenant_id: string
+          updated_at: string
+          waitlist_alert: boolean
+        }
+        Insert: {
+          sync_unsubscribes?: boolean
+          tenant_id: string
+          updated_at?: string
+          waitlist_alert?: boolean
+        }
+        Update: {
+          sync_unsubscribes?: boolean
+          tenant_id?: string
+          updated_at?: string
+          waitlist_alert?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "li_marketing_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      li_native_toggle_log: {
+        Row: {
+          created_at: string
+          from_state: boolean | null
+          id: string
+          snapshot: Json | null
+          tenant_id: string
+          to_state: boolean
+          toggle_key: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          from_state?: boolean | null
+          id?: string
+          snapshot?: Json | null
+          tenant_id: string
+          to_state: boolean
+          toggle_key: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          from_state?: boolean | null
+          id?: string
+          snapshot?: Json | null
+          tenant_id?: string
+          to_state?: boolean
+          toggle_key?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "li_native_toggle_log_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      li_newsletter_scan_state: {
+        Row: {
+          baseline_done: boolean
+          integration_id: string
+          last_check_at: string | null
+          last_full_scan_at: string | null
+          next_offset: number
+          scan_no: number
+          scanning: boolean
+          tenant_id: string
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          baseline_done?: boolean
+          integration_id: string
+          last_check_at?: string | null
+          last_full_scan_at?: string | null
+          next_offset?: number
+          scan_no?: number
+          scanning?: boolean
+          tenant_id: string
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          baseline_done?: boolean
+          integration_id?: string
+          last_check_at?: string | null
+          last_full_scan_at?: string | null
+          next_offset?: number
+          scan_no?: number
+          scanning?: boolean
+          tenant_id?: string
+          total?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "li_newsletter_scan_state_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: true
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "li_newsletter_scan_state_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      li_newsletter_subscribers: {
+        Row: {
+          email: string
+          first_seen_at: string
+          integration_id: string
+          is_baseline: boolean
+          is_customer: boolean
+          last_scan: number
+          li_id: number
+          removed_at: string | null
+          tenant_id: string
+        }
+        Insert: {
+          email: string
+          first_seen_at?: string
+          integration_id: string
+          is_baseline?: boolean
+          is_customer?: boolean
+          last_scan?: number
+          li_id: number
+          removed_at?: string | null
+          tenant_id: string
+        }
+        Update: {
+          email?: string
+          first_seen_at?: string
+          integration_id?: string
+          is_baseline?: boolean
+          is_customer?: boolean
+          last_scan?: number
+          li_id?: number
+          removed_at?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "li_newsletter_subscribers_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "li_newsletter_subscribers_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -7945,6 +8278,57 @@ export type Database = {
           },
           {
             foreignKeyName: "li_sync_state_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      li_waitlist_snapshots: {
+        Row: {
+          integration_id: string
+          name: string | null
+          parent_id: number | null
+          product_id: number
+          sku: string | null
+          snapshot_date: string
+          stock: number | null
+          subscribers: number
+          tenant_id: string
+        }
+        Insert: {
+          integration_id: string
+          name?: string | null
+          parent_id?: number | null
+          product_id: number
+          sku?: string | null
+          snapshot_date: string
+          stock?: number | null
+          subscribers?: number
+          tenant_id: string
+        }
+        Update: {
+          integration_id?: string
+          name?: string | null
+          parent_id?: number | null
+          product_id?: number
+          sku?: string | null
+          snapshot_date?: string
+          stock?: number | null
+          subscribers?: number
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "li_waitlist_snapshots_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "li_waitlist_snapshots_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -10692,7 +11076,15 @@ export type Database = {
           snapshot_id: string | null
           tenant_id: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "customer_rfm_snapshots_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {
@@ -10714,14 +11106,72 @@ export type Database = {
         }
         Returns: boolean
       }
+      archive_orphan_flow_campaigns: { Args: never; Returns: number }
+      bump_flow_campaign: {
+        Args: { p_campaign_id: string; p_ok: boolean }
+        Returns: undefined
+      }
       caller_has_tenant: { Args: { _tenant_id: string }; Returns: boolean }
       caller_is_trusted: { Args: never; Returns: boolean }
       caller_is_user: { Args: { _user_id: string }; Returns: boolean }
+      claim_domain_events: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          created_at: string
+          event_type: string
+          id: string
+          last_error: string | null
+          locked_until: string | null
+          payload: Json
+          processed_at: string | null
+          ref_id: string
+          tenant_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "domain_events"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_email_send_batch: {
+        Args: { p_campaign_id: string; p_limit?: number }
+        Returns: {
+          attempts: number
+          campaign_id: string
+          claimed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          processed_at: string | null
+          recipient_email: string
+          recipient_name: string | null
+          recipient_phone: string | null
+          sender_email: string | null
+          sender_name: string | null
+          status: string
+          tenant_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "email_send_queue"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      cleanup_customer_touches: { Args: never; Returns: number }
+      cleanup_domain_events: { Args: never; Returns: number }
       cleanup_old_logs: { Args: never; Returns: undefined }
       cleanup_operational_logs: { Args: never; Returns: undefined }
+      cleanup_pending_coupons: { Args: never; Returns: number }
       clear_message_buffer: {
         Args: { _conversation_id: string }
         Returns: string[]
+      }
+      customer_key: {
+        Args: { p_email: string; p_phone?: string }
+        Returns: string
       }
       decrypt_secret: { Args: { _ciphertext: string }; Returns: string }
       deduct_tokens: {
@@ -10739,12 +11189,45 @@ export type Database = {
         Args: { p_integration_id: string; p_tenant_id: string }
         Returns: undefined
       }
+      email_send_watchdog: { Args: never; Returns: number }
       encrypt_secret: { Args: { _plaintext: string }; Returns: string }
       estimate_email_audience: {
         Args: { _audience_reference?: Json; _audience_type: string }
         Returns: Json
       }
       functions_base_url: { Args: never; Returns: string }
+      get_ab_winner_candidates: {
+        Args: never
+        Returns: {
+          a_clicks: number
+          a_id: string
+          a_opens: number
+          a_sent: number
+          a_subject: string
+          b_clicks: number
+          b_id: string
+          b_opens: number
+          b_sent: number
+          b_subject: string
+          tenant_id: string
+          w_id: string
+        }[]
+      }
+      get_abandonment_funnel: {
+        Args: { p_days?: number; p_tenant_id: string }
+        Returns: {
+          captured: number
+          clicked: number
+          contacted: number
+          kind: string
+          opened: number
+          recovered_other: number
+          recovered_ours: number
+          revenue_ours: number
+          whatsapp_sent: number
+          with_contact: number
+        }[]
+      }
       get_best_send_days: {
         Args: { p_tenant_id: string }
         Returns: {
@@ -10757,6 +11240,29 @@ export type Database = {
         Returns: {
           hour_of_day: number
           open_count: number
+        }[]
+      }
+      get_contact_blockers: {
+        Args: {
+          p_emails: string[]
+          p_phones: string[]
+          p_purpose: string
+          p_tenant_id: string
+        }
+        Returns: {
+          contact_key: string
+          reason: string
+        }[]
+      }
+      get_coupon_performance: {
+        Args: { p_days?: number; p_tenant_id: string }
+        Returns: {
+          avg_ticket: number
+          discount_cost: number
+          issued: number
+          origin_type: string
+          redeemed: number
+          revenue: number
         }[]
       }
       get_cron_job_status: {
@@ -10779,28 +11285,16 @@ export type Database = {
           status: string
         }[]
       }
+      get_customer_communication: {
+        Args: {
+          p_email: string
+          p_limit?: number
+          p_phone?: string
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
       get_dashboard_stats: { Args: { _tenant_id: string }; Returns: Json }
-      get_internal_headers: { Args: never; Returns: Json }
-      get_me_cron_job_status: {
-        Args: never
-        Returns: {
-          active: boolean
-          jobid: number
-          jobname: string
-          schedule: string
-        }[]
-      }
-      get_me_cron_last_run: {
-        Args: never
-        Returns: {
-          end_time: string
-          job_pid: number
-          return_message: string
-          runid: number
-          start_time: string
-          status: string
-        }[]
-      }
       get_email_campaign_conversions: {
         Args: { p_campaign_id: string; p_tenant_id: string }
         Returns: {
@@ -10813,116 +11307,6 @@ export type Database = {
           ordered_at: string
           platform: string
           touch_at: string
-        }[]
-      }
-      get_abandonment_funnel: {
-        Args: { p_days?: number; p_tenant_id: string }
-        Returns: {
-          captured: number
-          clicked: number
-          contacted: number
-          kind: string
-          opened: number
-          recovered_other: number
-          recovered_ours: number
-          revenue_ours: number
-          whatsapp_sent: number
-          with_contact: number
-        }[]
-      }
-      get_waitlist_panel: {
-        Args: { p_limit?: number; p_tenant_id: string }
-        Returns: {
-          current_stock: number | null
-          delta_7d: number
-          image_url: string | null
-          name: string | null
-          parent_id: number | null
-          product_id: number
-          restocked: boolean
-          sku: string | null
-          snapshot_date: string
-          snapshot_stock: number | null
-          subscribers: number
-        }[]
-      }
-      get_rfm_audience_li_customers: {
-        Args: { p_audience_id: string; p_tenant_id: string }
-        Returns: {
-          current_group: string | null
-          email: string | null
-          li_customer_id: number
-        }[]
-      }
-      get_coupon_performance: {
-        Args: { p_days?: number; p_tenant_id: string }
-        Returns: {
-          avg_ticket: number
-          discount_cost: number
-          issued: number
-          origin_type: string
-          redeemed: number
-          revenue: number
-        }[]
-      }
-      refresh_coupon_usage: {
-        Args: { p_tenant_id: string }
-        Returns: number
-      }
-      get_customer_communication: {
-        Args: { p_email: string; p_limit?: number; p_phone?: string; p_tenant_id: string }
-        Returns: Json
-      }
-      get_message_performance: {
-        Args: { p_days?: number; p_tenant_id: string }
-        Returns: {
-          coupons_issued: number
-          coupons_redeemed: number
-          email_touches: number
-          people: number
-          purpose: string
-          revenue: number
-          touches: number
-          whatsapp_touches: number
-        }[]
-      }
-      get_touch_summary: {
-        Args: { p_days?: number; p_tenant_id: string }
-        Returns: {
-          channel: string
-          people: number
-          purpose: string
-          touches: number
-        }[]
-      }
-      get_email_health: {
-        Args: { p_days?: number; p_tenant_id: string }
-        Returns: {
-          bounced: number
-          campaigns: number
-          complaints: number
-          failed: number
-          last_send_at: string
-          sent: number
-          stuck_campaigns: number
-          unsubscribed: number
-        }[]
-      }
-      get_ab_winner_candidates: {
-        Args: Record<PropertyKey, never>
-        Returns: {
-          a_clicks: number
-          a_id: string
-          a_opens: number
-          a_sent: number
-          a_subject: string
-          b_clicks: number
-          b_id: string
-          b_opens: number
-          b_sent: number
-          b_subject: string
-          tenant_id: string
-          w_id: string
         }[]
       }
       get_email_campaign_performance: {
@@ -10985,12 +11369,22 @@ export type Database = {
           unique_clickers: number
         }[]
       }
-      refresh_email_campaign_attribution: {
-        Args: { p_tenant_id: string }
-        Returns: number
+      get_email_health: {
+        Args: { p_days?: number; p_tenant_id: string }
+        Returns: {
+          bounced: number
+          campaigns: number
+          complaints: number
+          failed: number
+          last_send_at: string
+          sent: number
+          stuck_campaigns: number
+          unsubscribed: number
+        }[]
       }
+      get_internal_headers: { Args: never; Returns: Json }
       get_li_parent_products: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           id: string
           image_large: string
@@ -11019,6 +11413,50 @@ export type Database = {
           url: string
         }[]
       }
+      get_me_cron_job_status: {
+        Args: never
+        Returns: {
+          active: boolean
+          jobid: number
+          jobname: string
+          schedule: string
+        }[]
+      }
+      get_me_cron_last_run: {
+        Args: never
+        Returns: {
+          end_time: string
+          job_pid: number
+          return_message: string
+          runid: number
+          start_time: string
+          status: string
+        }[]
+      }
+      get_message_performance: {
+        Args: { p_days?: number; p_tenant_id: string }
+        Returns: {
+          coupons_issued: number
+          coupons_redeemed: number
+          email_touches: number
+          people: number
+          purpose: string
+          revenue: number
+          touches: number
+          whatsapp_touches: number
+        }[]
+      }
+      get_recent_email_recipients: {
+        Args: {
+          p_days: number
+          p_emails: string[]
+          p_exclude_campaign?: string
+          p_tenant_id: string
+        }
+        Returns: {
+          email: string
+        }[]
+      }
       get_revenue_attribution: {
         Args: { p_lookback_days?: number; p_tenant_id: string }
         Returns: {
@@ -11031,9 +11469,26 @@ export type Database = {
           sent_count: number
         }[]
       }
+      get_rfm_audience_li_customers: {
+        Args: { p_audience_id: string; p_tenant_id: string }
+        Returns: {
+          current_group: string
+          email: string
+          li_customer_id: number
+        }[]
+      }
       get_tenant_token_balance: {
         Args: { _tenant_id: string }
         Returns: number
+      }
+      get_touch_summary: {
+        Args: { p_days?: number; p_tenant_id: string }
+        Returns: {
+          channel: string
+          people: number
+          purpose: string
+          touches: number
+        }[]
       }
       get_user_tenant_id: { Args: { _user_id: string }; Returns: string }
       get_user_tenants: {
@@ -11042,6 +11497,22 @@ export type Database = {
           role: string
           tenant_id: string
           tenant_name: string
+        }[]
+      }
+      get_waitlist_panel: {
+        Args: { p_limit?: number; p_tenant_id: string }
+        Returns: {
+          current_stock: number
+          delta_7d: number
+          image_url: string
+          name: string
+          parent_id: number
+          product_id: number
+          restocked: boolean
+          sku: string
+          snapshot_date: string
+          snapshot_stock: number
+          subscribers: number
         }[]
       }
       has_enough_tokens: {
@@ -11092,6 +11563,16 @@ export type Database = {
       map_evolution_status: { Args: { status: string }; Returns: string }
       mask_secret: { Args: { _plaintext: string }; Returns: string }
       process_churn_campaigns: { Args: never; Returns: undefined }
+      refresh_abandonment_recovery: { Args: never; Returns: number }
+      refresh_coupon_usage: { Args: { p_tenant_id: string }; Returns: number }
+      refresh_email_campaign_attribution: {
+        Args: { p_tenant_id: string }
+        Returns: number
+      }
+      refresh_newsletter_customers: {
+        Args: { p_integration_id: string }
+        Returns: number
+      }
       release_bot_lock: {
         Args: { _conversation_id: string }
         Returns: undefined
@@ -11130,6 +11611,10 @@ export type Database = {
         Args: { p_config_id: string; p_steps: Json; p_tenant_id: string }
         Returns: undefined
       }
+      requeue_stuck_email_sends: {
+        Args: { p_older_than?: string }
+        Returns: number
+      }
       rollup_instagram_metrics: { Args: { p_date?: string }; Returns: Json }
       schedule_bulk_campaigns: { Args: never; Returns: Json }
       schedule_email_campaigns: { Args: never; Returns: Json }
@@ -11147,6 +11632,8 @@ export type Database = {
         Args: { _campaign_id: string; _lock_seconds?: number }
         Returns: boolean
       }
+      try_numeric: { Args: { p_text: string }; Returns: number }
+      utm_slug: { Args: { p_name: string }; Returns: string }
     }
     Enums: {
       email_campaign_status:
@@ -11343,9 +11830,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       email_campaign_status: [

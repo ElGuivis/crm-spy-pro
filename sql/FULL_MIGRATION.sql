@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict GcOQKafRM8Pzon1OrW0Ler1WKvBidZxLt6C6EsRgJS4clq4hYc7AsSDvoU1yjXw
+\restrict qk6dsfU3KnfZbY59yHzsnbN1OWJtZLtemR85Q5ulmUp7lPQhmS7lTE8Ur4WmxM6
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -237,6 +237,28 @@ $$;
 
 
 --
+-- Name: archive_orphan_flow_campaigns(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.archive_orphan_flow_campaigns() RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE n integer;
+BEGIN
+  UPDATE public.email_campaigns c SET is_archived = true
+  WHERE c.flow_kind IS NOT NULL AND NOT c.is_archived AND COALESCE(c.total_sent, 0) = 0 AND c.created_at < now() - interval '1 day'
+    AND NOT EXISTS (
+      SELECT 1 FROM public.abandonment_flows f, jsonb_array_elements(f.steps) s
+      WHERE f.tenant_id = c.tenant_id AND s->'email'->>'campaign_id' = c.id::text
+    );
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+END;
+$$;
+
+
+--
 -- Name: block_new_signups(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -250,6 +272,25 @@ BEGIN
   END IF;
   RAISE EXCEPTION 'Cadastro desativado' USING ERRCODE = 'P0001';
 END;
+$$;
+
+
+--
+-- Name: bump_flow_campaign(uuid, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.bump_flow_campaign(p_campaign_id uuid, p_ok boolean) RETURNS void
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  UPDATE public.email_campaigns
+  SET total_sent = COALESCE(total_sent, 0) + CASE WHEN p_ok THEN 1 ELSE 0 END,
+      total_delivered = COALESCE(total_delivered, 0) + CASE WHEN p_ok THEN 1 ELSE 0 END,
+      total_recipients = COALESCE(total_recipients, 0) + 1,
+      status = 'sent',
+      sent_at = COALESCE(sent_at, now()),
+      completed_at = now()
+  WHERE id = p_campaign_id AND flow_kind IS NOT NULL;
 $$;
 
 
@@ -296,6 +337,133 @@ CREATE FUNCTION public.caller_is_user(_user_id uuid) RETURNS boolean
 $$;
 
 
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: domain_events; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.domain_events (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    event_type text NOT NULL,
+    ref_id uuid NOT NULL,
+    payload jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    processed_at timestamp with time zone,
+    attempts integer DEFAULT 0 NOT NULL,
+    locked_until timestamp with time zone,
+    last_error text
+);
+
+
+--
+-- Name: claim_domain_events(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.claim_domain_events(p_limit integer DEFAULT 50) RETURNS SETOF public.domain_events
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  RETURN QUERY
+  WITH picked AS (
+    SELECT e.id FROM public.domain_events e
+    WHERE e.processed_at IS NULL AND (e.locked_until IS NULL OR e.locked_until < now())
+    ORDER BY e.created_at LIMIT p_limit FOR UPDATE SKIP LOCKED
+  )
+  UPDATE public.domain_events d SET locked_until = now() + interval '2 minutes', attempts = d.attempts + 1
+  FROM picked WHERE d.id = picked.id
+  RETURNING d.*;
+END;
+$$;
+
+
+--
+-- Name: email_send_queue; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.email_send_queue (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    campaign_id uuid NOT NULL,
+    recipient_email text NOT NULL,
+    recipient_name text,
+    recipient_phone text,
+    sender_email text,
+    sender_name text,
+    status text DEFAULT 'pending'::text NOT NULL,
+    attempts integer DEFAULT 0 NOT NULL,
+    error_message text,
+    claimed_at timestamp with time zone,
+    processed_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT email_send_queue_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'sending'::text, 'sent'::text, 'failed'::text])))
+);
+
+
+--
+-- Name: claim_email_send_batch(uuid, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.claim_email_send_batch(p_campaign_id uuid, p_limit integer DEFAULT 40) RETURNS SETOF public.email_send_queue
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  IF NOT public.caller_is_trusted() THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
+  END IF;
+  RETURN QUERY
+  UPDATE public.email_send_queue q
+     SET status = 'sending', claimed_at = now(), attempts = q.attempts + 1
+   WHERE q.id IN (
+     SELECT id FROM public.email_send_queue
+      WHERE campaign_id = p_campaign_id AND status = 'pending'
+      ORDER BY id
+      LIMIT GREATEST(p_limit, 1)
+      FOR UPDATE SKIP LOCKED)
+  RETURNING q.*;
+END;
+$$;
+
+
+--
+-- Name: cleanup_customer_touches(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.cleanup_customer_touches() RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE n integer;
+BEGIN
+  DELETE FROM public.customer_touches WHERE sent_at < now() - interval '90 days';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+END;
+$$;
+
+
+--
+-- Name: cleanup_domain_events(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.cleanup_domain_events() RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE n integer;
+BEGIN
+  DELETE FROM public.domain_events WHERE processed_at IS NOT NULL AND processed_at < now() - interval '30 days';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+END;
+$$;
+
+
 --
 -- Name: cleanup_old_logs(); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -335,6 +503,24 @@ $$;
 
 
 --
+-- Name: cleanup_pending_coupons(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.cleanup_pending_coupons() RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE n integer;
+BEGIN
+  UPDATE public.generated_coupons SET issue_status = 'issued' WHERE issue_status = 'pending' AND li_coupon_id IS NOT NULL;
+  DELETE FROM public.generated_coupons WHERE issue_status = 'pending' AND li_coupon_id IS NULL AND created_at < now() - interval '15 minutes';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+END;
+$$;
+
+
+--
 -- Name: clear_message_buffer(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -355,6 +541,23 @@ BEGIN
   
   RETURN _buffered_ids;
 END;
+$$;
+
+
+--
+-- Name: customer_key(text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.customer_key(p_email text, p_phone text DEFAULT NULL::text) RETURNS text
+    LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    AS $$
+  SELECT CASE
+    WHEN p_email IS NOT NULL AND position('@' IN p_email) > 1 THEN lower(btrim(p_email))
+    ELSE (
+      SELECT CASE WHEN length(d) BETWEEN 10 AND 11 THEN '55' || d WHEN length(d) BETWEEN 12 AND 13 THEN d ELSE NULL END
+      FROM (SELECT regexp_replace(regexp_replace(COALESCE(p_phone, ''), '\D', '', 'g'), '^0', '') AS d) x
+    )
+  END
 $$;
 
 
@@ -704,6 +907,62 @@ $$;
 
 
 --
+-- Name: email_send_watchdog(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.email_send_watchdog() RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  r record;
+  v_count integer := 0;
+BEGIN
+  IF NOT public.caller_is_trusted() THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
+  END IF;
+  PERFORM public.requeue_stuck_email_sends();
+  FOR r IN
+    SELECT c.id FROM public.email_campaigns c
+     WHERE c.status = 'sending'
+       AND (c.send_lease_until IS NULL OR c.send_lease_until < now())
+       AND EXISTS (SELECT 1 FROM public.email_send_queue q WHERE q.campaign_id = c.id AND q.status = 'pending')
+  LOOP
+    PERFORM net.http_post(
+      url := public.functions_base_url() || '/functions/v1/email-campaign-send',
+      headers := public.get_internal_headers(),
+      body := jsonb_build_object('campaign_id', r.id, 'action', 'resume'),
+      timeout_milliseconds := 10000
+    );
+    v_count := v_count + 1;
+  END LOOP;
+  RETURN v_count;
+END;
+$$;
+
+
+--
+-- Name: emit_order_ingested(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.emit_order_ingested() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  IF NEW.tenant_id IS NULL THEN RETURN NEW; END IF;
+  IF TG_OP = 'UPDATE' AND NEW.status_name IS NOT DISTINCT FROM OLD.status_name THEN RETURN NEW; END IF;
+  INSERT INTO public.domain_events (tenant_id, event_type, ref_id, payload)
+  VALUES (NEW.tenant_id, 'order_ingested', NEW.id, jsonb_build_object(
+    'order_number', NEW.order_number, 'status_name', NEW.status_name,
+    'prev_status_name', CASE WHEN TG_OP = 'UPDATE' THEN OLD.status_name ELSE NULL END,
+    'is_new', TG_OP = 'INSERT', 'integration_id', NEW.integration_id));
+  RETURN NEW;
+END;
+$$;
+
+
+--
 -- Name: encrypt_ai_credentials(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -855,6 +1114,25 @@ $$;
 
 
 --
+-- Name: enqueue_li_unsubscribe(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.enqueue_li_unsubscribe() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  IF COALESCE(NEW.source, '') = 'li_newsletter' THEN RETURN NEW; END IF;
+  IF NOT COALESCE((SELECT s.sync_unsubscribes FROM public.li_marketing_settings s WHERE s.tenant_id = NEW.tenant_id), true) THEN RETURN NEW; END IF;
+  INSERT INTO public.li_marketing_outbox (tenant_id, integration_id, kind, payload)
+  SELECT NEW.tenant_id, i.id, 'unsubscribe', jsonb_build_object('email', NEW.email, 'reason', NEW.reason)
+  FROM public.integrations i WHERE i.tenant_id = NEW.tenant_id AND i.type = 'loja_integrada' AND i.status = 'connected';
+  RETURN NEW;
+END;
+$$;
+
+
+--
 -- Name: estimate_email_audience(text, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -877,6 +1155,7 @@ DECLARE
   _updated_from timestamptz;
   _updated_to timestamptz;
   _emails text[];
+  _days int;
   _total int := 0;
   _suppressed int := 0;
 BEGIN
@@ -896,6 +1175,20 @@ BEGIN
     IF _filters IS NULL THEN
       RAISE EXCEPTION 'segment not found';
     END IF;
+  END IF;
+
+  IF _audience_type = 'newsletter' THEN
+    _days := LEAST(GREATEST(COALESCE(NULLIF(_ref->>'days', '')::int, 30), 1), 365);
+    WITH candidates AS (
+      SELECT DISTINCT n.email FROM public.li_newsletter_subscribers n
+      WHERE n.tenant_id = _tenant_id AND NOT n.is_baseline AND n.removed_at IS NULL AND n.first_seen_at >= now() - make_interval(days => _days)
+    ), suppressed AS (
+      SELECT count(*)::int AS cnt FROM candidates c
+      JOIN public.email_suppression_list s ON s.tenant_id = _tenant_id AND lower(s.email) = c.email
+        AND s.reason IN ('unsubscribed','bounced','complained','invalid','blocked')
+    )
+    SELECT (SELECT count(*)::int FROM candidates), (SELECT cnt FROM suppressed) INTO _total, _suppressed;
+    RETURN jsonb_build_object('total_with_email', _total, 'suppressed', _suppressed, 'eligible', GREATEST(_total - _suppressed, 0));
   END IF;
 
   IF _audience_type = 'rfm' THEN
@@ -991,6 +1284,64 @@ $$;
 
 
 --
+-- Name: get_ab_winner_candidates(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_ab_winner_candidates() RETURNS TABLE(w_id uuid, tenant_id uuid, a_id uuid, a_subject text, a_sent integer, a_opens integer, a_clicks integer, b_id uuid, b_subject text, b_sent integer, b_opens integer, b_clicks integer)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  SELECT w.id, w.tenant_id,
+         a.id, a.subject, COALESCE(a.total_sent, 0),
+         (SELECT count(DISTINCT lower(btrim(e.recipient_email)))::int FROM public.email_events e WHERE e.campaign_id = a.id AND e.event_type = 'open'),
+         (SELECT count(DISTINCT lower(btrim(e.recipient_email)))::int FROM public.email_events e WHERE e.campaign_id = a.id AND e.event_type = 'click'),
+         b.id, b.subject, COALESCE(b.total_sent, 0),
+         (SELECT count(DISTINCT lower(btrim(e.recipient_email)))::int FROM public.email_events e WHERE e.campaign_id = b.id AND e.event_type = 'open'),
+         (SELECT count(DISTINCT lower(btrim(e.recipient_email)))::int FROM public.email_events e WHERE e.campaign_id = b.id AND e.event_type = 'click')
+  FROM public.email_campaigns w
+  JOIN public.email_campaigns a ON a.ab_test_id = w.ab_test_id AND a.ab_variant = 'A' AND a.status::text = 'sent'
+  JOIN public.email_campaigns b ON b.ab_test_id = w.ab_test_id AND b.ab_variant = 'B' AND b.status::text = 'sent'
+  WHERE w.ab_variant = 'W' AND w.ab_auto_winner AND w.status::text = 'draft' AND w.ab_winner_decided_at IS NULL
+    AND GREATEST(COALESCE(a.sent_at, a.completed_at), COALESCE(b.sent_at, b.completed_at))
+        + make_interval(hours => COALESCE(w.ab_winner_hours, 4)) <= now();
+$$;
+
+
+--
+-- Name: get_abandonment_funnel(uuid, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_abandonment_funnel(p_tenant_id uuid, p_days integer DEFAULT 30) RETURNS TABLE(kind text, captured integer, with_contact integer, contacted integer, opened integer, clicked integer, recovered_ours integer, recovered_other integer, revenue_ours numeric, whatsapp_sent integer)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  IF NOT public.caller_has_tenant(p_tenant_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
+  END IF;
+  RETURN QUERY
+  SELECT k.kind,
+    (SELECT count(*)::int FROM public.li_abandonment_campaigns a WHERE a.tenant_id = p_tenant_id AND a.kind = k.kind AND a.event_at >= now() - make_interval(days => p_days)),
+    (SELECT count(*)::int FROM public.li_abandonment_campaigns a WHERE a.tenant_id = p_tenant_id AND a.kind = k.kind AND a.event_at >= now() - make_interval(days => p_days) AND (a.recipient_email IS NOT NULL OR a.recipient_phone IS NOT NULL)),
+    (SELECT count(DISTINCT s.abandonment_id)::int FROM public.abandonment_flow_sends s WHERE s.tenant_id = p_tenant_id AND s.kind = k.kind AND s.status = 'sent' AND s.sent_at >= now() - make_interval(days => p_days)),
+    (SELECT count(DISTINCT s.abandonment_id)::int FROM public.abandonment_flow_sends s
+       JOIN public.li_abandonment_campaigns a ON a.id = s.abandonment_id
+       JOIN public.email_events e ON e.campaign_id = s.flow_campaign_id AND e.event_type = 'open' AND lower(btrim(e.recipient_email)) = lower(btrim(a.recipient_email))
+      WHERE s.tenant_id = p_tenant_id AND s.kind = k.kind AND s.channel = 'email' AND s.status = 'sent' AND s.sent_at >= now() - make_interval(days => p_days)),
+    (SELECT count(DISTINCT s.abandonment_id)::int FROM public.abandonment_flow_sends s
+       JOIN public.li_abandonment_campaigns a ON a.id = s.abandonment_id
+       JOIN public.email_events e ON e.campaign_id = s.flow_campaign_id AND e.event_type = 'click' AND lower(btrim(e.recipient_email)) = lower(btrim(a.recipient_email))
+      WHERE s.tenant_id = p_tenant_id AND s.kind = k.kind AND s.channel = 'email' AND s.status = 'sent' AND s.sent_at >= now() - make_interval(days => p_days)),
+    (SELECT count(*)::int FROM public.li_abandonment_campaigns a WHERE a.tenant_id = p_tenant_id AND a.kind = k.kind AND a.recovered_via = 'ours' AND a.event_at >= now() - make_interval(days => p_days)),
+    (SELECT count(*)::int FROM public.li_abandonment_campaigns a WHERE a.tenant_id = p_tenant_id AND a.kind = k.kind AND a.recovered_via = 'other' AND a.event_at >= now() - make_interval(days => p_days)),
+    (SELECT COALESCE(sum(a.recovered_total), 0) FROM public.li_abandonment_campaigns a WHERE a.tenant_id = p_tenant_id AND a.kind = k.kind AND a.recovered_via = 'ours' AND a.event_at >= now() - make_interval(days => p_days)),
+    (SELECT count(*)::int FROM public.abandonment_flow_sends s WHERE s.tenant_id = p_tenant_id AND s.kind = k.kind AND s.channel = 'whatsapp' AND s.status = 'sent' AND s.sent_at >= now() - make_interval(days => p_days))
+  FROM (VALUES ('cart'), ('browse'), ('order'), ('welcome')) AS k(kind);
+END;
+$$;
+
+
+--
 -- Name: get_best_send_days(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1031,6 +1382,74 @@ $$;
 
 
 --
+-- Name: get_contact_blockers(uuid, text[], text[], text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_contact_blockers(p_tenant_id uuid, p_emails text[], p_phones text[], p_purpose text) RETURNS TABLE(contact_key text, reason text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  v_enabled boolean := true; v_cap integer := 3; v_gap integer := 24;
+  v_exempt boolean := p_purpose IN ('cashback', 'birthday', 'cashback_reminder');
+  v_broadcast boolean := p_purpose IN ('campaign', 'bulk');
+  v_emails text[] := COALESCE(p_emails, ARRAY[]::text[]);
+  v_phones text[] := COALESCE(p_phones, ARRAY[]::text[]);
+BEGIN
+  IF NOT public.caller_has_tenant(p_tenant_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
+  END IF;
+  SELECT cp.enabled, cp.daily_cap, cp.broadcast_gap_hours INTO v_enabled, v_cap, v_gap FROM public.contact_policies cp WHERE cp.tenant_id = p_tenant_id;
+  v_enabled := COALESCE(v_enabled, true); v_cap := COALESCE(v_cap, 3); v_gap := COALESCE(v_gap, 24);
+
+  RETURN QUERY
+  SELECT e, 'suppressed'::text FROM unnest(v_emails) e
+    WHERE EXISTS (SELECT 1 FROM public.email_suppression_list s WHERE s.tenant_id = p_tenant_id AND lower(s.email) = e AND s.reason IN ('unsubscribed', 'bounced', 'complained', 'invalid', 'blocked'))
+  UNION ALL
+  SELECT ph, 'blocked'::text FROM unnest(v_phones) ph
+    WHERE EXISTS (SELECT 1 FROM public.contact_blocks b WHERE b.tenant_id = p_tenant_id AND regexp_replace(b.phone_e164, '\D', '', 'g') = ph)
+  UNION ALL
+  SELECT k, 'daily_cap'::text FROM unnest(v_emails || v_phones) k
+    WHERE v_enabled AND NOT v_exempt
+      AND (SELECT count(*) FROM public.customer_touches t WHERE t.tenant_id = p_tenant_id AND t.sent_at >= now() - interval '24 hours' AND (t.email = k OR t.phone = k)) >= v_cap
+  UNION ALL
+  SELECT k, 'priority_gap'::text FROM unnest(v_emails || v_phones) k
+    WHERE v_enabled AND v_broadcast AND v_gap > 0
+      AND EXISTS (SELECT 1 FROM public.customer_touches t WHERE t.tenant_id = p_tenant_id AND t.sent_at >= now() - make_interval(hours => v_gap)
+                    AND t.purpose NOT IN ('campaign', 'bulk') AND (t.email = k OR t.phone = k));
+END;
+$$;
+
+
+--
+-- Name: get_coupon_performance(uuid, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_coupon_performance(p_tenant_id uuid, p_days integer DEFAULT 90) RETURNS TABLE(origin_type text, issued integer, redeemed integer, revenue numeric, avg_ticket numeric, discount_cost numeric)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  IF NOT public.caller_has_tenant(p_tenant_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
+  END IF;
+  RETURN QUERY
+  SELECT COALESCE(g.origin_type, 'imported'),
+         count(*)::int,
+         count(g.used_at)::int,
+         COALESCE(sum(g.used_order_value) FILTER (WHERE g.used_at IS NOT NULL), 0),
+         COALESCE(avg(g.used_order_value) FILTER (WHERE g.used_at IS NOT NULL), 0),
+         COALESCE(sum(COALESCE(g.coupon_value, g.used_order_value * g.discount_percentage / 100)) FILTER (WHERE g.used_at IS NOT NULL), 0)
+  FROM public.generated_coupons g
+  WHERE g.tenant_id = p_tenant_id AND g.issue_status = 'issued'
+    AND (p_days <= 0 OR COALESCE(g.li_data_inicio, g.created_at) >= now() - make_interval(days => p_days))
+  GROUP BY 1
+  ORDER BY 3 DESC, 2 DESC;
+END;
+$$;
+
+
+--
 -- Name: get_cron_job_status(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1059,6 +1478,53 @@ CREATE FUNCTION public.get_cron_last_run() RETURNS TABLE(runid bigint, job_pid i
   WHERE j.jobname = 'invoke-li-reconciliation-processor-every-3-min'
   ORDER BY jrd.start_time DESC
   LIMIT 1;
+$$;
+
+
+--
+-- Name: get_customer_communication(uuid, text, text, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_customer_communication(p_tenant_id uuid, p_email text, p_phone text DEFAULT NULL::text, p_limit integer DEFAULT 30) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  v_email text := lower(btrim(COALESCE(p_email, '')));
+  v_key_email text := CASE WHEN position('@' IN v_email) > 1 THEN v_email END;
+  v_key_phone text := public.customer_key(NULL, p_phone);
+  v_limit integer := LEAST(GREATEST(COALESCE(p_limit, 30), 1), 100);
+  v_out jsonb;
+BEGIN
+  IF NOT public.caller_has_tenant(p_tenant_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
+  END IF;
+  SELECT jsonb_build_object(
+    'suppression', (SELECT to_jsonb(x) FROM (
+        SELECT s.reason, s.source, s.created_at FROM public.email_suppression_list s
+        WHERE s.tenant_id = p_tenant_id AND lower(s.email) = v_key_email ORDER BY s.created_at DESC LIMIT 1) x),
+    'phone_blocked', EXISTS (SELECT 1 FROM public.contact_blocks b WHERE b.tenant_id = p_tenant_id AND v_key_phone IS NOT NULL AND regexp_replace(b.phone_e164, '\D', '', 'g') = v_key_phone),
+    'newsletter', (SELECT to_jsonb(x) FROM (
+        SELECT n.is_baseline, n.first_seen_at, n.removed_at IS NOT NULL AS removed FROM public.li_newsletter_subscribers n
+        WHERE n.tenant_id = p_tenant_id AND lower(n.email) = v_key_email ORDER BY n.first_seen_at DESC LIMIT 1) x),
+    'touches', COALESCE((SELECT jsonb_agg(to_jsonb(x)) FROM (
+        SELECT t.purpose, t.channel, t.module_ref, t.sent_at FROM public.customer_touches t
+        WHERE t.tenant_id = p_tenant_id AND ((v_key_email IS NOT NULL AND t.email = v_key_email) OR (v_key_phone IS NOT NULL AND t.phone = v_key_phone))
+        ORDER BY t.sent_at DESC LIMIT v_limit) x), '[]'::jsonb),
+    'campaigns', COALESCE((SELECT jsonb_agg(to_jsonb(x)) FROM (
+        SELECT c.internal_name AS campaign_name, c.subject, c.flow_kind, l.status, l.sent_at FROM public.email_campaign_logs l
+        JOIN public.email_campaigns c ON c.id = l.campaign_id
+        WHERE l.tenant_id = p_tenant_id AND v_key_email IS NOT NULL AND lower(l.recipient_email) = v_key_email AND COALESCE(l.is_test, false) = false
+        ORDER BY l.sent_at DESC NULLS LAST LIMIT v_limit) x), '[]'::jsonb),
+    'coupons', COALESCE((SELECT jsonb_agg(to_jsonb(x)) FROM (
+        SELECT g.coupon_code, g.origin_type, g.created_at, g.expires_at, g.used_at, g.used_order_value
+        FROM public.generated_coupons g
+        WHERE g.tenant_id = p_tenant_id AND g.issue_status IS DISTINCT FROM 'pending'
+          AND ((v_key_email IS NOT NULL AND lower(g.customer_email) = v_key_email) OR (v_key_phone IS NOT NULL AND public.customer_key(NULL, g.customer_phone) = v_key_phone))
+        ORDER BY g.created_at DESC LIMIT v_limit) x), '[]'::jsonb)
+  ) INTO v_out;
+  RETURN v_out;
+END;
 $$;
 
 
@@ -1295,6 +1761,193 @@ $$;
 
 
 --
+-- Name: get_email_campaign_conversions(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_email_campaign_conversions(p_tenant_id uuid, p_campaign_id uuid) RETURNS TABLE(platform text, order_id uuid, order_number text, customer_email text, order_total numeric, ordered_at timestamp with time zone, attribution_type text, touch_at timestamp with time zone, coupon_code text)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  SELECT v.platform, v.order_id, v.order_number, v.customer_email, v.order_total,
+         v.ordered_at, v.attribution_type, v.touch_at, v.coupon_code
+  FROM public.email_campaign_conversions v
+  WHERE public.caller_has_tenant(p_tenant_id)
+    AND v.tenant_id = p_tenant_id AND v.campaign_id = p_campaign_id
+  ORDER BY v.ordered_at DESC
+  LIMIT 200;
+$$;
+
+
+--
+-- Name: get_email_campaign_performance(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_email_campaign_performance(p_tenant_id uuid, p_campaign_id uuid DEFAULT NULL::uuid) RETURNS TABLE(campaign_id uuid, internal_name text, subject text, status text, sent_at timestamp with time zone, total_sent integer, total_delivered integer, unique_opens integer, unique_clicks integer, orders bigint, revenue numeric, orders_coupon bigint, revenue_coupon numeric, orders_click bigint, revenue_click numeric, orders_open bigint, revenue_open numeric, window_days integer, coupon_codes text[], refreshed_at timestamp with time zone)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  SELECT c.id, c.internal_name, c.subject, c.status::text,
+         COALESCE(c.sent_at, c.started_at, c.created_at),
+         COALESCE(c.total_sent, 0), COALESCE(c.total_delivered, 0), c.unique_opens, c.unique_clicks,
+         count(v.id), COALESCE(sum(v.order_total), 0),
+         count(v.id) FILTER (WHERE v.attribution_type = 'coupon'),
+         COALESCE(sum(v.order_total) FILTER (WHERE v.attribution_type = 'coupon'), 0),
+         count(v.id) FILTER (WHERE v.attribution_type = 'click'),
+         COALESCE(sum(v.order_total) FILTER (WHERE v.attribution_type = 'click'), 0),
+         count(v.id) FILTER (WHERE v.attribution_type = 'open'),
+         COALESCE(sum(v.order_total) FILTER (WHERE v.attribution_type = 'open'), 0),
+         c.attribution_window_days, c.coupon_codes, c.attribution_refreshed_at
+  FROM public.email_campaigns c
+  LEFT JOIN public.email_campaign_conversions v ON v.campaign_id = c.id
+  WHERE public.caller_has_tenant(p_tenant_id)
+    AND c.tenant_id = p_tenant_id
+    AND (p_campaign_id IS NULL OR c.id = p_campaign_id)
+    AND (p_campaign_id IS NOT NULL OR c.status::text IN ('sent', 'sending'))
+  GROUP BY c.id
+  ORDER BY COALESCE(c.sent_at, c.started_at, c.created_at) DESC
+  LIMIT 100;
+$$;
+
+
+--
+-- Name: get_email_campaign_progress(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_email_campaign_progress(p_tenant_id uuid, p_campaign_id uuid) RETURNS TABLE(pending bigint, sending bigint, sent bigint, failed bigint, total bigint)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  SELECT count(*) FILTER (WHERE q.status = 'pending'),
+         count(*) FILTER (WHERE q.status = 'sending'),
+         count(*) FILTER (WHERE q.status = 'sent'),
+         count(*) FILTER (WHERE q.status = 'failed'),
+         count(*)
+  FROM public.email_send_queue q
+  WHERE public.caller_has_tenant(p_tenant_id) AND q.tenant_id = p_tenant_id AND q.campaign_id = p_campaign_id;
+$$;
+
+
+--
+-- Name: get_email_campaign_recipients(uuid, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_email_campaign_recipients(p_tenant_id uuid, p_campaign_id uuid, p_segment text DEFAULT 'all'::text) RETURNS TABLE(email text, name text, sent_at timestamp with time zone, opens bigint, first_open_at timestamp with time zone, last_open_at timestamp with time zone, clicks bigint, last_click_at timestamp with time zone, orders bigint, revenue numeric, unsubscribed boolean, bounced boolean)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  WITH base AS (
+    SELECT lower(btrim(l.recipient_email)) AS em,
+           max(l.recipient_name) AS nm,
+           min(l.sent_at) AS sent,
+           bool_or(l.status IN ('failed', 'error', 'bounced')) AS failed
+    FROM public.email_campaign_logs l
+    WHERE public.caller_has_tenant(p_tenant_id)
+      AND l.tenant_id = p_tenant_id AND l.campaign_id = p_campaign_id
+      AND COALESCE(l.is_test, false) = false
+      AND l.recipient_email IS NOT NULL AND btrim(l.recipient_email) <> ''
+    GROUP BY 1
+  ),
+  ev AS (
+    SELECT lower(btrim(e.recipient_email)) AS em,
+           count(*) FILTER (WHERE e.event_type = 'open') AS opens,
+           min(e.created_at) FILTER (WHERE e.event_type = 'open') AS first_open,
+           max(e.created_at) FILTER (WHERE e.event_type = 'open') AS last_open,
+           count(*) FILTER (WHERE e.event_type = 'click') AS clicks,
+           max(e.created_at) FILTER (WHERE e.event_type = 'click') AS last_click,
+           bool_or(e.event_type = 'unsubscribe') AS unsub,
+           bool_or(e.event_type IN ('bounce', 'complaint')) AS bnc
+    FROM public.email_events e
+    WHERE e.tenant_id = p_tenant_id AND e.campaign_id = p_campaign_id
+    GROUP BY 1
+  ),
+  conv AS (
+    SELECT lower(btrim(v.customer_email)) AS em, count(*) AS orders, sum(v.order_total) AS revenue
+    FROM public.email_campaign_conversions v
+    WHERE v.tenant_id = p_tenant_id AND v.campaign_id = p_campaign_id
+    GROUP BY 1
+  ),
+  joined AS (
+    SELECT b.em, b.nm, b.sent,
+           COALESCE(ev.opens, 0) AS opens, ev.first_open, ev.last_open,
+           COALESCE(ev.clicks, 0) AS clicks, ev.last_click,
+           COALESCE(conv.orders, 0) AS orders, COALESCE(conv.revenue, 0) AS revenue,
+           COALESCE(ev.unsub, false) AS unsub,
+           (COALESCE(ev.bnc, false) OR b.failed) AS bounced
+    FROM base b
+    LEFT JOIN ev ON ev.em = b.em
+    LEFT JOIN conv ON conv.em = b.em
+  )
+  SELECT j.em, j.nm, j.sent, j.opens, j.first_open, j.last_open, j.clicks, j.last_click,
+         j.orders, j.revenue, j.unsub, j.bounced
+  FROM joined j
+  WHERE CASE p_segment
+          WHEN 'all'                THEN NOT j.bounced
+          WHEN 'opened'             THEN j.opens > 0
+          WHEN 'clicked'            THEN j.clicks > 0
+          WHEN 'purchased'          THEN j.orders > 0
+          WHEN 'not_opened'         THEN j.opens = 0 AND NOT j.bounced
+          WHEN 'opened_not_clicked' THEN j.opens > 0 AND j.clicks = 0
+          WHEN 'unsubscribed'       THEN j.unsub
+          WHEN 'bounced'            THEN j.bounced
+          ELSE false
+        END
+  ORDER BY j.em;
+$$;
+
+
+--
+-- Name: get_email_campaign_top_links(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_email_campaign_top_links(p_tenant_id uuid, p_campaign_id uuid) RETURNS TABLE(link_url text, clicks bigint, unique_clickers bigint)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  SELECT e.link_url, count(*), count(DISTINCT lower(btrim(e.recipient_email)))
+  FROM public.email_events e
+  WHERE public.caller_has_tenant(p_tenant_id)
+    AND e.tenant_id = p_tenant_id AND e.campaign_id = p_campaign_id
+    AND e.event_type = 'click' AND e.link_url IS NOT NULL
+  GROUP BY e.link_url
+  ORDER BY 3 DESC, 2 DESC
+  LIMIT 20;
+$$;
+
+
+--
+-- Name: get_email_health(uuid, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_email_health(p_tenant_id uuid, p_days integer DEFAULT 30) RETURNS TABLE(sent bigint, failed bigint, unsubscribed bigint, bounced bigint, complaints bigint, campaigns bigint, stuck_campaigns bigint, last_send_at timestamp with time zone)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  WITH c AS (
+    SELECT id, status, send_lease_until, started_at, sent_at FROM public.email_campaigns
+    WHERE public.caller_has_tenant(p_tenant_id) AND tenant_id = p_tenant_id
+      AND COALESCE(sent_at, started_at, created_at) >= now() - make_interval(days => GREATEST(p_days, 1))
+      AND status IN ('sent', 'sending', 'paused', 'error')
+  ),
+  q AS (
+    SELECT count(*) FILTER (WHERE s.status = 'sent') AS sent, count(*) FILTER (WHERE s.status = 'failed') AS failed
+    FROM public.email_send_queue s WHERE s.campaign_id IN (SELECT id FROM c)
+  ),
+  ev AS (
+    SELECT count(DISTINCT lower(e.recipient_email)) FILTER (WHERE e.event_type = 'unsubscribe') AS unsub,
+           count(DISTINCT lower(e.recipient_email)) FILTER (WHERE e.event_type = 'bounce') AS bnc,
+           count(DISTINCT lower(e.recipient_email)) FILTER (WHERE e.event_type = 'complaint') AS cmp
+    FROM public.email_events e WHERE e.campaign_id IN (SELECT id FROM c)
+  )
+  SELECT q.sent, q.failed, ev.unsub, ev.bnc, ev.cmp,
+         (SELECT count(*) FROM c),
+         (SELECT count(*) FROM c WHERE status = 'sending' AND (send_lease_until IS NULL OR send_lease_until < now() - interval '10 minutes')
+            AND started_at < now() - interval '30 minutes'),
+         (SELECT max(COALESCE(sent_at, started_at)) FROM c)
+  FROM q, ev;
+$$;
+
+
+--
 -- Name: get_internal_headers(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1310,6 +1963,77 @@ CREATE FUNCTION public.get_internal_headers() RETURNS jsonb
     )
   );
 $$;
+
+
+--
+-- Name: get_li_parent_products(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_li_parent_products() RETURNS TABLE(id uuid, name text, sku text, price numeric, promotional_price numeric, image_url text, image_path text, image_large text, url text, variant_count bigint)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  SELECT p.id, p.name, p.sku, p.price, p.promotional_price, p.image_url,
+         p.raw_json->'imagem_principal'->>'caminho',
+         p.raw_json->'imagem_principal'->>'grande',
+         p.raw_json->>'url',
+         count(c.id)
+  FROM public.li_products p
+  LEFT JOIN public.li_products c
+    ON c.tenant_id = p.tenant_id
+   AND c.raw_json->>'tipo' = 'atributo_opcao'
+   AND c.active
+   AND c.raw_json->>'pai' = '/api/v1/produto/' || p.loja_integrada_product_id
+  WHERE p.raw_json->>'tipo' IN ('atributo', 'normal')
+    AND COALESCE((p.raw_json->>'removido')::boolean, false) = false
+  GROUP BY p.id
+  HAVING count(c.id) > 0 OR (p.raw_json->>'tipo' = 'normal' AND p.active)
+  ORDER BY p.name;
+$$;
+
+
+--
+-- Name: get_li_showcase_products(text, integer, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_li_showcase_products(p_mode text DEFAULT 'bestsellers'::text, p_limit integer DEFAULT 6, p_days integer DEFAULT 90) RETURNS TABLE(id uuid, name text, sku text, price numeric, promotional_price numeric, image_url text, image_path text, image_large text, url text, score numeric)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $_$
+  WITH parents AS (
+    SELECT * FROM public.get_li_parent_products()
+  ),
+  sold AS (
+    SELECT COALESCE(substring(v.raw_json->>'pai' from '[0-9]+$'), (it->>'product_id')) AS parent_lid,
+           sum(COALESCE((it->>'qty')::numeric, 1)) AS qty
+    FROM public.li_orders o
+    CROSS JOIN LATERAL jsonb_array_elements(COALESCE(o.items_json, '[]'::jsonb)) AS it
+    LEFT JOIN public.li_products v
+      ON v.tenant_id = o.tenant_id AND v.loja_integrada_product_id::text = (it->>'product_id')
+    WHERE p_mode = 'bestsellers'
+      AND o.created_at_remote >= now() - make_interval(days => GREATEST(p_days, 1))
+      AND COALESCE(o.status_id, 0) NOT IN (7, 8, 16, 1020)
+    GROUP BY 1
+  )
+  SELECT p.id, p.name, p.sku, p.price, p.promotional_price, p.image_url, p.image_path, p.image_large, p.url,
+         CASE p_mode
+           WHEN 'bestsellers' THEN COALESCE(s.qty, 0)
+           WHEN 'newest'      THEN extract(epoch FROM (lp.raw_json->>'data_criacao')::timestamptz)
+           ELSE COALESCE(p.price - p.promotional_price, 0)
+         END AS score
+  FROM parents p
+  JOIN public.li_products lp ON lp.id = p.id
+  LEFT JOIN sold s ON s.parent_lid = lp.loja_integrada_product_id::text
+  WHERE (p.image_path IS NOT NULL OR p.image_large IS NOT NULL OR p.image_url IS NOT NULL)
+    AND CASE p_mode
+          WHEN 'bestsellers' THEN COALESCE(s.qty, 0) > 0
+          WHEN 'newest'      THEN true
+          WHEN 'promo'       THEN p.promotional_price IS NOT NULL AND p.promotional_price > 0 AND p.promotional_price < p.price
+          ELSE false
+        END
+  ORDER BY score DESC NULLS LAST, p.name
+  LIMIT LEAST(GREATEST(p_limit, 1), 24);
+$_$;
 
 
 --
@@ -1341,6 +2065,61 @@ CREATE FUNCTION public.get_me_cron_last_run() RETURNS TABLE(runid bigint, job_pi
   WHERE j.jobname = 'melhor-envio-sync-hourly'
   ORDER BY jrd.start_time DESC
   LIMIT 1;
+$$;
+
+
+--
+-- Name: get_message_performance(uuid, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_message_performance(p_tenant_id uuid, p_days integer DEFAULT 30) RETURNS TABLE(purpose text, touches integer, people integer, email_touches integer, whatsapp_touches integer, coupons_issued integer, coupons_redeemed integer, revenue numeric)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  IF NOT public.caller_has_tenant(p_tenant_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
+  END IF;
+  RETURN QUERY
+  WITH t AS (
+    SELECT x.purpose, count(*)::int AS touches, count(DISTINCT COALESCE(x.email, x.phone))::int AS people,
+           count(*) FILTER (WHERE x.channel = 'email')::int AS email_touches, count(*) FILTER (WHERE x.channel = 'whatsapp')::int AS whatsapp_touches
+    FROM public.customer_touches x
+    WHERE x.tenant_id = p_tenant_id AND x.sent_at >= now() - make_interval(days => p_days)
+    GROUP BY x.purpose
+  ), c AS (
+    -- origem do cupom -> finalidade do envio que o entrega
+    SELECT CASE g.origin_type WHEN 'email_campaign' THEN 'campaign' ELSE g.origin_type END AS purpose,
+           count(*)::int AS issued, count(g.used_at)::int AS redeemed, COALESCE(sum(g.used_order_value) FILTER (WHERE g.used_at IS NOT NULL), 0) AS revenue
+    FROM public.generated_coupons g
+    WHERE g.tenant_id = p_tenant_id AND g.issue_status IS DISTINCT FROM 'pending' AND g.created_at >= now() - make_interval(days => p_days)
+      AND g.origin_type IN ('email_campaign', 'recovery', 'welcome', 'cashback', 'birthday', 'reactivation')
+    GROUP BY 1
+  )
+  SELECT COALESCE(t.purpose, c.purpose), COALESCE(t.touches, 0), COALESCE(t.people, 0), COALESCE(t.email_touches, 0), COALESCE(t.whatsapp_touches, 0),
+         COALESCE(c.issued, 0), COALESCE(c.redeemed, 0), COALESCE(c.revenue, 0)
+  FROM t FULL JOIN c ON c.purpose = t.purpose
+  ORDER BY 2 DESC, 1;
+END;
+$$;
+
+
+--
+-- Name: get_recent_email_recipients(uuid, text[], integer, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_recent_email_recipients(p_tenant_id uuid, p_emails text[], p_days integer, p_exclude_campaign uuid DEFAULT NULL::uuid) RETURNS TABLE(email text)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  SELECT DISTINCT lower(btrim(l.recipient_email))
+  FROM public.email_campaign_logs l
+  WHERE l.tenant_id = p_tenant_id
+    AND COALESCE(l.is_test, false) = false
+    AND l.status IN ('delivered', 'sent')
+    AND l.sent_at >= now() - make_interval(days => GREATEST(p_days, 1))
+    AND (p_exclude_campaign IS NULL OR l.campaign_id IS DISTINCT FROM p_exclude_campaign)
+    AND lower(btrim(l.recipient_email)) = ANY (p_emails);
 $$;
 
 
@@ -1396,6 +2175,34 @@ $$;
 
 
 --
+-- Name: get_rfm_audience_li_customers(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_rfm_audience_li_customers(p_tenant_id uuid, p_audience_id uuid) RETURNS TABLE(li_customer_id bigint, email text, current_group text)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+  WITH snaps AS (
+    SELECT s.customer_id,
+           CASE WHEN s.customer_id ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN s.customer_id::uuid END AS li_uuid,
+           CASE WHEN s.customer_id ~ '^li_[0-9]+$' THEN substring(s.customer_id FROM 4)::integer END AS li_n,
+           public.customer_key(s.customer_email, s.customer_phone) AS k
+    FROM public.rfm_audience_members am
+    JOIN public.customer_rfm_snapshots s ON s.id = am.snapshot_id
+    WHERE am.audience_id = p_audience_id AND am.tenant_id = p_tenant_id AND s.source_type = 'loja_integrada' AND public.caller_has_tenant(p_tenant_id)
+  ), matched AS (
+    SELECT c.id FROM snaps JOIN public.li_customers c ON c.id = snaps.li_uuid AND c.tenant_id = p_tenant_id
+    UNION
+    SELECT c.id FROM snaps JOIN public.li_customers c ON c.loja_integrada_customer_id = snaps.li_n AND c.tenant_id = p_tenant_id
+    UNION
+    SELECT c.id FROM snaps JOIN public.li_customers c ON c.tenant_id = p_tenant_id AND public.customer_key(c.email, c.phone) = snaps.k
+  )
+  SELECT DISTINCT ON (c.loja_integrada_customer_id) c.loja_integrada_customer_id::bigint, lower(btrim(c.email)), c.raw_json->'grupo'->>'nome'
+  FROM matched m JOIN public.li_customers c ON c.id = m.id
+$_$;
+
+
+--
 -- Name: get_tenant_token_balance(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1404,6 +2211,27 @@ CREATE FUNCTION public.get_tenant_token_balance(_tenant_id uuid) RETURNS integer
     SET search_path TO 'public'
     AS $$
   SELECT COALESCE(balance, 0) FROM public.tenant_tokens WHERE tenant_id = _tenant_id AND public.caller_has_tenant(_tenant_id);
+$$;
+
+
+--
+-- Name: get_touch_summary(uuid, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_touch_summary(p_tenant_id uuid, p_days integer DEFAULT 7) RETURNS TABLE(purpose text, channel text, touches integer, people integer)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  IF NOT public.caller_has_tenant(p_tenant_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
+  END IF;
+  RETURN QUERY
+  SELECT t.purpose, t.channel, count(*)::int, count(DISTINCT COALESCE(t.email, t.phone))::int
+  FROM public.customer_touches t
+  WHERE t.tenant_id = p_tenant_id AND t.sent_at >= now() - make_interval(days => p_days)
+  GROUP BY 1, 2 ORDER BY 3 DESC;
+END;
 $$;
 
 
@@ -1453,6 +2281,42 @@ CREATE FUNCTION public.get_user_tenants(_user_id uuid) RETURNS TABLE(tenant_id u
   FROM public.team_members tm
   JOIN public.tenants t ON t.id = tm.tenant_id
   WHERE public.caller_is_user(_user_id) AND tm.user_id = _user_id;
+$$;
+
+
+--
+-- Name: get_waitlist_panel(uuid, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_waitlist_panel(p_tenant_id uuid, p_limit integer DEFAULT 200) RETURNS TABLE(product_id bigint, parent_id bigint, sku text, name text, subscribers integer, snapshot_stock integer, current_stock integer, delta_7d integer, restocked boolean, image_url text, snapshot_date date)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE v_date date;
+BEGIN
+  IF NOT public.caller_has_tenant(p_tenant_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
+  END IF;
+  SELECT max(s.snapshot_date) INTO v_date FROM public.li_waitlist_snapshots s WHERE s.tenant_id = p_tenant_id;
+  IF v_date IS NULL THEN RETURN; END IF;
+  RETURN QUERY
+  SELECT c.product_id, c.parent_id, c.sku, c.name, c.subscribers, c.stock,
+         p.stock,
+         c.subscribers - COALESCE(prev.subscribers, c.subscribers),
+         (COALESCE(p.stock, c.stock, 0) > 0 AND EXISTS (SELECT 1 FROM public.li_waitlist_snapshots o
+            WHERE o.tenant_id = p_tenant_id AND o.product_id = c.product_id AND o.snapshot_date >= v_date - 30 AND o.snapshot_date < v_date AND COALESCE(o.stock, 0) <= 0)),
+         COALESCE(p.image_url, pp.image_url),
+         c.snapshot_date
+  FROM public.li_waitlist_snapshots c
+  LEFT JOIN LATERAL (SELECT o.subscribers FROM public.li_waitlist_snapshots o
+                      WHERE o.tenant_id = p_tenant_id AND o.product_id = c.product_id AND o.snapshot_date <= v_date - 7
+                      ORDER BY o.snapshot_date DESC LIMIT 1) prev ON true
+  LEFT JOIN public.li_products p ON p.integration_id = c.integration_id AND p.loja_integrada_product_id = c.product_id
+  LEFT JOIN public.li_products pp ON pp.integration_id = c.integration_id AND pp.loja_integrada_product_id = c.parent_id
+  WHERE c.tenant_id = p_tenant_id AND c.snapshot_date = v_date
+  ORDER BY (COALESCE(p.stock, c.stock, 0) <= 0) DESC, c.subscribers DESC
+  LIMIT p_limit;
+END;
 $$;
 
 
@@ -2037,6 +2901,32 @@ $$;
 
 
 --
+-- Name: mark_coupon_redeemed(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.mark_coupon_redeemed() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE v_code text;
+BEGIN
+  v_code := upper(btrim(NEW.raw_json->'cupom_desconto'->>'codigo'));
+  IF v_code IS NULL OR v_code = '' THEN RETURN NEW; END IF;
+  IF COALESCE(NEW.status_id, 0) IN (7, 8, 16, 1020) THEN
+    UPDATE public.generated_coupons SET used_at = NULL, used_in_order_id = NULL, used_order_value = NULL
+    WHERE integration_id = NEW.integration_id AND coupon_code = v_code AND used_in_order_id = NEW.order_number;
+  ELSE
+    UPDATE public.generated_coupons
+    SET used_at = COALESCE(NEW.created_at_remote, now()), used_in_order_id = NEW.order_number,
+        used_order_value = COALESCE(public.try_numeric(NEW.totals_json->>'total'), 0)
+    WHERE integration_id = NEW.integration_id AND coupon_code = v_code AND used_at IS NULL;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+--
 -- Name: mask_secret(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -2155,6 +3045,249 @@ BEGIN
     END IF;
   END LOOP;
 END;
+$$;
+
+
+--
+-- Name: refresh_abandonment_recovery(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.refresh_abandonment_recovery() RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE v_count integer := 0;
+BEGIN
+  WITH hit AS (
+    SELECT DISTINCT ON (a.id)
+           a.id AS a_id, a.tenant_id, o.id AS order_id, o.order_number, o.created_at_remote AS ordered_at,
+           lower(btrim(o.raw_json->'cliente'->>'email')) AS email,
+           COALESCE(public.try_numeric(o.totals_json->>'total'), 0) AS total,
+           (SELECT s.flow_campaign_id FROM public.abandonment_flow_sends s
+             WHERE s.abandonment_id = a.id AND s.channel = 'email' AND s.status = 'sent' AND s.sent_at <= o.created_at_remote
+             ORDER BY s.sent_at DESC LIMIT 1) AS flow_campaign_id,
+           EXISTS (SELECT 1 FROM public.abandonment_flow_sends s
+             WHERE s.abandonment_id = a.id AND s.status = 'sent' AND s.sent_at <= o.created_at_remote) AS ours
+    FROM public.li_abandonment_campaigns a
+    JOIN public.li_orders o
+      ON o.tenant_id = a.tenant_id
+     AND lower(btrim(o.raw_json->'cliente'->>'email')) = lower(btrim(a.recipient_email))
+     AND o.created_at_remote >= a.event_at
+     AND o.created_at_remote <= a.event_at + interval '7 days'
+     AND COALESCE(o.status_id, 0) NOT IN (7, 8, 16, 1020)
+    WHERE a.flow_status IN ('open', 'done', 'expired') AND a.recipient_email IS NOT NULL AND a.event_at IS NOT NULL
+      AND a.event_at >= now() - interval '30 days'
+    ORDER BY a.id, o.created_at_remote
+  ), upd AS (
+    UPDATE public.li_abandonment_campaigns a
+    SET flow_status = 'recovered', recovered_at = h.ordered_at, recovered_order_id = h.order_id, recovered_total = h.total,
+        recovered_via = CASE WHEN h.ours THEN 'ours' ELSE 'other' END
+    FROM hit h WHERE a.id = h.a_id
+    RETURNING a.id
+  ), conv AS (
+    INSERT INTO public.email_campaign_conversions
+      (tenant_id, campaign_id, platform, order_id, order_number, customer_email, order_total, ordered_at, attribution_type, touch_at)
+    SELECT h.tenant_id, h.flow_campaign_id, 'loja_integrada', h.order_id, h.order_number, h.email, h.total, h.ordered_at, 'recovery', h.ordered_at
+    FROM hit h WHERE h.ours AND h.flow_campaign_id IS NOT NULL
+    ON CONFLICT (tenant_id, platform, order_id) DO NOTHING
+    RETURNING 1
+  )
+  SELECT count(*) INTO v_count FROM upd;
+  RETURN v_count;
+END;
+$$;
+
+
+--
+-- Name: refresh_coupon_usage(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.refresh_coupon_usage(p_tenant_id uuid) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE n integer;
+BEGIN
+  IF NOT public.caller_has_tenant(p_tenant_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
+  END IF;
+  WITH first_use AS (
+    SELECT DISTINCT ON (o.integration_id, upper(btrim(o.raw_json->'cupom_desconto'->>'codigo')))
+           o.integration_id, upper(btrim(o.raw_json->'cupom_desconto'->>'codigo')) AS code, o.order_number, o.created_at_remote,
+           COALESCE(public.try_numeric(o.totals_json->>'total'), 0) AS total
+    FROM public.li_orders o
+    WHERE o.tenant_id = p_tenant_id AND COALESCE(o.raw_json->'cupom_desconto'->>'codigo', '') <> '' AND COALESCE(o.status_id, 0) NOT IN (7, 8, 16, 1020)
+    ORDER BY o.integration_id, upper(btrim(o.raw_json->'cupom_desconto'->>'codigo')), o.created_at_remote
+  )
+  UPDATE public.generated_coupons g SET used_at = f.created_at_remote, used_in_order_id = f.order_number, used_order_value = f.total
+  FROM first_use f
+  WHERE g.tenant_id = p_tenant_id AND g.integration_id = f.integration_id AND g.coupon_code = f.code AND g.used_at IS NULL;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+END;
+$$;
+
+
+--
+-- Name: refresh_email_campaign_attribution(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.refresh_email_campaign_attribution(p_tenant_id uuid) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  v_active uuid[];
+  v_since timestamptz;
+  v_inserted integer := 0;
+BEGIN
+  IF NOT public.caller_has_tenant(p_tenant_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
+  END IF;
+
+  SELECT array_agg(c.id),
+         min(COALESCE(c.sent_at, c.started_at, c.created_at))
+    INTO v_active, v_since
+  FROM public.email_campaigns c
+  WHERE c.tenant_id = p_tenant_id
+    AND c.status::text IN ('sent', 'sending')
+    AND COALESCE(c.sent_at, c.started_at, c.created_at) >= now() - ((c.attribution_window_days + 7) || ' days')::interval;
+
+  IF v_active IS NULL THEN
+    RETURN 0;
+  END IF;
+
+  DELETE FROM public.email_campaign_conversions
+  WHERE tenant_id = p_tenant_id AND campaign_id = ANY (v_active) AND attribution_type <> 'recovery';
+
+  WITH camp AS (
+    SELECT c.id, c.attribution_window_days AS win,
+           COALESCE(c.sent_at, c.started_at, c.created_at) AS start_at,
+           public.utm_slug(c.internal_name) AS slug,
+           ARRAY(SELECT upper(btrim(x)) FROM unnest(c.coupon_codes) x WHERE btrim(x) <> '') AS codes
+    FROM public.email_campaigns c
+    WHERE c.id = ANY (v_active)
+  ),
+  orders AS (
+    SELECT tenant_id, 'loja_integrada'::text AS platform, id AS order_id, order_number,
+           lower(btrim(raw_json->'cliente'->>'email')) AS email,
+           COALESCE(public.try_numeric(totals_json->>'total'), 0) AS total,
+           created_at_remote AS ordered_at,
+           upper(btrim(raw_json->'cupom_desconto'->>'codigo')) AS coupon,
+           NULLIF(lower(btrim(raw_json->>'utm_campaign')), '') AS utm
+    FROM public.li_orders
+    WHERE tenant_id = p_tenant_id AND created_at_remote >= v_since
+      AND COALESCE(status_id, 0) NOT IN (7, 8, 16, 1020)
+    UNION ALL
+    SELECT tenant_id, 'bling', id, numero,
+           lower(btrim(cliente_email)),
+           COALESCE(valor_total, 0),
+           data_criacao::timestamptz,
+           NULL, NULL
+    FROM public.bling_orders
+    WHERE tenant_id = p_tenant_id AND data_criacao >= v_since
+      AND COALESCE(situacao_nome, '') !~* 'cancel'
+    UNION ALL
+    SELECT tenant_id, 'nuvemshop', id, order_number,
+           lower(btrim(raw_json->>'contact_email')),
+           COALESCE(public.try_numeric(raw_json->>'total'), public.try_numeric(totals_json->>'total'), 0),
+           created_at_remote,
+           CASE WHEN jsonb_typeof(raw_json->'coupon') = 'array'
+                THEN upper(btrim(raw_json->'coupon'->0->>'code')) END,
+           NULL
+    FROM public.nuvemshop_orders
+    WHERE tenant_id = p_tenant_id AND created_at_remote >= v_since
+      AND COALESCE(status, '') <> 'cancelled'
+      AND COALESCE(payment_status, '') NOT IN ('refunded', 'voided')
+  ),
+  by_coupon AS (
+    SELECT o.platform, o.order_id, o.order_number, o.email, o.total, o.ordered_at,
+           c.id AS campaign_id, 1 AS prio, 'coupon'::text AS atype, c.start_at AS touch_at, o.coupon
+    FROM orders o
+    JOIN camp c ON o.coupon IS NOT NULL
+               AND (o.coupon = ANY (c.codes)
+                    OR EXISTS (SELECT 1 FROM public.email_campaign_coupons ec WHERE ec.campaign_id = c.id AND ec.code = o.coupon))
+               AND o.ordered_at >= c.start_at
+               AND o.ordered_at <= c.start_at + (c.win || ' days')::interval
+  ),
+  by_utm AS (
+    SELECT o.platform, o.order_id, o.order_number, o.email, o.total, o.ordered_at,
+           c.id AS campaign_id, 2 AS prio, 'utm'::text AS atype, c.start_at AS touch_at, NULL::text AS coupon
+    FROM orders o
+    JOIN camp c ON o.utm IS NOT NULL AND c.slug <> '' AND o.utm = c.slug
+               AND o.ordered_at >= c.start_at
+               AND o.ordered_at <= c.start_at + (c.win || ' days')::interval
+  ),
+  by_event AS (
+    SELECT o.platform, o.order_id, o.order_number, o.email, o.total, o.ordered_at,
+           e.campaign_id,
+           CASE e.event_type WHEN 'click' THEN 3 ELSE 4 END AS prio,
+           e.event_type AS atype,
+           max(e.created_at) AS touch_at,
+           NULL::text AS coupon
+    FROM orders o
+    JOIN public.email_events e
+      ON e.tenant_id = p_tenant_id
+     AND e.event_type IN ('click', 'open')
+     AND e.campaign_id = ANY (v_active)
+     AND lower(btrim(e.recipient_email)) = o.email
+     AND e.created_at <= o.ordered_at
+    JOIN camp c ON c.id = e.campaign_id
+               AND e.created_at >= o.ordered_at - (c.win || ' days')::interval
+    WHERE o.email IS NOT NULL AND o.email <> ''
+    GROUP BY o.platform, o.order_id, o.order_number, o.email, o.total, o.ordered_at, e.campaign_id, e.event_type
+  ),
+  best AS (
+    SELECT DISTINCT ON (platform, order_id) *
+    FROM (SELECT * FROM by_coupon UNION ALL SELECT * FROM by_utm UNION ALL SELECT * FROM by_event) u
+    ORDER BY platform, order_id, prio, touch_at DESC
+  ),
+  ins AS (
+    INSERT INTO public.email_campaign_conversions
+      (tenant_id, campaign_id, platform, order_id, order_number, customer_email, order_total,
+       ordered_at, attribution_type, touch_at, coupon_code)
+    SELECT p_tenant_id, campaign_id, platform, order_id, order_number, email, total,
+           ordered_at, atype, touch_at, coupon
+    FROM best
+    ON CONFLICT (tenant_id, platform, order_id) DO NOTHING
+    RETURNING 1
+  )
+  SELECT count(*) INTO v_inserted FROM ins;
+
+  UPDATE public.email_campaigns c
+  SET unique_opens = s.opens,
+      unique_clicks = s.clicks,
+      attribution_refreshed_at = now()
+  FROM (
+    SELECT cc.id,
+           count(DISTINCT lower(btrim(e.recipient_email))) FILTER (WHERE e.event_type = 'open')  AS opens,
+           count(DISTINCT lower(btrim(e.recipient_email))) FILTER (WHERE e.event_type = 'click') AS clicks
+    FROM public.email_campaigns cc
+    LEFT JOIN public.email_events e ON e.campaign_id = cc.id AND e.event_type IN ('open', 'click')
+    WHERE cc.id = ANY (v_active)
+    GROUP BY cc.id
+  ) s
+  WHERE c.id = s.id;
+
+  RETURN v_inserted;
+END;
+$$;
+
+
+--
+-- Name: refresh_newsletter_customers(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.refresh_newsletter_customers(p_integration_id uuid) RETURNS integer
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  WITH upd AS (
+    UPDATE public.li_newsletter_subscribers n SET is_customer = true
+    WHERE n.integration_id = p_integration_id AND NOT n.is_customer
+      AND EXISTS (SELECT 1 FROM public.li_customers c WHERE c.tenant_id = n.tenant_id AND lower(btrim(c.email)) = n.email)
+    RETURNING 1)
+  SELECT count(*)::int FROM upd;
 $$;
 
 
@@ -2468,6 +3601,31 @@ $$;
 
 
 --
+-- Name: requeue_stuck_email_sends(interval); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.requeue_stuck_email_sends(p_older_than interval DEFAULT '00:03:00'::interval) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  v_requeued integer;
+BEGIN
+  IF NOT public.caller_is_trusted() THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
+  END IF;
+  UPDATE public.email_send_queue
+     SET status = CASE WHEN attempts >= 3 THEN 'failed' ELSE 'pending' END,
+         error_message = CASE WHEN attempts >= 3 THEN 'Sem resposta do servidor de envio após 3 tentativas' ELSE error_message END,
+         processed_at = CASE WHEN attempts >= 3 THEN now() ELSE processed_at END
+   WHERE status = 'sending' AND claimed_at < now() - p_older_than;
+  GET DIAGNOSTICS v_requeued = ROW_COUNT;
+  RETURN v_requeued;
+END;
+$$;
+
+
+--
 -- Name: rollup_instagram_metrics(date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -2706,6 +3864,24 @@ $$;
 
 
 --
+-- Name: set_abandonment_flow_enabled_at(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.set_abandonment_flow_enabled_at() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF NEW.enabled AND (TG_OP = 'INSERT' OR NOT OLD.enabled) THEN
+    NEW.enabled_at := now();
+  ELSIF NOT NEW.enabled THEN
+    NEW.enabled_at := NULL;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+--
 -- Name: set_active_tenant(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -2731,6 +3907,25 @@ BEGIN
   WHERE user_id = _user_id;
   
   RETURN true;
+END;
+$$;
+
+
+--
+-- Name: set_coupon_origin(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.set_coupon_origin() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  IF NEW.origin_type IS NULL THEN
+    NEW.origin_type := CASE NEW.source
+      WHEN 'cashback' THEN 'cashback' WHEN 'email' THEN 'email_campaign' WHEN 'manual' THEN 'manual'
+      WHEN 'birthday' THEN 'birthday' WHEN 'reactivation' THEN 'reactivation' WHEN 'loyalty' THEN 'loyalty' ELSE 'imported' END;
+  END IF;
+  RETURN NEW;
 END;
 $$;
 
@@ -2855,6 +4050,18 @@ $$;
 
 
 --
+-- Name: try_numeric(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.try_numeric(p_text text) RETURNS numeric
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $_$
+  SELECT CASE WHEN btrim(p_text) ~ '^-?[0-9]+(\.[0-9]+)?$' THEN btrim(p_text)::numeric END;
+$_$;
+
+
+--
 -- Name: update_campaign_stats_on_event(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -2919,9 +4126,66 @@ END;
 $$;
 
 
-SET default_tablespace = '';
+--
+-- Name: utm_slug(text); Type: FUNCTION; Schema: public; Owner: -
+--
 
-SET default_table_access_method = heap;
+CREATE FUNCTION public.utm_slug(p_name text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  SELECT left(btrim(regexp_replace(translate(lower(coalesce(p_name, '')),
+    'áàâãäéèêëíìîïóòôõöúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn'), '[^a-z0-9]+', '-', 'g'), '-'), 60)
+$$;
+
+
+--
+-- Name: abandonment_flow_sends; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.abandonment_flow_sends (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    abandonment_id uuid NOT NULL,
+    kind text NOT NULL,
+    step_id text NOT NULL,
+    channel text NOT NULL,
+    status text NOT NULL,
+    reason text,
+    coupon_code text,
+    flow_campaign_id uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    sent_at timestamp with time zone,
+    CONSTRAINT abandonment_flow_sends_channel_check CHECK ((channel = ANY (ARRAY['email'::text, 'whatsapp'::text]))),
+    CONSTRAINT abandonment_flow_sends_kind_check CHECK ((kind = ANY (ARRAY['cart'::text, 'browse'::text, 'order'::text, 'welcome'::text]))),
+    CONSTRAINT abandonment_flow_sends_status_check CHECK ((status = ANY (ARRAY['sending'::text, 'sent'::text, 'failed'::text, 'skipped'::text])))
+);
+
+
+--
+-- Name: abandonment_flows; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.abandonment_flows (
+    tenant_id uuid NOT NULL,
+    kind text NOT NULL,
+    enabled boolean DEFAULT false NOT NULL,
+    email_integration_id uuid,
+    whatsapp_integration_id uuid,
+    steps jsonb DEFAULT '[]'::jsonb NOT NULL,
+    quiet_start time without time zone DEFAULT '21:00:00'::time without time zone NOT NULL,
+    quiet_end time without time zone DEFAULT '08:00:00'::time without time zone NOT NULL,
+    max_event_age_hours integer DEFAULT 96 NOT NULL,
+    cooldown_days integer DEFAULT 3 NOT NULL,
+    min_value numeric DEFAULT 0 NOT NULL,
+    opt_out_native boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    enabled_at timestamp with time zone,
+    CONSTRAINT abandonment_flows_cooldown_days_check CHECK (((cooldown_days >= 0) AND (cooldown_days <= 60))),
+    CONSTRAINT abandonment_flows_kind_check CHECK ((kind = ANY (ARRAY['cart'::text, 'browse'::text, 'order'::text, 'welcome'::text]))),
+    CONSTRAINT abandonment_flows_max_event_age_hours_check CHECK (((max_event_age_hours >= 1) AND (max_event_age_hours <= 720)))
+);
+
 
 --
 -- Name: ai_agent_column_assignments; Type: TABLE; Schema: public; Owner: -
@@ -3810,6 +5074,21 @@ CREATE TABLE public.contact_merges (
 
 
 --
+-- Name: contact_policies; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.contact_policies (
+    tenant_id uuid NOT NULL,
+    enabled boolean DEFAULT true NOT NULL,
+    daily_cap integer DEFAULT 3 NOT NULL,
+    broadcast_gap_hours integer DEFAULT 24 NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT contact_policies_broadcast_gap_hours_check CHECK (((broadcast_gap_hours >= 0) AND (broadcast_gap_hours <= 168))),
+    CONSTRAINT contact_policies_daily_cap_check CHECK (((daily_cap >= 1) AND (daily_cap <= 20)))
+);
+
+
+--
 -- Name: contacts; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3991,6 +5270,34 @@ ALTER TABLE ONLY public.customer_rfm_snapshots REPLICA IDENTITY FULL;
 
 
 --
+-- Name: customer_rfm_latest; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.customer_rfm_latest WITH (security_invoker='true') AS
+ SELECT DISTINCT ON (tenant_id, (public.customer_key(customer_email, customer_phone))) tenant_id,
+    public.customer_key(customer_email, customer_phone) AS customer_key,
+    id AS snapshot_id,
+    customer_id,
+    customer_name,
+    customer_email,
+    customer_phone,
+    segment_name,
+    segment_action,
+    churn_risk,
+    rfm_score,
+    recency_days,
+    orders_count,
+    revenue_total,
+    aov,
+    last_order_date,
+    first_purchase_date,
+    reference_date
+   FROM public.customer_rfm_snapshots s
+  WHERE (public.customer_key(customer_email, customer_phone) IS NOT NULL)
+  ORDER BY tenant_id, (public.customer_key(customer_email, customer_phone)), reference_date DESC, created_at DESC;
+
+
+--
 -- Name: customer_tags; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -3999,6 +5306,25 @@ CREATE TABLE public.customer_tags (
     customer_id uuid NOT NULL,
     tag_id uuid NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: customer_touches; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.customer_touches (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    email text,
+    phone text,
+    channel text NOT NULL,
+    purpose text NOT NULL,
+    module_ref text,
+    sent_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT customer_touches_channel_check CHECK ((channel = ANY (ARRAY['email'::text, 'whatsapp'::text]))),
+    CONSTRAINT customer_touches_purpose_check CHECK ((purpose = ANY (ARRAY['campaign'::text, 'bulk'::text, 'recovery'::text, 'welcome'::text, 'cashback'::text, 'cashback_reminder'::text, 'birthday'::text, 'reactivation'::text]))),
+    CONSTRAINT customer_touches_who CHECK (((email IS NOT NULL) OR (phone IS NOT NULL)))
 );
 
 
@@ -4022,6 +5348,57 @@ CREATE TABLE public.dead_letter_queue (
     metadata jsonb,
     status text DEFAULT 'dead'::text NOT NULL,
     retried_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: domain_event_deliveries; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.domain_event_deliveries (
+    event_id uuid NOT NULL,
+    consumer text NOT NULL,
+    status text DEFAULT 'done'::text NOT NULL,
+    detail text,
+    processed_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: email_campaign_conversions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.email_campaign_conversions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    campaign_id uuid NOT NULL,
+    platform text NOT NULL,
+    order_id uuid NOT NULL,
+    order_number text,
+    customer_email text,
+    order_total numeric DEFAULT 0 NOT NULL,
+    ordered_at timestamp with time zone NOT NULL,
+    attribution_type text NOT NULL,
+    touch_at timestamp with time zone,
+    coupon_code text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT email_campaign_conversions_attribution_type_check CHECK ((attribution_type = ANY (ARRAY['coupon'::text, 'utm'::text, 'click'::text, 'open'::text, 'recovery'::text]))),
+    CONSTRAINT email_campaign_conversions_platform_check CHECK ((platform = ANY (ARRAY['loja_integrada'::text, 'bling'::text, 'nuvemshop'::text])))
+);
+
+
+--
+-- Name: email_campaign_coupons; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.email_campaign_coupons (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    campaign_id uuid NOT NULL,
+    recipient_email text NOT NULL,
+    code text NOT NULL,
+    li_coupon_id integer,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
@@ -4090,7 +5467,27 @@ CREATE TABLE public.email_campaigns (
     ab_test_id uuid,
     ab_variant text,
     ab_split_pct integer DEFAULT 50,
-    ab_offset_pct integer DEFAULT 0
+    ab_offset_pct integer DEFAULT 0,
+    coupon_codes text[] DEFAULT '{}'::text[] NOT NULL,
+    attribution_window_days integer DEFAULT 7 NOT NULL,
+    unique_opens integer DEFAULT 0 NOT NULL,
+    unique_clicks integer DEFAULT 0 NOT NULL,
+    attribution_refreshed_at timestamp with time zone,
+    send_lease_until timestamp with time zone,
+    skip_recent_days integer,
+    unique_coupon jsonb,
+    ab_auto_winner boolean DEFAULT false NOT NULL,
+    ab_winner_hours integer,
+    ab_winner_variant text,
+    ab_winner_decided_at timestamp with time zone,
+    ab_winner_detail jsonb,
+    flow_kind text,
+    flow_step text,
+    CONSTRAINT email_campaigns_ab_winner_hours_check CHECK (((ab_winner_hours IS NULL) OR ((ab_winner_hours >= 1) AND (ab_winner_hours <= 72)))),
+    CONSTRAINT email_campaigns_ab_winner_variant_check CHECK (((ab_winner_variant IS NULL) OR (ab_winner_variant = ANY (ARRAY['A'::text, 'B'::text])))),
+    CONSTRAINT email_campaigns_attribution_window_check CHECK (((attribution_window_days >= 1) AND (attribution_window_days <= 30))),
+    CONSTRAINT email_campaigns_flow_kind_check CHECK (((flow_kind IS NULL) OR (flow_kind = ANY (ARRAY['cart'::text, 'browse'::text, 'order'::text, 'welcome'::text, 'system'::text])))),
+    CONSTRAINT email_campaigns_skip_recent_days_check CHECK (((skip_recent_days IS NULL) OR ((skip_recent_days >= 1) AND (skip_recent_days <= 90))))
 );
 
 
@@ -4110,7 +5507,7 @@ CREATE TABLE public.email_events (
     ip_address text,
     metadata jsonb,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT email_events_event_type_check CHECK ((event_type = ANY (ARRAY['open'::text, 'click'::text, 'bounce'::text, 'complaint'::text, 'unsubscribe'::text])))
+    CONSTRAINT email_events_event_type_check CHECK ((event_type = ANY (ARRAY['open'::text, 'click'::text, 'bounce'::text, 'complaint'::text, 'unsubscribe'::text, 'delivered'::text, 'bot_open'::text, 'bot_click'::text, 'test_open'::text, 'test_click'::text])))
 );
 
 
@@ -4206,7 +5603,8 @@ CREATE TABLE public.email_unsubscribe_tokens (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     used_at timestamp with time zone,
     last_opened_at timestamp with time zone,
-    last_clicked_at timestamp with time zone
+    last_clicked_at timestamp with time zone,
+    is_test boolean DEFAULT false NOT NULL
 );
 
 
@@ -4259,7 +5657,17 @@ CREATE TABLE public.generated_coupons (
     li_data_inicio timestamp with time zone,
     li_data_fim timestamp with time zone,
     li_quantidade_uso_maximo integer,
-    li_quantidade_usada integer DEFAULT 0
+    li_quantidade_usada integer DEFAULT 0,
+    li_ativo boolean,
+    li_valor_minimo numeric,
+    li_quantidade_por_cliente integer,
+    li_cumulativo boolean,
+    origin_type text,
+    origin_id uuid,
+    origin_ref text,
+    issue_status text DEFAULT 'issued'::text NOT NULL,
+    CONSTRAINT generated_coupons_issue_status_check CHECK ((issue_status = ANY (ARRAY['pending'::text, 'issued'::text]))),
+    CONSTRAINT generated_coupons_origin_type_check CHECK (((origin_type IS NULL) OR (origin_type = ANY (ARRAY['cashback'::text, 'birthday'::text, 'reactivation'::text, 'email_campaign'::text, 'recovery'::text, 'welcome'::text, 'manual'::text, 'loyalty'::text, 'imported'::text]))))
 );
 
 ALTER TABLE ONLY public.generated_coupons REPLICA IDENTITY FULL;
@@ -5269,6 +6677,47 @@ CREATE TABLE public.leads (
 
 
 --
+-- Name: li_abandonment_campaigns; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.li_abandonment_campaigns (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    integration_id uuid NOT NULL,
+    li_campaign_id bigint NOT NULL,
+    automation_id integer NOT NULL,
+    kind text NOT NULL,
+    rule_id bigint,
+    li_status text,
+    value numeric DEFAULT 0 NOT NULL,
+    items jsonb DEFAULT '[]'::jsonb NOT NULL,
+    product_ids bigint[] DEFAULT '{}'::bigint[] NOT NULL,
+    recipient_email text,
+    recipient_name text,
+    recipient_phone text,
+    client_id bigint,
+    event_at timestamp with time zone,
+    li_last_sent_at timestamp with time zone,
+    cart_json jsonb,
+    details_fetched_at timestamp with time zone,
+    captured_at timestamp with time zone DEFAULT now() NOT NULL,
+    last_seen_at timestamp with time zone DEFAULT now() NOT NULL,
+    gone_at timestamp with time zone,
+    flow_status text DEFAULT 'open'::text NOT NULL,
+    recovered_at timestamp with time zone,
+    recovered_order_id uuid,
+    recovered_total numeric,
+    recovered_via text,
+    native_optout_at timestamp with time zone,
+    CONSTRAINT li_abandonment_campaigns_flow_status_check CHECK ((flow_status = ANY (ARRAY['open'::text, 'recovered'::text, 'expired'::text, 'excluded'::text, 'done'::text]))),
+    CONSTRAINT li_abandonment_campaigns_kind_check CHECK ((kind = ANY (ARRAY['cart'::text, 'browse'::text, 'order'::text, 'welcome'::text]))),
+    CONSTRAINT li_abandonment_campaigns_recovered_via_check CHECK (((recovered_via IS NULL) OR (recovered_via = ANY (ARRAY['ours'::text, 'other'::text]))))
+);
+
+ALTER TABLE ONLY public.li_abandonment_campaigns REPLICA IDENTITY FULL;
+
+
+--
 -- Name: li_customers; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -5288,6 +6737,132 @@ CREATE TABLE public.li_customers (
 );
 
 ALTER TABLE ONLY public.li_customers REPLICA IDENTITY FULL;
+
+
+--
+-- Name: li_group_job_items; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.li_group_job_items (
+    job_id uuid NOT NULL,
+    li_customer_id bigint NOT NULL,
+    tenant_id uuid NOT NULL,
+    email text,
+    previous_group text,
+    new_group text,
+    status text DEFAULT 'pending'::text NOT NULL,
+    error text,
+    done_at timestamp with time zone,
+    CONSTRAINT li_group_job_items_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'done'::text, 'failed'::text, 'skipped'::text])))
+);
+
+
+--
+-- Name: li_group_jobs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.li_group_jobs (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    integration_id uuid NOT NULL,
+    label text NOT NULL,
+    target_group text,
+    status text DEFAULT 'running'::text NOT NULL,
+    total integer DEFAULT 0 NOT NULL,
+    done integer DEFAULT 0 NOT NULL,
+    failed integer DEFAULT 0 NOT NULL,
+    skipped integer DEFAULT 0 NOT NULL,
+    undo_of uuid,
+    undone_at timestamp with time zone,
+    created_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    finished_at timestamp with time zone,
+    CONSTRAINT li_group_jobs_status_check CHECK ((status = ANY (ARRAY['running'::text, 'done'::text, 'cancelled'::text])))
+);
+
+
+--
+-- Name: li_marketing_outbox; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.li_marketing_outbox (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    integration_id uuid NOT NULL,
+    kind text NOT NULL,
+    payload jsonb NOT NULL,
+    status text DEFAULT 'pending'::text NOT NULL,
+    attempts integer DEFAULT 0 NOT NULL,
+    next_attempt_at timestamp with time zone DEFAULT now() NOT NULL,
+    last_error text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    done_at timestamp with time zone,
+    CONSTRAINT li_marketing_outbox_kind_check CHECK ((kind = ANY (ARRAY['unsubscribe'::text, 'newsletter_subscribe'::text]))),
+    CONSTRAINT li_marketing_outbox_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'done'::text, 'failed'::text])))
+);
+
+
+--
+-- Name: li_marketing_settings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.li_marketing_settings (
+    tenant_id uuid NOT NULL,
+    sync_unsubscribes boolean DEFAULT true NOT NULL,
+    waitlist_alert boolean DEFAULT true NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: li_native_toggle_log; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.li_native_toggle_log (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    user_id uuid,
+    toggle_key text NOT NULL,
+    from_state boolean,
+    to_state boolean NOT NULL,
+    snapshot jsonb,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: li_newsletter_scan_state; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.li_newsletter_scan_state (
+    integration_id uuid NOT NULL,
+    tenant_id uuid NOT NULL,
+    total integer DEFAULT 0 NOT NULL,
+    scan_no integer DEFAULT 0 NOT NULL,
+    next_offset integer DEFAULT 0 NOT NULL,
+    scanning boolean DEFAULT false NOT NULL,
+    baseline_done boolean DEFAULT false NOT NULL,
+    last_full_scan_at timestamp with time zone,
+    last_check_at timestamp with time zone,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: li_newsletter_subscribers; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.li_newsletter_subscribers (
+    integration_id uuid NOT NULL,
+    li_id bigint NOT NULL,
+    tenant_id uuid NOT NULL,
+    email text NOT NULL,
+    is_baseline boolean DEFAULT false NOT NULL,
+    is_customer boolean DEFAULT false NOT NULL,
+    first_seen_at timestamp with time zone DEFAULT now() NOT NULL,
+    last_scan integer DEFAULT 0 NOT NULL,
+    removed_at timestamp with time zone
+);
 
 
 --
@@ -5376,6 +6951,23 @@ CREATE TABLE public.li_sync_state (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     last_offset integer DEFAULT 0,
     total_count integer
+);
+
+
+--
+-- Name: li_waitlist_snapshots; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.li_waitlist_snapshots (
+    integration_id uuid NOT NULL,
+    snapshot_date date NOT NULL,
+    product_id bigint NOT NULL,
+    tenant_id uuid NOT NULL,
+    parent_id bigint,
+    sku text,
+    name text,
+    subscribers integer DEFAULT 0 NOT NULL,
+    stock integer
 );
 
 
@@ -6378,6 +7970,30 @@ CREATE TABLE public.whatsapp_channels (
 
 
 --
+-- Name: abandonment_flow_sends abandonment_flow_sends_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.abandonment_flow_sends
+    ADD CONSTRAINT abandonment_flow_sends_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: abandonment_flow_sends abandonment_flow_sends_uniq; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.abandonment_flow_sends
+    ADD CONSTRAINT abandonment_flow_sends_uniq UNIQUE (abandonment_id, step_id, channel);
+
+
+--
+-- Name: abandonment_flows abandonment_flows_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.abandonment_flows
+    ADD CONSTRAINT abandonment_flows_pkey PRIMARY KEY (tenant_id, kind);
+
+
+--
 -- Name: ai_agent_column_assignments ai_agent_column_assignments_column_id_tenant_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6786,6 +8402,14 @@ ALTER TABLE ONLY public.contact_merges
 
 
 --
+-- Name: contact_policies contact_policies_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.contact_policies
+    ADD CONSTRAINT contact_policies_pkey PRIMARY KEY (tenant_id);
+
+
+--
 -- Name: contacts contacts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -6858,11 +8482,75 @@ ALTER TABLE ONLY public.customer_tags
 
 
 --
+-- Name: customer_touches customer_touches_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.customer_touches
+    ADD CONSTRAINT customer_touches_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: dead_letter_queue dead_letter_queue_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.dead_letter_queue
     ADD CONSTRAINT dead_letter_queue_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: domain_event_deliveries domain_event_deliveries_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.domain_event_deliveries
+    ADD CONSTRAINT domain_event_deliveries_pkey PRIMARY KEY (event_id, consumer);
+
+
+--
+-- Name: domain_events domain_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.domain_events
+    ADD CONSTRAINT domain_events_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: email_campaign_conversions email_campaign_conversions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.email_campaign_conversions
+    ADD CONSTRAINT email_campaign_conversions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: email_campaign_conversions email_campaign_conversions_tenant_id_platform_order_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.email_campaign_conversions
+    ADD CONSTRAINT email_campaign_conversions_tenant_id_platform_order_id_key UNIQUE (tenant_id, platform, order_id);
+
+
+--
+-- Name: email_campaign_coupons email_campaign_coupons_campaign_id_code_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.email_campaign_coupons
+    ADD CONSTRAINT email_campaign_coupons_campaign_id_code_key UNIQUE (campaign_id, code);
+
+
+--
+-- Name: email_campaign_coupons email_campaign_coupons_campaign_id_recipient_email_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.email_campaign_coupons
+    ADD CONSTRAINT email_campaign_coupons_campaign_id_recipient_email_key UNIQUE (campaign_id, recipient_email);
+
+
+--
+-- Name: email_campaign_coupons email_campaign_coupons_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.email_campaign_coupons
+    ADD CONSTRAINT email_campaign_coupons_pkey PRIMARY KEY (id);
 
 
 --
@@ -6903,6 +8591,22 @@ ALTER TABLE ONLY public.email_integration_senders
 
 ALTER TABLE ONLY public.email_integrations
     ADD CONSTRAINT email_integrations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: email_send_queue email_send_queue_campaign_id_recipient_email_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.email_send_queue
+    ADD CONSTRAINT email_send_queue_campaign_id_recipient_email_key UNIQUE (campaign_id, recipient_email);
+
+
+--
+-- Name: email_send_queue email_send_queue_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.email_send_queue
+    ADD CONSTRAINT email_send_queue_pkey PRIMARY KEY (id);
 
 
 --
@@ -7434,6 +9138,22 @@ ALTER TABLE ONLY public.leads
 
 
 --
+-- Name: li_abandonment_campaigns li_abandonment_campaigns_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_abandonment_campaigns
+    ADD CONSTRAINT li_abandonment_campaigns_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: li_abandonment_campaigns li_abandonment_campaigns_uniq; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_abandonment_campaigns
+    ADD CONSTRAINT li_abandonment_campaigns_uniq UNIQUE (integration_id, li_campaign_id);
+
+
+--
 -- Name: li_customers li_customers_integration_id_loja_integrada_customer_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7447,6 +9167,62 @@ ALTER TABLE ONLY public.li_customers
 
 ALTER TABLE ONLY public.li_customers
     ADD CONSTRAINT li_customers_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: li_group_job_items li_group_job_items_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_group_job_items
+    ADD CONSTRAINT li_group_job_items_pkey PRIMARY KEY (job_id, li_customer_id);
+
+
+--
+-- Name: li_group_jobs li_group_jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_group_jobs
+    ADD CONSTRAINT li_group_jobs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: li_marketing_outbox li_marketing_outbox_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_marketing_outbox
+    ADD CONSTRAINT li_marketing_outbox_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: li_marketing_settings li_marketing_settings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_marketing_settings
+    ADD CONSTRAINT li_marketing_settings_pkey PRIMARY KEY (tenant_id);
+
+
+--
+-- Name: li_native_toggle_log li_native_toggle_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_native_toggle_log
+    ADD CONSTRAINT li_native_toggle_log_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: li_newsletter_scan_state li_newsletter_scan_state_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_newsletter_scan_state
+    ADD CONSTRAINT li_newsletter_scan_state_pkey PRIMARY KEY (integration_id);
+
+
+--
+-- Name: li_newsletter_subscribers li_newsletter_subscribers_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_newsletter_subscribers
+    ADD CONSTRAINT li_newsletter_subscribers_pkey PRIMARY KEY (integration_id, li_id);
 
 
 --
@@ -7503,6 +9279,14 @@ ALTER TABLE ONLY public.li_sync_state
 
 ALTER TABLE ONLY public.li_sync_state
     ADD CONSTRAINT li_sync_state_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: li_waitlist_snapshots li_waitlist_snapshots_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_waitlist_snapshots
+    ADD CONSTRAINT li_waitlist_snapshots_pkey PRIMARY KEY (integration_id, snapshot_date, product_id);
 
 
 --
@@ -8069,6 +9853,20 @@ CREATE UNIQUE INDEX bling_connections_tenant_id_idx ON public.bling_connections 
 --
 
 CREATE UNIQUE INDEX conversations_csat_token_idx ON public.conversations USING btree (csat_token);
+
+
+--
+-- Name: generated_coupons_integration_code_uniq; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX generated_coupons_integration_code_uniq ON public.generated_coupons USING btree (integration_id, coupon_code) WHERE (integration_id IS NOT NULL);
+
+
+--
+-- Name: idx_abandon_sends_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_abandon_sends_tenant ON public.abandonment_flow_sends USING btree (tenant_id, created_at DESC);
 
 
 --
@@ -8751,6 +10549,27 @@ CREATE INDEX idx_dead_letter_queue_tenant ON public.dead_letter_queue USING btre
 
 
 --
+-- Name: idx_domain_events_pending; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_domain_events_pending ON public.domain_events USING btree (created_at) WHERE (processed_at IS NULL);
+
+
+--
+-- Name: idx_domain_events_ref; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_domain_events_ref ON public.domain_events USING btree (tenant_id, ref_id, created_at DESC);
+
+
+--
+-- Name: idx_email_campaign_coupons_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_email_campaign_coupons_code ON public.email_campaign_coupons USING btree (code);
+
+
+--
 -- Name: idx_email_campaign_logs_campaign; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -8814,6 +10633,13 @@ CREATE INDEX idx_email_campaigns_ab_test_id ON public.email_campaigns USING btre
 
 
 --
+-- Name: idx_email_campaigns_flow; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_email_campaigns_flow ON public.email_campaigns USING btree (tenant_id, flow_kind) WHERE (flow_kind IS NOT NULL);
+
+
+--
 -- Name: idx_email_campaigns_is_archived; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -8856,6 +10682,13 @@ CREATE INDEX idx_email_campaigns_type ON public.email_campaigns USING btree (cam
 
 
 --
+-- Name: idx_email_conversions_campaign; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_email_conversions_campaign ON public.email_campaign_conversions USING btree (campaign_id);
+
+
+--
 -- Name: idx_email_events_campaign; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -8891,6 +10724,13 @@ CREATE INDEX idx_email_events_tenant ON public.email_events USING btree (tenant_
 
 
 --
+-- Name: idx_email_events_tenant_type_created; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_email_events_tenant_type_created ON public.email_events USING btree (tenant_id, event_type, created_at);
+
+
+--
 -- Name: idx_email_events_type; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -8909,6 +10749,13 @@ CREATE INDEX idx_email_integration_senders_integration ON public.email_integrati
 --
 
 CREATE INDEX idx_email_integration_senders_tenant ON public.email_integration_senders USING btree (tenant_id);
+
+
+--
+-- Name: idx_email_send_queue_next; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_email_send_queue_next ON public.email_send_queue USING btree (campaign_id, status, id);
 
 
 --
@@ -9017,6 +10864,13 @@ CREATE INDEX idx_generated_coupons_li_coupon_id ON public.generated_coupons USIN
 
 
 --
+-- Name: idx_generated_coupons_origin; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_generated_coupons_origin ON public.generated_coupons USING btree (tenant_id, origin_type, created_at DESC);
+
+
+--
 -- Name: idx_generated_coupons_source; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -9028,6 +10882,13 @@ CREATE INDEX idx_generated_coupons_source ON public.generated_coupons USING btre
 --
 
 CREATE INDEX idx_generated_coupons_tenant ON public.generated_coupons USING btree (tenant_id);
+
+
+--
+-- Name: idx_generated_coupons_used; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_generated_coupons_used ON public.generated_coupons USING btree (tenant_id, used_at) WHERE (used_at IS NOT NULL);
 
 
 --
@@ -9437,6 +11298,20 @@ CREATE INDEX idx_leads_tenant_id ON public.leads USING btree (tenant_id);
 
 
 --
+-- Name: idx_li_abandon_email; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_li_abandon_email ON public.li_abandonment_campaigns USING btree (tenant_id, lower(recipient_email));
+
+
+--
+-- Name: idx_li_abandon_tenant_kind; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_li_abandon_tenant_kind ON public.li_abandonment_campaigns USING btree (tenant_id, kind, flow_status, event_at DESC);
+
+
+--
 -- Name: idx_li_customers_doc; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -9451,6 +11326,13 @@ CREATE INDEX idx_li_customers_integration ON public.li_customers USING btree (in
 
 
 --
+-- Name: idx_li_customers_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_li_customers_key ON public.li_customers USING btree (tenant_id, public.customer_key(email, phone));
+
+
+--
 -- Name: idx_li_customers_remote_id; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -9462,6 +11344,34 @@ CREATE INDEX idx_li_customers_remote_id ON public.li_customers USING btree (loja
 --
 
 CREATE INDEX idx_li_customers_tenant ON public.li_customers USING btree (tenant_id);
+
+
+--
+-- Name: idx_li_group_items_pending; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_li_group_items_pending ON public.li_group_job_items USING btree (job_id) WHERE (status = 'pending'::text);
+
+
+--
+-- Name: idx_li_group_jobs_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_li_group_jobs_tenant ON public.li_group_jobs USING btree (tenant_id, created_at DESC);
+
+
+--
+-- Name: idx_li_newsletter_new; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_li_newsletter_new ON public.li_newsletter_subscribers USING btree (tenant_id, first_seen_at DESC) WHERE ((NOT is_baseline) AND (removed_at IS NULL));
+
+
+--
+-- Name: idx_li_newsletter_tenant_email; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_li_newsletter_tenant_email ON public.li_newsletter_subscribers USING btree (tenant_id, email);
 
 
 --
@@ -9490,6 +11400,13 @@ CREATE INDEX idx_li_orders_created ON public.li_orders USING btree (created_at_r
 --
 
 CREATE INDEX idx_li_orders_customer_id ON public.li_orders USING btree (customer_id);
+
+
+--
+-- Name: idx_li_orders_email; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_li_orders_email ON public.li_orders USING btree (tenant_id, lower(btrim(((raw_json -> 'cliente'::text) ->> 'email'::text))), created_at_remote);
 
 
 --
@@ -9528,6 +11445,13 @@ CREATE INDEX idx_li_orders_tenant ON public.li_orders USING btree (tenant_id);
 
 
 --
+-- Name: idx_li_outbox_pending; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_li_outbox_pending ON public.li_marketing_outbox USING btree (next_attempt_at) WHERE (status = 'pending'::text);
+
+
+--
 -- Name: idx_li_products_integration; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -9553,6 +11477,13 @@ CREATE INDEX idx_li_products_sku ON public.li_products USING btree (sku);
 --
 
 CREATE INDEX idx_li_products_tenant ON public.li_products USING btree (tenant_id);
+
+
+--
+-- Name: idx_li_waitlist_tenant_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_li_waitlist_tenant_date ON public.li_waitlist_snapshots USING btree (tenant_id, snapshot_date DESC);
 
 
 --
@@ -10011,6 +11942,13 @@ CREATE INDEX idx_rfm_segment ON public.customer_rfm_snapshots USING btree (integ
 
 
 --
+-- Name: idx_rfm_snap_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_rfm_snap_key ON public.customer_rfm_snapshots USING btree (tenant_id, public.customer_key(customer_email, customer_phone), reference_date DESC);
+
+
+--
 -- Name: idx_rfm_tenant; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -10043,6 +11981,27 @@ CREATE INDEX idx_team_invites_token_hash ON public.team_invites USING btree (inv
 --
 
 CREATE UNIQUE INDEX idx_tenant_ai_credentials_one_default ON public.tenant_ai_credentials USING btree (tenant_id) WHERE (is_default = true);
+
+
+--
+-- Name: idx_touches_email; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_touches_email ON public.customer_touches USING btree (tenant_id, email, sent_at DESC) WHERE (email IS NOT NULL);
+
+
+--
+-- Name: idx_touches_phone; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_touches_phone ON public.customer_touches USING btree (tenant_id, phone, sent_at DESC) WHERE (phone IS NOT NULL);
+
+
+--
+-- Name: idx_touches_sent_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_touches_sent_at ON public.customer_touches USING btree (sent_at);
 
 
 --
@@ -10088,6 +12047,13 @@ CREATE TRIGGER on_tenant_created_tokens AFTER INSERT ON public.tenants FOR EACH 
 
 
 --
+-- Name: abandonment_flows trg_abandonment_flow_enabled_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_abandonment_flow_enabled_at BEFORE INSERT OR UPDATE OF enabled ON public.abandonment_flows FOR EACH ROW EXECUTE FUNCTION public.set_abandonment_flow_enabled_at();
+
+
+--
 -- Name: chatbot_flows trg_chatbot_flows_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -10099,6 +12065,13 @@ CREATE TRIGGER trg_chatbot_flows_updated_at BEFORE UPDATE ON public.chatbot_flow
 --
 
 CREATE TRIGGER trg_email_event_campaign_stats AFTER INSERT ON public.email_events FOR EACH ROW EXECUTE FUNCTION public.update_campaign_stats_on_event();
+
+
+--
+-- Name: li_orders trg_emit_order_ingested; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_emit_order_ingested AFTER INSERT OR UPDATE ON public.li_orders FOR EACH ROW EXECUTE FUNCTION public.emit_order_ingested();
 
 
 --
@@ -10137,10 +12110,38 @@ CREATE TRIGGER trg_encrypt_nuvemshop_tokens BEFORE INSERT OR UPDATE ON public.nu
 
 
 --
+-- Name: email_suppression_list trg_enqueue_li_unsubscribe; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_enqueue_li_unsubscribe AFTER INSERT ON public.email_suppression_list FOR EACH ROW EXECUTE FUNCTION public.enqueue_li_unsubscribe();
+
+
+--
+-- Name: li_orders trg_mark_coupon_redeemed; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_mark_coupon_redeemed AFTER INSERT OR UPDATE OF raw_json, status_id ON public.li_orders FOR EACH ROW EXECUTE FUNCTION public.mark_coupon_redeemed();
+
+
+--
+-- Name: generated_coupons trg_set_coupon_origin; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_set_coupon_origin BEFORE INSERT ON public.generated_coupons FOR EACH ROW EXECUTE FUNCTION public.set_coupon_origin();
+
+
+--
 -- Name: messages trg_set_first_response_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_set_first_response_at AFTER INSERT ON public.messages FOR EACH ROW EXECUTE FUNCTION public.set_first_response_at();
+
+
+--
+-- Name: abandonment_flows update_abandonment_flows_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER update_abandonment_flows_updated_at BEFORE UPDATE ON public.abandonment_flows FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
@@ -10484,6 +12485,54 @@ CREATE TRIGGER update_tenants_updated_at BEFORE UPDATE ON public.tenants FOR EAC
 --
 
 CREATE TRIGGER update_whatsapp_channels_updated_at BEFORE UPDATE ON public.whatsapp_channels FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
+-- Name: abandonment_flow_sends abandonment_flow_sends_abandonment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.abandonment_flow_sends
+    ADD CONSTRAINT abandonment_flow_sends_abandonment_id_fkey FOREIGN KEY (abandonment_id) REFERENCES public.li_abandonment_campaigns(id) ON DELETE CASCADE;
+
+
+--
+-- Name: abandonment_flow_sends abandonment_flow_sends_flow_campaign_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.abandonment_flow_sends
+    ADD CONSTRAINT abandonment_flow_sends_flow_campaign_id_fkey FOREIGN KEY (flow_campaign_id) REFERENCES public.email_campaigns(id) ON DELETE SET NULL;
+
+
+--
+-- Name: abandonment_flow_sends abandonment_flow_sends_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.abandonment_flow_sends
+    ADD CONSTRAINT abandonment_flow_sends_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: abandonment_flows abandonment_flows_email_integration_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.abandonment_flows
+    ADD CONSTRAINT abandonment_flows_email_integration_id_fkey FOREIGN KEY (email_integration_id) REFERENCES public.email_integrations(id) ON DELETE SET NULL;
+
+
+--
+-- Name: abandonment_flows abandonment_flows_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.abandonment_flows
+    ADD CONSTRAINT abandonment_flows_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: abandonment_flows abandonment_flows_whatsapp_integration_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.abandonment_flows
+    ADD CONSTRAINT abandonment_flows_whatsapp_integration_id_fkey FOREIGN KEY (whatsapp_integration_id) REFERENCES public.integrations(id) ON DELETE SET NULL;
 
 
 --
@@ -11135,6 +13184,14 @@ ALTER TABLE ONLY public.contact_merges
 
 
 --
+-- Name: contact_policies contact_policies_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.contact_policies
+    ADD CONSTRAINT contact_policies_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
 -- Name: contacts contacts_li_customer_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -11287,11 +13344,67 @@ ALTER TABLE ONLY public.customer_tags
 
 
 --
+-- Name: customer_touches customer_touches_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.customer_touches
+    ADD CONSTRAINT customer_touches_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
 -- Name: dead_letter_queue dead_letter_queue_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.dead_letter_queue
     ADD CONSTRAINT dead_letter_queue_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: domain_event_deliveries domain_event_deliveries_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.domain_event_deliveries
+    ADD CONSTRAINT domain_event_deliveries_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.domain_events(id) ON DELETE CASCADE;
+
+
+--
+-- Name: domain_events domain_events_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.domain_events
+    ADD CONSTRAINT domain_events_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: email_campaign_conversions email_campaign_conversions_campaign_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.email_campaign_conversions
+    ADD CONSTRAINT email_campaign_conversions_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.email_campaigns(id) ON DELETE CASCADE;
+
+
+--
+-- Name: email_campaign_conversions email_campaign_conversions_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.email_campaign_conversions
+    ADD CONSTRAINT email_campaign_conversions_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: email_campaign_coupons email_campaign_coupons_campaign_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.email_campaign_coupons
+    ADD CONSTRAINT email_campaign_coupons_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.email_campaigns(id) ON DELETE CASCADE;
+
+
+--
+-- Name: email_campaign_coupons email_campaign_coupons_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.email_campaign_coupons
+    ADD CONSTRAINT email_campaign_coupons_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
 
 
 --
@@ -11380,6 +13493,22 @@ ALTER TABLE ONLY public.email_integration_senders
 
 ALTER TABLE ONLY public.email_integrations
     ADD CONSTRAINT email_integrations_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: email_send_queue email_send_queue_campaign_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.email_send_queue
+    ADD CONSTRAINT email_send_queue_campaign_id_fkey FOREIGN KEY (campaign_id) REFERENCES public.email_campaigns(id) ON DELETE CASCADE;
+
+
+--
+-- Name: email_send_queue email_send_queue_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.email_send_queue
+    ADD CONSTRAINT email_send_queue_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
 
 
 --
@@ -12191,6 +14320,22 @@ ALTER TABLE ONLY public.leads
 
 
 --
+-- Name: li_abandonment_campaigns li_abandonment_campaigns_integration_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_abandonment_campaigns
+    ADD CONSTRAINT li_abandonment_campaigns_integration_id_fkey FOREIGN KEY (integration_id) REFERENCES public.integrations(id) ON DELETE CASCADE;
+
+
+--
+-- Name: li_abandonment_campaigns li_abandonment_campaigns_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_abandonment_campaigns
+    ADD CONSTRAINT li_abandonment_campaigns_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
 -- Name: li_customers li_customers_integration_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -12204,6 +14349,110 @@ ALTER TABLE ONLY public.li_customers
 
 ALTER TABLE ONLY public.li_customers
     ADD CONSTRAINT li_customers_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: li_group_job_items li_group_job_items_job_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_group_job_items
+    ADD CONSTRAINT li_group_job_items_job_id_fkey FOREIGN KEY (job_id) REFERENCES public.li_group_jobs(id) ON DELETE CASCADE;
+
+
+--
+-- Name: li_group_job_items li_group_job_items_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_group_job_items
+    ADD CONSTRAINT li_group_job_items_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: li_group_jobs li_group_jobs_integration_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_group_jobs
+    ADD CONSTRAINT li_group_jobs_integration_id_fkey FOREIGN KEY (integration_id) REFERENCES public.integrations(id) ON DELETE CASCADE;
+
+
+--
+-- Name: li_group_jobs li_group_jobs_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_group_jobs
+    ADD CONSTRAINT li_group_jobs_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: li_group_jobs li_group_jobs_undo_of_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_group_jobs
+    ADD CONSTRAINT li_group_jobs_undo_of_fkey FOREIGN KEY (undo_of) REFERENCES public.li_group_jobs(id) ON DELETE SET NULL;
+
+
+--
+-- Name: li_marketing_outbox li_marketing_outbox_integration_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_marketing_outbox
+    ADD CONSTRAINT li_marketing_outbox_integration_id_fkey FOREIGN KEY (integration_id) REFERENCES public.integrations(id) ON DELETE CASCADE;
+
+
+--
+-- Name: li_marketing_outbox li_marketing_outbox_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_marketing_outbox
+    ADD CONSTRAINT li_marketing_outbox_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: li_marketing_settings li_marketing_settings_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_marketing_settings
+    ADD CONSTRAINT li_marketing_settings_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: li_native_toggle_log li_native_toggle_log_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_native_toggle_log
+    ADD CONSTRAINT li_native_toggle_log_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: li_newsletter_scan_state li_newsletter_scan_state_integration_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_newsletter_scan_state
+    ADD CONSTRAINT li_newsletter_scan_state_integration_id_fkey FOREIGN KEY (integration_id) REFERENCES public.integrations(id) ON DELETE CASCADE;
+
+
+--
+-- Name: li_newsletter_scan_state li_newsletter_scan_state_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_newsletter_scan_state
+    ADD CONSTRAINT li_newsletter_scan_state_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: li_newsletter_subscribers li_newsletter_subscribers_integration_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_newsletter_subscribers
+    ADD CONSTRAINT li_newsletter_subscribers_integration_id_fkey FOREIGN KEY (integration_id) REFERENCES public.integrations(id) ON DELETE CASCADE;
+
+
+--
+-- Name: li_newsletter_subscribers li_newsletter_subscribers_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_newsletter_subscribers
+    ADD CONSTRAINT li_newsletter_subscribers_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
 
 
 --
@@ -12276,6 +14525,22 @@ ALTER TABLE ONLY public.li_sync_state
 
 ALTER TABLE ONLY public.li_sync_state
     ADD CONSTRAINT li_sync_state_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: li_waitlist_snapshots li_waitlist_snapshots_integration_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_waitlist_snapshots
+    ADD CONSTRAINT li_waitlist_snapshots_integration_id_fkey FOREIGN KEY (integration_id) REFERENCES public.integrations(id) ON DELETE CASCADE;
+
+
+--
+-- Name: li_waitlist_snapshots li_waitlist_snapshots_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.li_waitlist_snapshots
+    ADD CONSTRAINT li_waitlist_snapshots_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
 
 
 --
@@ -13149,6 +15414,13 @@ CREATE POLICY "Tenant admins can view function metrics" ON public.function_metri
 
 
 --
+-- Name: abandonment_flows Tenant isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant isolation" ON public.abandonment_flows TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+
+
+--
 -- Name: cashback_configs Tenant isolation; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -13177,10 +15449,24 @@ CREATE POLICY "Tenant isolation" ON public.contact_merges TO authenticated USING
 
 
 --
+-- Name: contact_policies Tenant isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant isolation" ON public.contact_policies TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+
+
+--
 -- Name: crm_segments Tenant isolation; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY "Tenant isolation" ON public.crm_segments TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+
+
+--
+-- Name: email_campaign_conversions Tenant isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant isolation" ON public.email_campaign_conversions FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
 
 
 --
@@ -13230,6 +15516,13 @@ CREATE POLICY "Tenant isolation" ON public.generated_coupons TO authenticated US
 --
 
 CREATE POLICY "Tenant isolation" ON public.inbox_routing_rules TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
+
+
+--
+-- Name: li_marketing_settings Tenant isolation; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant isolation" ON public.li_marketing_settings TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid()))) WITH CHECK ((tenant_id = public.get_user_tenant_id(auth.uid())));
 
 
 --
@@ -13691,6 +15984,92 @@ CREATE POLICY "Tenant members can view their token transactions" ON public.token
 --
 
 CREATE POLICY "Tenant members can view webhook events" ON public.webhook_events FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+
+
+--
+-- Name: abandonment_flow_sends Tenant select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant select" ON public.abandonment_flow_sends FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+
+
+--
+-- Name: customer_touches Tenant select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant select" ON public.customer_touches FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+
+
+--
+-- Name: domain_event_deliveries Tenant select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant select" ON public.domain_event_deliveries FOR SELECT TO authenticated USING ((EXISTS ( SELECT 1
+   FROM public.domain_events e
+  WHERE ((e.id = domain_event_deliveries.event_id) AND (e.tenant_id = public.get_user_tenant_id(auth.uid()))))));
+
+
+--
+-- Name: domain_events Tenant select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant select" ON public.domain_events FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+
+
+--
+-- Name: li_abandonment_campaigns Tenant select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant select" ON public.li_abandonment_campaigns FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+
+
+--
+-- Name: li_group_job_items Tenant select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant select" ON public.li_group_job_items FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+
+
+--
+-- Name: li_group_jobs Tenant select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant select" ON public.li_group_jobs FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+
+
+--
+-- Name: li_marketing_outbox Tenant select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant select" ON public.li_marketing_outbox FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+
+
+--
+-- Name: li_native_toggle_log Tenant select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant select" ON public.li_native_toggle_log FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+
+
+--
+-- Name: li_newsletter_scan_state Tenant select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant select" ON public.li_newsletter_scan_state FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+
+
+--
+-- Name: li_newsletter_subscribers Tenant select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant select" ON public.li_newsletter_subscribers FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+
+
+--
+-- Name: li_waitlist_snapshots Tenant select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant select" ON public.li_waitlist_snapshots FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
 
 
 --
@@ -14626,6 +17005,18 @@ CREATE POLICY "Users can view their tenant's business hours" ON public.business_
 
 
 --
+-- Name: abandonment_flow_sends; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.abandonment_flow_sends ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: abandonment_flows; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.abandonment_flows ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: tenant_ai_credentials admin_only_ai_credentials_select; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -15010,6 +17401,12 @@ ALTER TABLE public.contact_custom_fields ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.contact_merges ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: contact_policies; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.contact_policies ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: contacts; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -15065,10 +17462,47 @@ CREATE POLICY customer_tags_tenant_all ON public.customer_tags TO authenticated 
 
 
 --
+-- Name: customer_touches; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.customer_touches ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: dead_letter_queue; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.dead_letter_queue ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: domain_event_deliveries; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.domain_event_deliveries ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: domain_events; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.domain_events ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: email_campaign_conversions; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.email_campaign_conversions ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: email_campaign_coupons; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.email_campaign_coupons ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: email_campaign_coupons email_campaign_coupons_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY email_campaign_coupons_select ON public.email_campaign_coupons FOR SELECT TO authenticated USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
+
 
 --
 -- Name: email_campaign_logs; Type: ROW SECURITY; Schema: public; Owner: -
@@ -15099,6 +17533,12 @@ ALTER TABLE public.email_integration_senders ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.email_integrations ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: email_send_queue; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.email_send_queue ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: email_suppression_list; Type: ROW SECURITY; Schema: public; Owner: -
@@ -15428,6 +17868,12 @@ ALTER TABLE public.kanban_columns ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.leads ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: li_abandonment_campaigns; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.li_abandonment_campaigns ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: li_customers; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -15446,6 +17892,48 @@ CREATE POLICY li_customers_delete ON public.li_customers FOR DELETE USING ((tena
 
 CREATE POLICY li_customers_select ON public.li_customers FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
 
+
+--
+-- Name: li_group_job_items; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.li_group_job_items ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: li_group_jobs; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.li_group_jobs ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: li_marketing_outbox; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.li_marketing_outbox ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: li_marketing_settings; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.li_marketing_settings ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: li_native_toggle_log; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.li_native_toggle_log ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: li_newsletter_scan_state; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.li_newsletter_scan_state ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: li_newsletter_subscribers; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.li_newsletter_subscribers ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: li_order_items; Type: ROW SECURITY; Schema: public; Owner: -
@@ -15526,6 +18014,12 @@ CREATE POLICY li_sync_state_all ON public.li_sync_state USING ((tenant_id = publ
 
 CREATE POLICY li_sync_state_select ON public.li_sync_state FOR SELECT USING ((tenant_id = public.get_user_tenant_id(auth.uid())));
 
+
+--
+-- Name: li_waitlist_snapshots; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.li_waitlist_snapshots ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: li_webhook_events; Type: ROW SECURITY; Schema: public; Owner: -
@@ -16503,5 +18997,5 @@ ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict GcOQKafRM8Pzon1OrW0Ler1WKvBidZxLt6C6EsRgJS4clq4hYc7AsSDvoU1yjXw
+\unrestrict qk6dsfU3KnfZbY59yHzsnbN1OWJtZLtemR85Q5ulmUp7lPQhmS7lTE8Ur4WmxM6
 

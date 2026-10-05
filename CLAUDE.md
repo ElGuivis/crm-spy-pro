@@ -99,7 +99,7 @@ supabase/
 docs/, sql/, scripts/    # docs internos, snippets SQL ad-hoc, scripts utilitários
 ```
 
-`src/integrations/supabase/types.ts` é **autogerado** — não editar manualmente. Regenerar com túnel SSH aberto: `supabase gen types typescript --db-url postgresql://postgres:<senha>@127.0.0.1:6543/postgres --schema public` (UTF-8/LF; ver `sql/SOURCE_OF_TRUTH.md`).
+`src/integrations/supabase/types.ts` é **autogerado** — não editar manualmente. Regenerar SEM CLI/docker local, pelo postgres-meta do servidor: `ssh ... "curl -s 'http://<ip do container supabase-meta>:8080/generators/typescript?included_schemas=public&detect_one_to_one_relationships=true'" > types.ts` (IP: `docker inspect supabase-meta`; salvar UTF-8 sem BOM e LF) e o snapshot com `docker exec supabase-db pg_dump -U postgres -d postgres -s -n public --no-owner --no-privileges --no-comments > sql/FULL_MIGRATION.sql`; conferir com `deno run --allow-read scripts/check-schema-drift.ts` (rodar na VPS com `docker run denoland/deno`). Última regeneração: 05/10/2026 (drift 0). Alternativa com túnel SSH aberto: `supabase gen types typescript --db-url postgresql://postgres:<senha>@127.0.0.1:6543/postgres --schema public` (UTF-8/LF; ver `sql/SOURCE_OF_TRUTH.md`).
 
 ## Tenants e dados
 
