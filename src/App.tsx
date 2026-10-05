@@ -38,6 +38,7 @@ const BulkCampaigns = lazy(() => import("./pages/BulkCampaigns"));
 const Settings = lazy(() => import("./pages/Settings"));
 const CatalogoWhatsApp = lazy(() => import("./pages/CatalogoWhatsApp"));
 const EmailMarketing = lazy(() => import("./pages/EmailMarketing"));
+const RecuperacaoLI = lazy(() => import("./pages/RecuperacaoLI"));
 const InstagramComunicacao = lazy(() => import("./pages/InstagramComunicacao"));
 const Operations = lazy(() => import("./pages/Operations"));
 const Fidelidade = lazy(() => import("./pages/Fidelidade"));
@@ -108,6 +109,7 @@ const App = () => (
                             <Route path="/envios/:integrationId" element={<Envios />} />
                             <Route path="/disparos" element={<BulkCampaigns />} />
                             <Route path="/email-marketing" element={<EmailMarketing />} />
+          <Route path="/recuperacao-li" element={<RecuperacaoLI />} />
                             <Route path="/instagram" element={<InstagramComunicacao />} />
                             <Route path="/catalogo-whatsapp" element={<CatalogoWhatsApp />} />
                             <Route path="/catalogo-whatsapp/:integrationId" element={<CatalogoWhatsApp />} />

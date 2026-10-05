@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Plug, Settings, Headset, Zap,
   ShoppingCart, UserCircle, Package, Ticket, UsersRound, Coins,
-  Truck, Megaphone, Grid3X3, BookImage, Mail, Activity, Instagram, Star,
+  Truck, Megaphone, Grid3X3, BookImage, Mail, Activity, Instagram, Star, ShoppingBasket,
 } from "lucide-react";
 
 export interface NavItem {
@@ -53,6 +53,7 @@ export const navGroups: NavGroup[] = [
     label: "Automação",
     items: [
       { icon: Zap, label: "Pós Venda", href: "/automations", permissionKey: "automations" },
+      { icon: ShoppingBasket, label: "Recuperação LI", href: "/recuperacao-li", permissionKey: "automations" },
       { icon: Instagram, label: "Instagram", href: "/instagram", permissionKey: "conversations" },
     ]
   },

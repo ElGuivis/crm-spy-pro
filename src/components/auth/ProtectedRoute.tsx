@@ -23,6 +23,7 @@ const routePermissionMap: Record<string, string> = {
   '/coupons': 'coupons',
   '/settings': 'settings',
   '/email-marketing': 'automations',
+  '/recuperacao-li': 'automations',
   '/catalogo-whatsapp': 'products',
   '/instagram-inbox': 'conversations',
   '/instagram-automations': 'automations',

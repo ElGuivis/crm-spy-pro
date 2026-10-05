@@ -6,7 +6,7 @@ export const RECENT_CHANGELOG: ChangelogEntry[] = [
     version: '4.2.0',
     date: '05 Out 2026',
     items: [
-      { type: 'feature', text: 'E-mail Marketing > Recuperação: carrinho, navegação e pedido abandonado direto da API de Marketing da Loja Integrada, com até 4 etapas por tipo (de 5 minutos a 48 horas), e-mail e WhatsApp, cupom único por pessoa e janela de silêncio. Tudo começa desligado e só atende quem abandonar depois de você ligar' },
+      { type: 'feature', text: 'Automação > Recuperação LI: carrinho, navegação e pedido abandonado direto da API de Marketing da Loja Integrada, com até 4 etapas por tipo (de 5 minutos a 48 horas), e-mail e WhatsApp, cupom único por pessoa e janela de silêncio. Tudo começa desligado e só atende quem abandonar depois de você ligar' },
       { type: 'feature', text: 'Novo bloco "Itens do carrinho" no editor: mostra foto, nome, quantidade, preço e total dos produtos que a própria pessoa deixou, com 9 modelos prontos de recuperação' },
       { type: 'feature', text: 'Você decide se a automação nativa da Loja Integrada continua ligada: chave por tipo, lida direto da loja, com verificação e restauração automática se a loja não aplicar a mudança, ou a opção de tirar da nativa só quem o nosso fluxo atender' },
       { type: 'feature', text: 'Resultado da recuperação: abandonos capturados, contatados, aberturas, cliques e valor recuperado, separando o que veio do nosso fluxo do que comprou por outro caminho' },
@@ -18,7 +18,7 @@ export const RECENT_CHANGELOG: ChangelogEntry[] = [
       { type: 'feature', text: 'Cupons: todos os módulos (cashback, aniversário, reativação, e-mail marketing, recuperação, boas-vindas e criados aqui) agora usam o mesmo emissor, com registro único, nova tentativa quando a loja recusa uma rajada e código sem repetição' },
       { type: 'feature', text: 'Cupons: cartão "Retorno por origem" com quantos cupons cada módulo emitiu, quantos foram usados, receita, ticket médio e desconto dado; o uso é preenchido pelos pedidos da loja (cancelados não contam)' },
       { type: 'improvement', text: 'Cupons de aniversário e reativação passam a aparecer na lista de cupons, com a origem' },
-      { type: 'feature', text: 'Regras de contato para todos os módulos: limite de mensagens por pessoa em 24 horas e prioridade da recuperação, boas-vindas, lembretes e reativação sobre campanhas e disparos em massa, com o resumo do que foi enviado (aba Recuperação > Regras de contato)' },
+      { type: 'feature', text: 'Regras de contato para todos os módulos: limite de mensagens por pessoa em 24 horas e prioridade da recuperação, boas-vindas, lembretes e reativação sobre campanhas e disparos em massa, com o resumo do que foi enviado (Automação > Recuperação LI > Regras de contato)' },
       { type: 'fix', text: 'Aniversário, cashback e lembretes de cashback agora respeitam a lista de supressão de e-mail e os telefones bloqueados' },
       { type: 'fix', text: 'E-mails de aniversário, cashback e lembrete de cashback agora trazem o link para cancelar a inscrição (e o botão de descadastro do Gmail e do Yahoo); quem cancelar deixa de receber de todos os módulos' },
       { type: 'fix', text: 'Ativar ou desativar cupons que não têm valor mínimo falhava na loja; corrigido' },
