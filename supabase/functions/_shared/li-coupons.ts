@@ -87,7 +87,7 @@ export interface LiCoupon {
   id: number; codigo: string; descricao?: string | null; tipo: string; valor: string | number | null;
   quantidade?: number | null; quantidade_usada?: number | null; quantidade_por_cliente?: number | null;
   validade?: string | null; valor_minimo?: string | number | null; ativo?: boolean; cumulativo?: boolean;
-  data_modificacao?: string | null;
+  data_criacao?: string | null; data_modificacao?: string | null;
 }
 
 const num = (v: unknown): number | null => {
@@ -117,6 +117,9 @@ export function liCouponToRow(c: LiCoupon, ctx: { tenantId: string; integrationI
     coupon_description: c.descricao || null,
     discount_percentage: c.tipo === "porcentagem" ? valor ?? 0 : 0,
     coupon_value: c.tipo === "fixo" ? valor : null,
+    // data de criação na loja: alimenta o filtro de período do retorno por origem (sem ela valeria a data da sincronização)
+    li_data_inicio: brDate(c.data_criacao),
+    issue_status: "issued", // a loja já tem o cupom: confirma reservas que ficaram pendentes
     li_data_fim: validade,
     expires_at: validade,
     li_quantidade_uso_maximo: max != null && max > 0 && max < 100_000 ? max : null,

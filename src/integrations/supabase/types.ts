@@ -11591,6 +11591,10 @@ export type Database = {
       map_evolution_status: { Args: { status: string }; Returns: string }
       mask_secret: { Args: { _plaintext: string }; Returns: string }
       process_churn_campaigns: { Args: never; Returns: undefined }
+      recompute_coupon_usage: {
+        Args: { p_code: string; p_integration_id: string }
+        Returns: undefined
+      }
       refresh_abandonment_recovery: { Args: never; Returns: number }
       refresh_coupon_usage: { Args: { p_tenant_id: string }; Returns: number }
       refresh_email_campaign_attribution: {

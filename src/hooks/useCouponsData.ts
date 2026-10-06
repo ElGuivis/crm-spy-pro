@@ -49,7 +49,8 @@ export function useCouponsData(integrationId: string) {
   const calculateStats = (data: GeneratedCoupon[]) => {
     const now = new Date();
     const codes = data.map((c) => getCouponStatus(c, now).code);
-    const usedList = data.filter((c, i) => codes[i] === "used");
+    // "utilizado" nos cartões = qualquer cupom que já teve uso (inclusive os de uso múltiplo, que seguem "ativos" na linha)
+    const usedList = data.filter((c) => !!c.used_at);
     const totalGeneratedValue = usedList.reduce((acc, c) => acc + (c.used_order_value || 0), 0);
     setStats({
       total: data.length, used: usedList.length,
@@ -143,6 +144,7 @@ export function useCouponsData(integrationId: string) {
     if (!matchesSearch || !matchesSource(coupon, sourceFilter)) return false;
     if (statusFilter !== "all") {
       const { code } = getCouponStatus(coupon);
+      if (statusFilter === "used") return !!coupon.used_at; // mesmo critério do cartão "Utilizados"
       if (statusFilter === "expired") return code === "expired" || code === "limit_reached";
       return code === statusFilter;
     }

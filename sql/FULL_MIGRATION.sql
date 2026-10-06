@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict K4LWL6AuCwXmbfeiazqNtAbpo7fCz7gf4lOLuwh4e4887LONDtiLvltBhb6UNGw
+\restrict uKLgtmYxpXBQJB6tx5xGwGDd25loClMzBfEwvcvWiprAXRRAaRXtfjS1Sy5tKYn
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -1479,8 +1479,8 @@ BEGIN
          count(*)::int,
          count(g.used_at)::int,
          COALESCE(sum(g.used_order_value) FILTER (WHERE g.used_at IS NOT NULL), 0),
-         COALESCE(avg(g.used_order_value) FILTER (WHERE g.used_at IS NOT NULL), 0),
-         COALESCE(sum(COALESCE(g.coupon_value, g.used_order_value * g.discount_percentage / 100)) FILTER (WHERE g.used_at IS NOT NULL), 0)
+         COALESCE(sum(g.used_order_value) FILTER (WHERE g.used_at IS NOT NULL) / NULLIF(sum(GREATEST(COALESCE(g.li_quantidade_usada, 1), 1)) FILTER (WHERE g.used_at IS NOT NULL), 0), 0),
+         COALESCE(sum(COALESCE(g.coupon_value * GREATEST(COALESCE(g.li_quantidade_usada, 1), 1), g.used_order_value * g.discount_percentage / 100)) FILTER (WHERE g.used_at IS NOT NULL), 0)
   FROM public.generated_coupons g
   WHERE g.tenant_id = p_tenant_id AND g.issue_status = 'issued'
     AND (p_days <= 0 OR COALESCE(g.li_data_inicio, g.created_at) >= now() - make_interval(days => p_days))
@@ -2953,15 +2953,7 @@ DECLARE v_code text;
 BEGIN
   v_code := upper(btrim(NEW.raw_json->'cupom_desconto'->>'codigo'));
   IF v_code IS NULL OR v_code = '' THEN RETURN NEW; END IF;
-  IF COALESCE(NEW.status_id, 0) IN (7, 8, 16, 1020) THEN
-    UPDATE public.generated_coupons SET used_at = NULL, used_in_order_id = NULL, used_order_value = NULL
-    WHERE integration_id = NEW.integration_id AND coupon_code = v_code AND used_in_order_id = NEW.order_number;
-  ELSE
-    UPDATE public.generated_coupons
-    SET used_at = COALESCE(NEW.created_at_remote, now()), used_in_order_id = NEW.order_number,
-        used_order_value = COALESCE(public.try_numeric(NEW.totals_json->>'total'), 0)
-    WHERE integration_id = NEW.integration_id AND coupon_code = v_code AND used_at IS NULL;
-  END IF;
+  PERFORM public.recompute_coupon_usage(NEW.integration_id, v_code);
   RETURN NEW;
 END;
 $$;
@@ -3090,6 +3082,36 @@ $$;
 
 
 --
+-- Name: recompute_coupon_usage(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.recompute_coupon_usage(p_integration_id uuid, p_code text) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE v_first timestamptz; v_order text; v_total numeric; v_n integer;
+BEGIN
+  SELECT count(*), min(o.created_at_remote), (array_agg(o.order_number::text ORDER BY o.created_at_remote))[1],
+         COALESCE(sum(COALESCE(public.try_numeric(o.totals_json->>'total'), 0)), 0)
+    INTO v_n, v_first, v_order, v_total
+  FROM public.li_orders o
+  WHERE o.integration_id = p_integration_id AND COALESCE(o.status_id, 0) NOT IN (7, 8, 16, 1020)
+    AND upper(btrim(o.raw_json->'cupom_desconto'->>'codigo')) = p_code;
+
+  IF v_n > 0 THEN
+    UPDATE public.generated_coupons
+    SET used_at = COALESCE(v_first, used_at, now()), used_in_order_id = v_order, used_order_value = v_total
+    WHERE integration_id = p_integration_id AND coupon_code = p_code;
+  ELSE
+    -- nenhum pedido válido: desfaz só o que veio de pedido (o uso informado pela loja continua)
+    UPDATE public.generated_coupons SET used_at = NULL, used_in_order_id = NULL, used_order_value = NULL
+    WHERE integration_id = p_integration_id AND coupon_code = p_code AND used_in_order_id IS NOT NULL;
+  END IF;
+END;
+$$;
+
+
+--
 -- Name: refresh_abandonment_recovery(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -3152,17 +3174,19 @@ BEGIN
   IF NOT public.caller_has_tenant(p_tenant_id) THEN
     RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
   END IF;
-  WITH first_use AS (
-    SELECT DISTINCT ON (o.integration_id, upper(btrim(o.raw_json->'cupom_desconto'->>'codigo')))
-           o.integration_id, upper(btrim(o.raw_json->'cupom_desconto'->>'codigo')) AS code, o.order_number, o.created_at_remote,
-           COALESCE(public.try_numeric(o.totals_json->>'total'), 0) AS total
+  WITH u AS (
+    SELECT o.integration_id, upper(btrim(o.raw_json->'cupom_desconto'->>'codigo')) AS code,
+           min(o.created_at_remote) AS first_at, (array_agg(o.order_number::text ORDER BY o.created_at_remote))[1] AS first_order,
+           COALESCE(sum(COALESCE(public.try_numeric(o.totals_json->>'total'), 0)), 0) AS total
     FROM public.li_orders o
     WHERE o.tenant_id = p_tenant_id AND COALESCE(o.raw_json->'cupom_desconto'->>'codigo', '') <> '' AND COALESCE(o.status_id, 0) NOT IN (7, 8, 16, 1020)
-    ORDER BY o.integration_id, upper(btrim(o.raw_json->'cupom_desconto'->>'codigo')), o.created_at_remote
+    GROUP BY 1, 2
   )
-  UPDATE public.generated_coupons g SET used_at = f.created_at_remote, used_in_order_id = f.order_number, used_order_value = f.total
-  FROM first_use f
-  WHERE g.tenant_id = p_tenant_id AND g.integration_id = f.integration_id AND g.coupon_code = f.code AND g.used_at IS NULL;
+  UPDATE public.generated_coupons g
+  SET used_at = u.first_at, used_in_order_id = u.first_order, used_order_value = u.total
+  FROM u
+  WHERE g.tenant_id = p_tenant_id AND g.integration_id = u.integration_id AND g.coupon_code = u.code
+    AND (g.used_in_order_id IS DISTINCT FROM u.first_order OR g.used_order_value IS DISTINCT FROM u.total OR g.used_at IS DISTINCT FROM u.first_at);
   GET DIAGNOSTICS n = ROW_COUNT;
   RETURN n;
 END;
@@ -11428,6 +11452,13 @@ CREATE INDEX idx_li_order_items_tenant_id ON public.li_order_items USING btree (
 
 
 --
+-- Name: idx_li_orders_coupon_code; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_li_orders_coupon_code ON public.li_orders USING btree (integration_id, upper(btrim(((raw_json -> 'cupom_desconto'::text) ->> 'codigo'::text)))) WHERE (COALESCE(((raw_json -> 'cupom_desconto'::text) ->> 'codigo'::text), ''::text) <> ''::text);
+
+
+--
 -- Name: idx_li_orders_created; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -19035,5 +19066,5 @@ ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict K4LWL6AuCwXmbfeiazqNtAbpo7fCz7gf4lOLuwh4e4887LONDtiLvltBhb6UNGw
+\unrestrict uKLgtmYxpXBQJB6tx5xGwGDd25loClMzBfEwvcvWiprAXRRAaRXtfjS1Sy5tKYn
 
