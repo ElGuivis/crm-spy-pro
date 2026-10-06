@@ -12,6 +12,7 @@ const BATCH = 40;
 export async function runOutbox(supabase: Supabase, log: { info: (...a: unknown[]) => void; error: (...a: unknown[]) => void }) {
   // aproveita a rodada de 5 min: reservas de cupom esquecidas (queda no meio da emissão) viram emitidas ou somem
   await supabase.rpc("cleanup_pending_coupons");
+  await supabase.rpc("cleanup_public_rate_limits"); // janelas de limite de taxa com mais de 1 dia
   await supabase.rpc("cleanup_domain_events"); // eventos de pedido tratados há mais de 30 dias
   await supabase.rpc("cleanup_customer_touches"); // toques com mais de 90 dias não influenciam nenhuma regra
   await supabase.rpc("archive_orphan_flow_campaigns"); // etapas criadas e nunca usadas (cliques repetidos em "Criar etapas padrão")

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict iCmiEL1PMa5f13ZpUJ3fGXPg6o7FCA8bEQTkDLfbFZuxydatJ3dJO3gcGnvctML
+\restrict 5v39hNT5cl8wEdt203TYI1ebSqepAP3zQaqOyx2WqeMd2i3agImi2DGu9AtaGXE
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -337,6 +337,30 @@ CREATE FUNCTION public.caller_is_user(_user_id uuid) RETURNS boolean
 $$;
 
 
+--
+-- Name: check_rate_limit(text, integer, integer, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.check_rate_limit(p_bucket text, p_max integer, p_window_seconds integer, p_increment boolean DEFAULT true) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  v_window timestamptz := to_timestamp(floor(extract(epoch FROM now()) / GREATEST(p_window_seconds, 1)) * GREATEST(p_window_seconds, 1));
+  v_hits integer;
+BEGIN
+  IF p_increment THEN
+    INSERT INTO public.public_rate_limits (bucket, window_start, hits) VALUES (left(p_bucket, 200), v_window, 1)
+    ON CONFLICT (bucket, window_start) DO UPDATE SET hits = public.public_rate_limits.hits + 1
+    RETURNING hits INTO v_hits;
+    RETURN v_hits <= p_max;
+  END IF;
+  SELECT hits INTO v_hits FROM public.public_rate_limits WHERE bucket = left(p_bucket, 200) AND window_start = v_window;
+  RETURN COALESCE(v_hits, 0) < p_max;
+END;
+$$;
+
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
@@ -514,6 +538,23 @@ DECLARE n integer;
 BEGIN
   UPDATE public.generated_coupons SET issue_status = 'issued' WHERE issue_status = 'pending' AND li_coupon_id IS NOT NULL;
   DELETE FROM public.generated_coupons WHERE issue_status = 'pending' AND li_coupon_id IS NULL AND created_at < now() - interval '15 minutes';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+END;
+$$;
+
+
+--
+-- Name: cleanup_public_rate_limits(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.cleanup_public_rate_limits() RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE n integer;
+BEGIN
+  DELETE FROM public.public_rate_limits WHERE window_start < now() - interval '1 day';
   GET DIAGNOSTICS n = ROW_COUNT;
   RETURN n;
 END;
@@ -7581,6 +7622,17 @@ CREATE TABLE public.profiles (
 
 
 --
+-- Name: public_rate_limits; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.public_rate_limits (
+    bucket text NOT NULL,
+    window_start timestamp with time zone NOT NULL,
+    hits integer DEFAULT 0 NOT NULL
+);
+
+
+--
 -- Name: quick_replies; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -9607,6 +9659,14 @@ ALTER TABLE ONLY public.profiles
 
 ALTER TABLE ONLY public.profiles
     ADD CONSTRAINT profiles_user_id_key UNIQUE (user_id);
+
+
+--
+-- Name: public_rate_limits public_rate_limits_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.public_rate_limits
+    ADD CONSTRAINT public_rate_limits_pkey PRIMARY KEY (bucket, window_start);
 
 
 --
@@ -11841,6 +11901,13 @@ CREATE INDEX idx_outbound_queue_tenant ON public.outbound_queue USING btree (ten
 --
 
 CREATE INDEX idx_profiles_active_tenant ON public.profiles USING btree (active_tenant_id);
+
+
+--
+-- Name: idx_public_rate_limits_window; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_public_rate_limits_window ON public.public_rate_limits USING btree (window_start);
 
 
 --
@@ -18237,6 +18304,12 @@ ALTER TABLE public.outbound_queue ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: public_rate_limits; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.public_rate_limits ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: quick_replies; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -18962,5 +19035,5 @@ ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict iCmiEL1PMa5f13ZpUJ3fGXPg6o7FCA8bEQTkDLfbFZuxydatJ3dJO3gcGnvctML
+\unrestrict 5v39hNT5cl8wEdt203TYI1ebSqepAP3zQaqOyx2WqeMd2i3agImi2DGu9AtaGXE
 

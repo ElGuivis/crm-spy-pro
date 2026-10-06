@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { classifyOpen, firstIp } from "../_shared/email-bot-filter.ts";
+import { clientIp, withinRateLimit } from "../_shared/rate-limit.ts";
 
 // 1x1 transparent GIF
 const TRANSPARENT_GIF = new Uint8Array([
@@ -26,6 +27,9 @@ serve(async (req) => {
         Deno.env.get("SUPABASE_URL")!,
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
       );
+
+      // acima do limite o pixel continua respondendo, só deixa de gravar (proteção contra enxurrada de escrita)
+      if (!(await withinRateLimit(supabase, `open:${clientIp(req)}`, 600, 60))) return new Response(TRANSPARENT_GIF, { headers: GIF_HEADERS });
 
       const { data: token } = await supabase
         .from("email_unsubscribe_tokens")

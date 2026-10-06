@@ -10002,6 +10002,24 @@ export type Database = {
           },
         ]
       }
+      public_rate_limits: {
+        Row: {
+          bucket: string
+          hits: number
+          window_start: string
+        }
+        Insert: {
+          bucket: string
+          hits?: number
+          window_start: string
+        }
+        Update: {
+          bucket?: string
+          hits?: number
+          window_start?: string
+        }
+        Relationships: []
+      }
       quick_replies: {
         Row: {
           category: string | null
@@ -11114,6 +11132,15 @@ export type Database = {
       caller_has_tenant: { Args: { _tenant_id: string }; Returns: boolean }
       caller_is_trusted: { Args: never; Returns: boolean }
       caller_is_user: { Args: { _user_id: string }; Returns: boolean }
+      check_rate_limit: {
+        Args: {
+          p_bucket: string
+          p_increment?: boolean
+          p_max: number
+          p_window_seconds: number
+        }
+        Returns: boolean
+      }
       claim_domain_events: {
         Args: { p_limit?: number }
         Returns: {
@@ -11165,6 +11192,7 @@ export type Database = {
       cleanup_old_logs: { Args: never; Returns: undefined }
       cleanup_operational_logs: { Args: never; Returns: undefined }
       cleanup_pending_coupons: { Args: never; Returns: number }
+      cleanup_public_rate_limits: { Args: never; Returns: number }
       clear_message_buffer: {
         Args: { _conversation_id: string }
         Returns: string[]

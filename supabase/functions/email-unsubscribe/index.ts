@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
+import { clientIp, withinRateLimit } from "../_shared/rate-limit.ts";
 
 function htmlResponse(status: number, title: string, description: string, extraHtml = "") {
   return new Response(
@@ -31,6 +32,12 @@ serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
+    // anti-enxurrada e anti-adivinhação de token: 300 acessos/min por IP (o Gmail faz o descadastro de um clique de IPs compartilhados) e no máximo 20 tokens inexistentes em 10 min
+    const ip = clientIp(req);
+    if (!(await withinRateLimit(supabase, `unsub:${ip}`, 300, 60)) || !(await withinRateLimit(supabase, `unsub-miss:${ip}`, 20, 600, false))) {
+      return htmlResponse(429, "Muitas tentativas", "Aguarde alguns minutos e tente de novo.");
+    }
+
     const url = new URL(req.url);
     let token = url.searchParams.get("token") || "";
 
@@ -51,6 +58,7 @@ serve(async (req) => {
       .maybeSingle();
 
     if (tokenError || !unsubscribeToken) {
+      await withinRateLimit(supabase, `unsub-miss:${ip}`, 20, 600);
       return htmlResponse(404, "Link não encontrado", "Este link de descadastro não existe ou já expirou.");
     }
 

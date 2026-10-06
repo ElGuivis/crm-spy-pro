@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { classifyClick, firstIp } from "../_shared/email-bot-filter.ts";
+import { clientIp, withinRateLimit } from "../_shared/rate-limit.ts";
 
 serve(async (req) => {
   const params = new URL(req.url).searchParams;
@@ -29,13 +30,21 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
+    // sem token válido não há redirecionamento (anti open-redirect), então o limite responde 429 em vez de seguir
+    const ip = clientIp(req);
+    if (!(await withinRateLimit(supabase, `click:${ip}`, 600, 60))) return new Response("Too many requests", { status: 429 });
+    if (!(await withinRateLimit(supabase, `click-miss:${ip}`, 20, 600, false))) return new Response("Too many requests", { status: 429 });
+
     const { data: token } = await supabase
       .from("email_unsubscribe_tokens")
       .select("id, tenant_id, campaign_id, recipient_email, is_test, created_at")
       .eq("id", tokenId)
       .maybeSingle();
 
-    if (!token) return new Response("Invalid tracking token", { status: 403 });
+    if (!token) {
+      await withinRateLimit(supabase, `click-miss:${ip}`, 20, 600);
+      return new Response("Invalid tracking token", { status: 403 });
+    }
 
     const forwarded = req.headers.get("x-forwarded-for") ?? req.headers.get("cf-connecting-ip");
     const userAgent = req.headers.get("user-agent");
