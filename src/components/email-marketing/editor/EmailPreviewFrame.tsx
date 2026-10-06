@@ -2,19 +2,25 @@ import { useRef, useState } from "react";
 import type { EmailContent } from "./types";
 import { generateEmailHTML } from "./htmlGenerator";
 import { withPreviewSamples } from "./cartPreview";
+import { applyPersona, SAMPLE_PERSON, withDarkSimulation, type PreviewPerson } from "./previewPersona";
 
 interface Props {
   content: EmailContent;
   mode: "desktop" | "mobile";
   /** miniatura: só o e-mail em 600 px, sem margens (usado na galeria de modelos) */
   compact?: boolean;
+  /** cliente da pré-visualização (nome e dados); sem ele usa um exemplo */
+  person?: PreviewPerson;
+  /** simula o modo escuro dos clientes de e-mail */
+  dark?: boolean;
 }
 
 /** Pré-visualização fiel: o e-mail completo (o mesmo HTML do envio) dentro de um iframe sem scripts. */
-export function EmailPreviewFrame({ content, mode, compact }: Props) {
+export function EmailPreviewFrame({ content, mode, compact, person, dark }: Props) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState(600);
-  const html = withPreviewSamples(generateEmailHTML(content));
+  const base = applyPersona(withPreviewSamples(generateEmailHTML(content)), person ?? SAMPLE_PERSON);
+  const html = dark ? withDarkSimulation(base) : base;
 
   const fit = () => {
     const doc = ref.current?.contentDocument;
@@ -35,7 +41,7 @@ export function EmailPreviewFrame({ content, mode, compact }: Props) {
 
   return (
     <div className="p-8 bg-muted/30">
-      <div className={`mx-auto bg-white rounded-lg shadow-sm transition-all overflow-hidden ${mode === "desktop" ? "max-w-[680px]" : "max-w-[375px]"}`}>
+      <div className={`mx-auto ${dark ? "bg-neutral-900" : "bg-white"} rounded-lg shadow-sm transition-all overflow-hidden ${mode === "desktop" ? "max-w-[680px]" : "max-w-[375px]"}`}>
         {frame}
       </div>
     </div>

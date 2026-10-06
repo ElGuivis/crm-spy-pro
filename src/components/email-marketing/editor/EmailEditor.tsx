@@ -1,10 +1,12 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { EmailContent } from "./types";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { History } from "lucide-react";
 import { EmailPreviewFrame } from "./EmailPreviewFrame";
+import { PreviewControls } from "./PreviewControls";
+import { SAMPLE_PERSON, type PreviewPerson } from "./previewPersona";
 import { BlockPropertiesPanel } from "./BlockPropertiesPanel";
 import { generateEmailHTML } from "./htmlGenerator";
 import { useEmailEditor } from "@/hooks/useEmailEditor";
@@ -36,6 +38,8 @@ export function EmailEditor({ initialContent, onChange, draftKey, onTemplateAppl
   const editor = useEmailEditor({ initialContent, onChange: handleChange });
   const generatedHTML = generateEmailHTML(editor.content);
   const { undo, redo } = editor;
+  const [previewPerson, setPreviewPerson] = useState<PreviewPerson>(SAMPLE_PERSON);
+  const [previewDark, setPreviewDark] = useState(false);
 
   // Ctrl+Z / Ctrl+Y (ou Ctrl+Shift+Z) fora dos campos de texto (que têm o desfazer do próprio navegador)
   useEffect(() => {
@@ -79,6 +83,7 @@ export function EmailEditor({ initialContent, onChange, draftKey, onTemplateAppl
           onRedo={editor.redo}
           canUndo={editor.canUndo}
           canRedo={editor.canRedo}
+          previewExtra={<PreviewControls person={previewPerson} onPerson={setPreviewPerson} dark={previewDark} onDark={setPreviewDark} />}
           extra={<><ShowcaseDialog onInsert={(blocks) => editor.handleInsertBlocks(blocks)} /><TemplatesGalleryDialog hasContent={editor.content.blocks.length > 0} onApply={(c, sug) => { editor.handleInsertBlocks(c.blocks, true, c.globalStyles); onTemplateApplied?.(sug); }} /></>}
         />
 
@@ -111,7 +116,7 @@ export function EmailEditor({ initialContent, onChange, draftKey, onTemplateAppl
           )}
 
           {editor.viewMode === "preview" && (
-            <EmailPreviewFrame content={editor.content} mode={editor.previewMode} />
+            <EmailPreviewFrame content={editor.content} mode={editor.previewMode} person={previewPerson} dark={previewDark} />
           )}
 
           {editor.viewMode === "code" && (

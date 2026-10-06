@@ -18,11 +18,13 @@ interface Props {
   canRedo: boolean;
   /** botões extras (ex.: modelos prontos) */
   extra?: ReactNode;
+  /** controles só da pré-visualização (ver como cliente, tema escuro) */
+  previewExtra?: ReactNode;
 }
 
-export function EmailEditorToolbar({ viewMode, previewMode, onViewModeChange, onPreviewModeChange, globalStyles, onGlobalStylesChange, onUndo, onRedo, canUndo, canRedo, extra }: Props) {
+export function EmailEditorToolbar({ viewMode, previewMode, onViewModeChange, onPreviewModeChange, globalStyles, onGlobalStylesChange, onUndo, onRedo, canUndo, canRedo, extra, previewExtra }: Props) {
   return (
-    <div className="border-b p-4 flex items-center justify-between bg-background">
+    <div className="border-b p-4 flex flex-wrap items-center justify-between gap-2 bg-background">
       <div className="flex items-center gap-2">
         <Tabs value={viewMode} onValueChange={(v: any) => onViewModeChange(v)}>
           <TabsList>
@@ -48,11 +50,12 @@ export function EmailEditorToolbar({ viewMode, previewMode, onViewModeChange, on
         </Button>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         {extra}
         <EmailGlobalStyles styles={globalStyles} onChange={onGlobalStylesChange} />
         {viewMode === "preview" && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {previewExtra}
             <Button variant={previewMode === "desktop" ? "default" : "outline"} size="sm" onClick={() => onPreviewModeChange("desktop")}>
               <Monitor className="h-4 w-4 mr-2" />
               Desktop
