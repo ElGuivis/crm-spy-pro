@@ -1,10 +1,17 @@
-import { bestLiImageUrl } from "@/lib/product-images";
+import { bestLiImageUrl, hdImageUrl } from "@/lib/product-images";
+
+/** Quantas fotos de um mesmo produto podem ir numa só remessa (igual a supabase/functions/_shared/catalog-images.ts). */
+export const MAX_CATALOG_PHOTOS = 3;
 export interface CatalogProduct {
   id: string;
   name: string;
   price: number | null;
   stock: number;
   imageUrl: string | null;
+  /** todas as fotos do produto (a principal primeiro, no máximo 10), em boa qualidade */
+  images: string[];
+  /** fotos escolhidas para enviar (na ordem do envio); sem escolha vale a principal */
+  sendImages?: string[];
   sku: string | null;
   variations: string[];
   parsedAttributes: Record<string, string[]>;
@@ -48,6 +55,7 @@ export function normalizeBlingProducts(blingProducts: any[]): CatalogProduct[] {
       price: p.preco,
       stock: (p.estoque_atual || 0) + inlineStock,
       imageUrl: (imagens && imagens[0]?.link) || p.imagem_url || null,
+      images: [...new Set([(imagens && imagens[0]?.link) || p.imagem_url, ...(imagens ?? []).map(i => i?.link)].filter((u): u is string => !!u))].slice(0, 10),
       sku: p.codigo,
       variations: variationNames,
       parsedAttributes: parseVariationAttributes(variationNames),
@@ -57,6 +65,23 @@ export function normalizeBlingProducts(blingProducts: any[]): CatalogProduct[] {
 }
 
 const liImageUrl = bestLiImageUrl;
+
+/** Miniatura da CDN da loja (380x380) para a grade de escolha; outras origens ficam como estão. */
+export function thumbUrl(url: string): string {
+  const m = url.match(/^(https?:\/\/cdn\.awsli\.com\.br)\/(?!\d+x\d+\/)(.+)$/i);
+  return m ? `${m[1]}/380x380/${m[2]}` : url;
+}
+
+/** LI: principal primeiro e depois as demais fotos do produto na ordem da loja (sem repetir). */
+export function liImageList(raw: any, fallback: string | null | undefined): string[] {
+  const out: string[] = [];
+  const add = (u: string | null | undefined) => { if (u && !out.includes(u)) out.push(u); };
+  add(liImageUrl(raw, fallback));
+  const list: any[] = Array.isArray(raw?.imagens) ? [...raw.imagens] : [];
+  list.sort((a, b) => Number(a?.posicao ?? 0) - Number(b?.posicao ?? 0));
+  for (const im of list) add(im?.caminho ? `https://cdn.awsli.com.br/${im.caminho}` : hdImageUrl(im?.grande));
+  return out.slice(0, 10);
+}
 
 export function normalizeLiProducts(liProducts: any[]): CatalogProduct[] {
   const parents = liProducts.filter(p => {
@@ -106,6 +131,7 @@ export function normalizeLiProducts(liProducts: any[]): CatalogProduct[] {
       price: (p.promotional_price as number) || p.price,
       stock: totalStock,
       imageUrl: liImageUrl(raw, p.image_url),
+      images: liImageList(raw, p.image_url),
       sku: p.sku,
       variations: variationNames,
       parsedAttributes: parseVariationAttributes(variationNames),
@@ -125,6 +151,7 @@ export function normalizeLiProducts(liProducts: any[]): CatalogProduct[] {
         price: (p.promotional_price as number) || p.price,
         stock,
         imageUrl: liImageUrl(raw, p.image_url),
+        images: liImageList(raw, p.image_url),
         sku: p.sku,
         variations: [] as string[],
         parsedAttributes: {},

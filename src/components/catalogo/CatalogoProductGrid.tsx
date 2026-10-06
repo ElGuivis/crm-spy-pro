@@ -2,17 +2,20 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Package, ImageOff } from "lucide-react";
-import { type CatalogProduct, formatCatalogCurrency } from "./catalogoHelpers";
+import { Package, ImageOff, Images } from "lucide-react";
+import { type CatalogProduct, formatCatalogCurrency, MAX_CATALOG_PHOTOS } from "./catalogoHelpers";
 
 interface Props {
   isLoading: boolean;
   products: CatalogProduct[];
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
+  /** abre a escolha de fotos do produto (só aparece nos selecionados com mais de uma foto) */
+  onEditPhotos?: (p: CatalogProduct) => void;
+  photoCount?: (p: CatalogProduct) => number;
 }
 
-export function CatalogoProductGrid({ isLoading, products, selectedIds, onToggleSelect }: Props) {
+export function CatalogoProductGrid({ isLoading, products, selectedIds, onToggleSelect, onEditPhotos, photoCount }: Props) {
   if (isLoading) {
     return (
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -58,6 +61,11 @@ export function CatalogoProductGrid({ isLoading, products, selectedIds, onToggle
               <div className="p-3 space-y-1">
                 <p className="text-sm font-medium line-clamp-2 leading-tight">{product.name}</p>
                 <p className="text-base font-bold text-primary">{formatCatalogCurrency(product.price)}</p>
+                {selected && product.images.length > 1 && onEditPhotos && (
+                  <button type="button" onClick={(e) => { e.stopPropagation(); onEditPhotos(product); }} className="inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs font-medium text-primary hover:bg-muted">
+                    <Images className="h-3 w-3" />Fotos {photoCount?.(product) ?? 1}/{MAX_CATALOG_PHOTOS}
+                  </button>
+                )}
                 {product.variations.length > 0 && (
                   <div className="flex flex-wrap gap-1">
                     {product.variations.slice(0, 3).map((v, i) => (

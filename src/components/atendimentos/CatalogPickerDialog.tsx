@@ -1,4 +1,7 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { ProductPhotosDialog } from "@/components/catalogo/ProductPhotosDialog";
+import type { CatalogProduct } from "@/components/catalogo/catalogoHelpers";
 import { Package, Send, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useCatalogoProducts } from "@/hooks/useCatalogoProducts";
@@ -25,6 +28,7 @@ export function CatalogPickerDialog({ open, onOpenChange, integrationId, contact
   });
 
   const tokenCost = c.selectedProducts.length;
+  const [photoProduct, setPhotoProduct] = useState<CatalogProduct | null>(null);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -63,12 +67,14 @@ export function CatalogPickerDialog({ open, onOpenChange, integrationId, contact
           products={c.filtered}
           selectedIds={c.selectedIds}
           onToggleSelect={c.toggleSelect}
+          onEditPhotos={setPhotoProduct}
+          photoCount={c.photoCount}
         />
 
         {c.selectedIds.size > 0 && (
           <div className="border-t px-4 py-3 flex items-center justify-between bg-card shrink-0">
             <span className="text-sm text-muted-foreground">
-              {c.selectedIds.size} produto{c.selectedIds.size > 1 ? "s" : ""} · {tokenCost} token{tokenCost > 1 ? "s" : ""}
+              {c.selectedIds.size} produto{c.selectedIds.size > 1 ? "s" : ""} · {c.selectedProducts.reduce((n, p) => n + (p.sendImages?.length ?? 1), 0)} foto(s) · {tokenCost} token{tokenCost > 1 ? "s" : ""}
             </span>
             <Button onClick={() => sender.send(c.selectedProducts)} disabled={sender.sending} className="gap-2" size="sm">
               {sender.sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -77,6 +83,12 @@ export function CatalogPickerDialog({ open, onOpenChange, integrationId, contact
           </div>
         )}
       </DialogContent>
+      <ProductPhotosDialog
+        product={photoProduct}
+        selected={photoProduct ? (c.photoChoice[photoProduct.id] ?? []) : []}
+        onClose={() => setPhotoProduct(null)}
+        onSave={(urls) => photoProduct && c.setPhotos(photoProduct.id, urls)}
+      />
     </Dialog>
   );
 }

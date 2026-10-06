@@ -6,6 +6,8 @@ import { useTokens } from "@/contexts/TokenContext";
 import { useToast } from "@/hooks/use-toast";
 import { useCatalogoProducts } from "@/hooks/useCatalogoProducts";
 import { SendCatalogDialog } from "./SendCatalogDialog";
+import { ProductPhotosDialog } from "./ProductPhotosDialog";
+import type { CatalogProduct } from "./catalogoHelpers";
 import { CatalogoFilters } from "./CatalogoFilters";
 import { CatalogoProductGrid } from "./CatalogoProductGrid";
 
@@ -19,6 +21,7 @@ export function CatalogoContent({ integrationId }: Props) {
   const { balance } = useTokens();
   const c = useCatalogoProducts(integrationId);
   const [showSendDialog, setShowSendDialog] = useState(false);
+  const [photoProduct, setPhotoProduct] = useState<CatalogProduct | null>(null);
 
   const tokenCost = c.selectedProducts.length;
 
@@ -72,6 +75,15 @@ export function CatalogoContent({ integrationId }: Props) {
         products={c.filtered}
         selectedIds={c.selectedIds}
         onToggleSelect={c.toggleSelect}
+        onEditPhotos={setPhotoProduct}
+        photoCount={c.photoCount}
+      />
+
+      <ProductPhotosDialog
+        product={photoProduct}
+        selected={photoProduct ? (c.photoChoice[photoProduct.id] ?? []) : []}
+        onClose={() => setPhotoProduct(null)}
+        onSave={(urls) => photoProduct && c.setPhotos(photoProduct.id, urls)}
       />
 
       <SendCatalogDialog

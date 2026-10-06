@@ -16,20 +16,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTokens } from "@/contexts/TokenContext";
 import { useToast } from "@/hooks/use-toast";
+import { MAX_CATALOG_PHOTOS, type CatalogProduct } from "./catalogoHelpers";
 
 import { createLogger } from '@/lib/logger';
 const log = createLogger('SendCatalogDialog');
-
-interface CatalogProduct {
-  id: string;
-  name: string;
-  price: number | null;
-  stock: number;
-  imageUrl: string | null;
-  sku: string | null;
-  variations: string[];
-  source: 'li' | 'bling';
-}
 
 interface SendCatalogDialogProps {
   open: boolean;
@@ -74,6 +64,7 @@ export function SendCatalogDialog({ open, onOpenChange, products, integrationId,
             price: p.price,
             stock: p.stock,
             image_url: p.imageUrl,
+            image_urls: (p.sendImages?.length ? p.sendImages : p.images.slice(0, 1)).slice(0, MAX_CATALOG_PHOTOS),
             variations: p.variations,
             source: p.source,
           })),
@@ -82,11 +73,11 @@ export function SendCatalogDialog({ open, onOpenChange, products, integrationId,
 
       if (error) throw error;
 
-      const result = data as { sent: number; failed: number; token_cost: number };
+      const result = data as { sent: number; failed: number; skipped?: number; images_sent?: number; token_cost: number };
 
       toast({
         title: "Catálogo enviado!",
-        description: `${result.sent} produto${result.sent > 1 ? 's' : ''} enviado${result.sent > 1 ? 's' : ''} com sucesso. ${result.failed > 0 ? `${result.failed} falha(s).` : ''} ${result.token_cost} token${result.token_cost > 1 ? 's' : ''} consumido${result.token_cost > 1 ? 's' : ''}.`,
+        description: `${result.sent} produto${result.sent > 1 ? 's' : ''} (${result.images_sent ?? result.sent} foto${(result.images_sent ?? result.sent) > 1 ? 's' : ''}) enviado${result.sent > 1 ? 's' : ''}. ${result.failed > 0 ? `${result.failed} falha(s).` : ''}${result.skipped ? ` ${result.skipped} ficou de fora por tempo: envie de novo.` : ''} ${result.token_cost} token${result.token_cost > 1 ? 's' : ''} consumido${result.token_cost > 1 ? 's' : ''}.`,
       });
 
       await refetchBalance();
@@ -109,7 +100,7 @@ export function SendCatalogDialog({ open, onOpenChange, products, integrationId,
         <DialogHeader>
           <DialogTitle>Enviar Catálogo via WhatsApp</DialogTitle>
           <DialogDescription>
-            {products.length} produto{products.length > 1 ? 's' : ''} selecionado{products.length > 1 ? 's' : ''} — Custo: {tokenCost} token{tokenCost > 1 ? 's' : ''}
+            {products.length} produto{products.length > 1 ? 's' : ''} selecionado{products.length > 1 ? 's' : ''}, {products.reduce((n, p) => n + (p.sendImages?.length ?? 1), 0)} foto{products.reduce((n, p) => n + (p.sendImages?.length ?? 1), 0) > 1 ? 's' : ''} — Custo: {tokenCost} token{tokenCost > 1 ? 's' : ''} (1 por produto)
           </DialogDescription>
         </DialogHeader>
 

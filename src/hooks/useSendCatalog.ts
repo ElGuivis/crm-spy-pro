@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTokens } from "@/contexts/TokenContext";
 import { useToast } from "@/hooks/use-toast";
-import type { CatalogProduct } from "@/components/catalogo/catalogoHelpers";
+import { MAX_CATALOG_PHOTOS, type CatalogProduct } from "@/components/catalogo/catalogoHelpers";
 
 interface Options {
   integrationId: string;
@@ -38,18 +38,19 @@ export function useSendCatalog({ integrationId, contactPhone, onSendNote, onSent
           send_as_document: false,
           products: selectedProducts.map(p => ({
             id: p.id, name: p.name, price: p.price, stock: p.stock,
-            image_url: p.imageUrl, variations: p.variations, source: p.source,
+            image_url: p.imageUrl, image_urls: (p.sendImages?.length ? p.sendImages : p.images.slice(0, 1)).slice(0, MAX_CATALOG_PHOTOS),
+            variations: p.variations, source: p.source,
           })),
         },
       });
       if (error) throw error;
-      const result = data as { sent: number; failed: number; token_cost: number };
+      const result = data as { sent: number; failed: number; skipped?: number; images_sent?: number; token_cost: number };
       toast({
         title: "Catálogo enviado!",
-        description: `${result.sent} produto${result.sent > 1 ? "s" : ""} enviado${result.sent > 1 ? "s" : ""}. ${result.token_cost} token${result.token_cost > 1 ? "s" : ""} consumido${result.token_cost > 1 ? "s" : ""}.`,
+        description: `${result.sent} produto${result.sent > 1 ? "s" : ""} (${result.images_sent ?? result.sent} foto${(result.images_sent ?? result.sent) > 1 ? "s" : ""}). ${result.token_cost} token${result.token_cost > 1 ? "s" : ""} consumido${result.token_cost > 1 ? "s" : ""}.${result.failed ? ` ${result.failed} falhou.` : ""}${result.skipped ? ` ${result.skipped} ficou de fora por tempo: envie de novo.` : ""}`,
       });
       const productList = selectedProducts
-        .map(p => `• ${p.name}${p.price ? ` — R$ ${p.price.toFixed(2).replace(".", ",")}` : ""}`)
+        .map(p => `• ${p.name}${p.price ? ` — R$ ${p.price.toFixed(2).replace(".", ",")}` : ""}${(p.sendImages?.length ?? 1) > 1 ? ` (${p.sendImages!.length} fotos)` : ""}`)
         .join("\n");
       onSendNote(`📦 Catálogo enviado (${result.sent} produto${result.sent > 1 ? "s" : ""}):\n${productList}`);
       await refetchBalance();

@@ -3,17 +3,20 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Package, ImageOff } from "lucide-react";
-import { type CatalogProduct, formatCatalogCurrency } from "@/components/catalogo/catalogoHelpers";
+import { Package, ImageOff, Images } from "lucide-react";
+import { type CatalogProduct, formatCatalogCurrency, MAX_CATALOG_PHOTOS } from "@/components/catalogo/catalogoHelpers";
 
 interface Props {
   isLoading: boolean;
   products: CatalogProduct[];
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
+  /** abre a escolha de fotos do produto (só aparece nos selecionados com mais de uma foto) */
+  onEditPhotos?: (p: CatalogProduct) => void;
+  photoCount?: (p: CatalogProduct) => number;
 }
 
-export function CatalogPickerGrid({ isLoading, products, selectedIds, onToggleSelect }: Props) {
+export function CatalogPickerGrid({ isLoading, products, selectedIds, onToggleSelect, onEditPhotos, photoCount }: Props) {
   return (
     <ScrollArea className="flex-1 px-4">
       {isLoading ? (
@@ -52,6 +55,11 @@ export function CatalogPickerGrid({ isLoading, products, selectedIds, onToggleSe
                   <div className="p-2 space-y-0.5">
                     <p className="text-xs font-medium line-clamp-2 leading-tight">{product.name}</p>
                     <p className="text-sm font-bold text-primary">{formatCatalogCurrency(product.price)}</p>
+                {selected && product.images.length > 1 && onEditPhotos && (
+                  <button type="button" onClick={(e) => { e.stopPropagation(); onEditPhotos(product); }} className="mt-1 inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs font-medium text-primary hover:bg-muted">
+                    <Images className="h-3 w-3" />Fotos {photoCount?.(product) ?? 1}/{MAX_CATALOG_PHOTOS}
+                  </button>
+                )}
                   </div>
                 </CardContent>
               </Card>

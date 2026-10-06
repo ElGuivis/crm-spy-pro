@@ -10,6 +10,8 @@ export function useCatalogoProducts(integrationId: string, enabled = true) {
   const [searchQuery, setSearchQuery] = useState("");
   const [onlyInStock, setOnlyInStock] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  /** fotos escolhidas por produto (ordem do envio); sem escolha vale a principal */
+  const [photoChoice, setPhotoChoice] = useState<Record<string, string[]>>({});
   const [colorFilter, setColorFilter] = useState("");
   const [sizeFilter, setSizeFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -73,9 +75,14 @@ export function useCatalogoProducts(integrationId: string, enabled = true) {
     else setSelectedIds(new Set(filtered.map(p => p.id)));
   };
 
-  const clearSelection = () => setSelectedIds(new Set());
+  const clearSelection = () => { setSelectedIds(new Set()); setPhotoChoice({}); };
 
-  const selectedProducts = filtered.filter(p => selectedIds.has(p.id));
+  const setPhotos = (id: string, urls: string[]) => setPhotoChoice(prev => ({ ...prev, [id]: urls }));
+  const photoCount = (p: CatalogProduct) => photoChoice[p.id]?.length ?? (p.imageUrl ? 1 : 0);
+
+  const selectedProducts: CatalogProduct[] = filtered
+    .filter(p => selectedIds.has(p.id))
+    .map(p => ({ ...p, sendImages: photoChoice[p.id]?.length ? photoChoice[p.id] : (p.imageUrl ? [p.imageUrl] : []) }));
 
   return {
     integration, isLoading: liLoading || blingLoading,
@@ -83,5 +90,6 @@ export function useCatalogoProducts(integrationId: string, enabled = true) {
     searchQuery, setSearchQuery, onlyInStock, setOnlyInStock,
     colorFilter, setColorFilter, sizeFilter, setSizeFilter, categoryFilter, setCategoryFilter,
     selectedIds, toggleSelect, selectAll, clearSelection,
+    photoChoice, setPhotos, photoCount,
   };
 }

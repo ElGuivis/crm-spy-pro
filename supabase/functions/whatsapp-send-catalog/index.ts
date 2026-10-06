@@ -4,7 +4,7 @@ import { requireUserAuth, assertTenantMatch } from "../_shared/auth-guard.ts";
 import { requireResource } from "../_shared/resource-guard.ts";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
-import { hdImageUrl } from "../_shared/product-images.ts";
+import { pickCatalogImages, MAX_CATALOG_PHOTOS } from "../_shared/catalog-images.ts";
 
 interface ProductPayload {
   id: string;
@@ -12,6 +12,8 @@ interface ProductPayload {
   price: number | null;
   stock: number;
   image_url: string | null;
+  /** até 3 fotos do mesmo produto, na ordem de envio (a primeira leva a legenda); sem isto vale image_url */
+  image_urls?: string[];
   variations: string[];
   source: 'li' | 'bling';
 }
@@ -95,55 +97,54 @@ Deno.serve(async (req) => {
     const numberToSend = phoneInfo.isLid ? `${phoneInfo.number}@lid` : phoneInfo.number;
     const baseUrl = evolutionApiUrl.replace(/\/$/, '');
 
-    let sent = 0;
-    let failed = 0;
+    let sent = 0;        // produtos entregues (a 1ª foto saiu)
+    let failed = 0;      // produtos que não saíram
+    let skipped = 0;     // produtos que ficaram de fora por falta de tempo (não são cobrados)
+    let imagesSent = 0;  // fotos entregues no total
+    const startedAt = Date.now();
+    const TIME_BUDGET_MS = 110_000;
 
-    for (const product of products) {
+    const sendImage = async (media: string, caption?: string): Promise<boolean> => {
+      const response = await fetch(`${baseUrl}/message/sendMedia/${instanceName}`, {
+        method: 'POST',
+        headers: { 'apikey': evolutionApiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number: numberToSend, mediatype: 'image', media, ...(caption ? { caption } : {}) }),
+      });
+      if (!response.ok) log.error(`[CATALOG] ❌ Evolution recusou ${media}: ${await response.text()}`);
+      return response.ok;
+    };
+
+    for (let i = 0; i < products.length; i++) {
+      const product = products[i];
+      if (Date.now() - startedAt > TIME_BUDGET_MS) { skipped += products.length - i; log.info(`[CATALOG] Tempo esgotado: ${products.length - i} produto(s) não enviado(s)`); break; }
       try {
-        // Build caption — name (no emoji) + price only
+        // Legenda: nome + preço, só na primeira foto
         let caption = `*${product.name}*`;
         if (include_price && product.price) {
           caption += `\n💰 R$ ${product.price.toFixed(2).replace('.', ',')}`;
         }
 
-        if (!product.image_url) {
+        const images = pickCatalogImages(product).slice(0, MAX_CATALOG_PHOTOS);
+        if (images.length === 0) {
           log.info(`[CATALOG] Skipping ${product.name} - no image`);
           failed++;
           continue;
         }
 
-        // Send image via Evolution API — always as image type
-        // sempre a melhor qualidade: mesmo que o cliente mande a versão reduzida (800x800), enviamos o original
-        const imageUrl = hdImageUrl(product.image_url) ?? product.image_url;
-        log.info(`[CATALOG] Sending ${product.name} with URL: ${imageUrl}`);
-
-        const response = await fetch(`${baseUrl}/message/sendMedia/${instanceName}`, {
-          method: 'POST',
-          headers: {
-            'apikey': evolutionApiKey,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            number: numberToSend,
-            mediatype: 'image',
-            media: imageUrl,
-            caption,
-          }),
-        });
-
-        if (response.ok) {
-          sent++;
+        log.info(`[CATALOG] Sending ${product.name} (${images.length} foto(s))`);
+        if (await sendImage(images[0], caption)) {
+          sent++; imagesSent++;
           log.info(`[CATALOG] ✅ Sent ${product.name}`);
+          for (const extra of images.slice(1)) {
+            await new Promise(r => setTimeout(r, 1000));
+            if (await sendImage(extra)) imagesSent++;
+          }
         } else {
-          const errText = await response.text();
-          log.error(`[CATALOG] ❌ Failed ${product.name}: ${errText}`);
           failed++;
         }
 
-        // Rate limit delay (1.5s between sends)
-        if (products.indexOf(product) < products.length - 1) {
-          await new Promise(r => setTimeout(r, 1500));
-        }
+        // Rate limit delay (1.5s between products)
+        if (i < products.length - 1) await new Promise(r => setTimeout(r, 1500));
       } catch (err) {
         log.error(`[CATALOG] Exception sending ${product.name}:`, err);
         failed++;
@@ -156,12 +157,12 @@ Deno.serve(async (req) => {
         _tenant_id: authTenantId,
         _amount: sent,
         _type: 'whatsapp_catalog',
-        _description: `Catálogo WhatsApp: ${sent} produto(s) enviado(s)`,
+        _description: `Catálogo WhatsApp: ${sent} produto(s) enviado(s) (${imagesSent} foto(s))`,
         _reference_id: integration_id,
       });
     }
 
-    return new Response(JSON.stringify({ sent, failed, token_cost: sent }), {
+    return new Response(JSON.stringify({ sent, failed, skipped, images_sent: imagesSent, token_cost: sent }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
