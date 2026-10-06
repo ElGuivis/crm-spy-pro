@@ -78,7 +78,8 @@ export function SyncProgressBanner({ integrationId, entityType, melhorEnvio, nuv
           const recentlyActive = Date.now() - updatedAt < 5 * 60_000;
           const isRunning = page > 0 && recentlyActive;
           const isDone = page === 0 && totalCount !== null && totalCount > 0;
-          const doneCount = records > 0 ? records : totalCount;
+          // concluída (offset 0) = tudo sincronizado: mostra o total. records_synced guarda só o que a última rodada incremental trouxe (ex.: 79 de 15.855)
+          const doneCount = totalCount ?? records;
 
           setStatus(isRunning ? "running" : isDone ? "done" : "idle");
           setSynced(isRunning ? records : doneCount);
@@ -99,7 +100,8 @@ export function SyncProgressBanner({ integrationId, entityType, melhorEnvio, nuv
           const recentlyActive = Date.now() - updatedAt < 5 * 60_000;
           const isRunning = offset > 0 && recentlyActive;
           const isDone = offset === 0 && totalCount !== null && totalCount > 0;
-          const doneCount = records > 0 ? records : totalCount;
+          // concluída (offset 0) = tudo sincronizado: mostra o total. records_synced guarda só o que a última rodada incremental trouxe (ex.: 79 de 15.855)
+          const doneCount = totalCount ?? records;
 
           setStatus(isRunning ? "running" : isDone ? "done" : "idle");
           setSynced(isRunning ? offset : doneCount);
