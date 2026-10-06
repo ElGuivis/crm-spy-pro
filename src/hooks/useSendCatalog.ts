@@ -18,6 +18,8 @@ export function useSendCatalog({ integrationId, contactPhone, onSendNote, onSent
   const { toast } = useToast();
   const [sending, setSending] = useState(false);
   const [includePrice, setIncludePrice] = useState(true);
+  /** junta as fotos de cada produto numa imagem só (colagem) com nome e preço na legenda; desligado manda uma mensagem por foto */
+  const [joinPhotos, setJoinPhotos] = useState(true);
 
   const send = async (selectedProducts: CatalogProduct[]) => {
     if (!tenantId || selectedProducts.length === 0) return;
@@ -36,6 +38,7 @@ export function useSendCatalog({ integrationId, contactPhone, onSendNote, onSent
           include_price: includePrice,
           include_stock: false,
           send_as_document: false,
+          photo_layout: joinPhotos ? "collage" : "separate",
           products: selectedProducts.map(p => ({
             id: p.id, name: p.name, price: p.price, stock: p.stock,
             image_url: p.imageUrl, image_urls: (p.sendImages?.length ? p.sendImages : p.images.slice(0, 1)).slice(0, MAX_CATALOG_PHOTOS),
@@ -62,5 +65,5 @@ export function useSendCatalog({ integrationId, contactPhone, onSendNote, onSent
     }
   };
 
-  return { sending, includePrice, setIncludePrice, send };
+  return { sending, includePrice, setIncludePrice, joinPhotos, setJoinPhotos, send };
 }

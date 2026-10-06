@@ -5,6 +5,7 @@ import { requireResource } from "../_shared/resource-guard.ts";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { pickCatalogImages, MAX_CATALOG_PHOTOS } from "../_shared/catalog-images.ts";
+import { buildCollageBase64 } from "../_shared/catalog-collage.ts";
 
 interface ProductPayload {
   id: string;
@@ -37,7 +38,7 @@ Deno.serve(async (req) => {
     });
 
     const body = await req.json();
-    const { tenant_id, integration_id, phone, include_price, include_stock, send_as_document, products } = body as {
+    const { tenant_id, integration_id, phone, include_price, include_stock, send_as_document, products, photo_layout } = body as {
       tenant_id: string;
       integration_id: string;
       phone: string;
@@ -45,6 +46,8 @@ Deno.serve(async (req) => {
       include_stock: boolean;
       send_as_document: boolean;
       products: ProductPayload[];
+      /** 'collage' (padrão) junta 2-3 fotos do produto numa imagem só, com a legenda; 'separate' manda uma mensagem por foto */
+      photo_layout?: 'collage' | 'separate';
     };
 
     assertTenantMatch(authTenantId, tenant_id, req);
@@ -101,14 +104,19 @@ Deno.serve(async (req) => {
     let failed = 0;      // produtos que não saíram
     let skipped = 0;     // produtos que ficaram de fora por falta de tempo (não são cobrados)
     let imagesSent = 0;  // fotos entregues no total
+    let collages = 0;    // produtos enviados com as fotos juntas numa imagem
+    const useCollage = photo_layout !== 'separate';
     const startedAt = Date.now();
     const TIME_BUDGET_MS = 110_000;
 
-    const sendImage = async (media: string, caption?: string): Promise<boolean> => {
+    const sendImage = async (media: string, caption?: string, isBase64 = false): Promise<boolean> => {
       const response = await fetch(`${baseUrl}/message/sendMedia/${instanceName}`, {
         method: 'POST',
         headers: { 'apikey': evolutionApiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ number: numberToSend, mediatype: 'image', media, ...(caption ? { caption } : {}) }),
+        body: JSON.stringify({
+          number: numberToSend, mediatype: 'image', media, ...(caption ? { caption } : {}),
+          ...(isBase64 ? { mimetype: 'image/jpeg', fileName: 'produto.jpg' } : {}),
+        }),
       });
       if (!response.ok) log.error(`[CATALOG] ❌ Evolution recusou ${media}: ${await response.text()}`);
       return response.ok;
@@ -131,7 +139,20 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        log.info(`[CATALOG] Sending ${product.name} (${images.length} foto(s))`);
+        log.info(`[CATALOG] Sending ${product.name} (${images.length} foto(s), ${useCollage && images.length > 1 ? 'colagem' : 'separadas'})`);
+
+        // Várias fotos: uma imagem só (colagem) com nome e preço na legenda; se a colagem falhar, manda separadas
+        if (useCollage && images.length > 1) {
+          let collage: string | null = null;
+          try { collage = await buildCollageBase64(images); } catch (e) { log.error(`[CATALOG] Colagem falhou para ${product.name}, enviando separadas:`, (e as Error).message); }
+          if (collage && await sendImage(collage, caption, true)) {
+            sent++; imagesSent += images.length; collages++;
+            log.info(`[CATALOG] ✅ Sent ${product.name} (colagem)`);
+            if (i < products.length - 1) await new Promise(r => setTimeout(r, 1500));
+            continue;
+          }
+        }
+
         if (await sendImage(images[0], caption)) {
           sent++; imagesSent++;
           log.info(`[CATALOG] ✅ Sent ${product.name}`);
@@ -162,7 +183,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ sent, failed, skipped, images_sent: imagesSent, token_cost: sent }), {
+    return new Response(JSON.stringify({ sent, failed, skipped, images_sent: imagesSent, collages, token_cost: sent }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 

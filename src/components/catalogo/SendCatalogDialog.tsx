@@ -36,6 +36,8 @@ export function SendCatalogDialog({ open, onOpenChange, products, integrationId,
   const [phone, setPhone] = useState("");
   const [includePrice, setIncludePrice] = useState(true);
   const [includeStock, setIncludeStock] = useState(false);
+  const [joinPhotos, setJoinPhotos] = useState(true);
+  const hasMultiPhotos = products.some((p) => (p.sendImages?.length ?? 1) > 1);
   const [sending, setSending] = useState(false);
 
   const tokenCost = products.length;
@@ -58,6 +60,7 @@ export function SendCatalogDialog({ open, onOpenChange, products, integrationId,
           include_price: includePrice,
           include_stock: includeStock,
           send_as_document: false,
+          photo_layout: joinPhotos ? 'collage' : 'separate',
           products: products.map(p => ({
             id: p.id,
             name: p.name,
@@ -129,6 +132,13 @@ export function SendCatalogDialog({ open, onOpenChange, products, integrationId,
             <Label htmlFor="include-stock">Incluir estoque na legenda</Label>
             <Switch id="include-stock" checked={includeStock} onCheckedChange={setIncludeStock} />
           </div>
+
+          {hasMultiPhotos && (
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="join-photos" className="leading-tight">Juntar as fotos de cada produto numa imagem só<span className="block text-xs font-normal text-muted-foreground">Com o nome e o preço na legenda. Desligado, cada foto vai numa mensagem.</span></Label>
+              <Switch id="join-photos" checked={joinPhotos} onCheckedChange={setJoinPhotos} />
+            </div>
+          )}
 
 
           {/* Preview */}

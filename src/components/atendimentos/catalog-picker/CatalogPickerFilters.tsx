@@ -26,6 +26,8 @@ interface Props {
   onOnlyInStockChange: (v: boolean) => void;
   includePrice: boolean;
   onIncludePriceChange: (v: boolean) => void;
+  joinPhotos: boolean;
+  onJoinPhotosChange: (v: boolean) => void;
   filteredCount: number;
   selectedCount: number;
   onSelectAll: () => void;
@@ -34,7 +36,7 @@ interface Props {
 export function CatalogPickerFilters({
   searchQuery, onSearchChange, filterOptions,
   colorFilter, onColorChange, sizeFilter, onSizeChange, categoryFilter, onCategoryChange,
-  onlyInStock, onOnlyInStockChange, includePrice, onIncludePriceChange,
+  onlyInStock, onOnlyInStockChange, includePrice, onIncludePriceChange, joinPhotos, onJoinPhotosChange,
   filteredCount, selectedCount, onSelectAll,
 }: Props) {
   return (
@@ -86,6 +88,10 @@ export function CatalogPickerFilters({
         <div className="flex items-center gap-1.5">
           <Switch id="price-picker" checked={includePrice} onCheckedChange={onIncludePriceChange} className="scale-75" />
           <Label htmlFor="price-picker" className="text-xs">Preço</Label>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Switch id="join-picker" checked={joinPhotos} onCheckedChange={onJoinPhotosChange} className="scale-75" />
+          <Label htmlFor="join-picker" className="text-xs" title="Com várias fotos do mesmo produto, manda uma imagem só com todas juntas e o nome e o preço na legenda">Juntar fotos numa imagem</Label>
         </div>
       </div>
     </div>

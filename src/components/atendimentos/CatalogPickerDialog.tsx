@@ -57,6 +57,8 @@ export function CatalogPickerDialog({ open, onOpenChange, integrationId, contact
           onOnlyInStockChange={c.setOnlyInStock}
           includePrice={sender.includePrice}
           onIncludePriceChange={sender.setIncludePrice}
+          joinPhotos={sender.joinPhotos}
+          onJoinPhotosChange={sender.setJoinPhotos}
           filteredCount={c.filtered.length}
           selectedCount={c.selectedIds.size}
           onSelectAll={c.selectAll}
