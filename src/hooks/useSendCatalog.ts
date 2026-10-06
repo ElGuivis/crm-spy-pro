@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { sendCatalogInChunks } from "@/components/catalogo/sendCatalogChunks";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTokens } from "@/contexts/TokenContext";
 import { useToast } from "@/hooks/use-toast";
@@ -30,8 +30,8 @@ export function useSendCatalog({ integrationId, contactPhone, onSendNote, onSent
     }
     setSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke("whatsapp-send-catalog", {
-        body: {
+      const result = await sendCatalogInChunks(
+        {
           tenant_id: tenantId,
           integration_id: integrationId,
           phone: contactPhone,
@@ -39,15 +39,14 @@ export function useSendCatalog({ integrationId, contactPhone, onSendNote, onSent
           include_stock: false,
           send_as_document: false,
           photo_layout: joinPhotos ? "collage" : "separate",
-          products: selectedProducts.map(p => ({
-            id: p.id, name: p.name, price: p.price, stock: p.stock,
-            image_url: p.imageUrl, image_urls: (p.sendImages?.length ? p.sendImages : p.images.slice(0, 1)).slice(0, MAX_CATALOG_PHOTOS),
-            variations: p.variations, source: p.source,
-          })),
         },
-      });
-      if (error) throw error;
-      const result = data as { sent: number; failed: number; skipped?: number; images_sent?: number; token_cost: number };
+        selectedProducts.map(p => ({
+          id: p.id, name: p.name, price: p.price, stock: p.stock,
+          image_url: p.imageUrl, image_urls: (p.sendImages?.length ? p.sendImages : p.images.slice(0, 1)).slice(0, MAX_CATALOG_PHOTOS),
+          variations: p.variations, source: p.source,
+        })),
+        joinPhotos,
+      );
       toast({
         title: "Catálogo enviado!",
         description: `${result.sent} produto${result.sent > 1 ? "s" : ""} (${result.images_sent ?? result.sent} foto${(result.images_sent ?? result.sent) > 1 ? "s" : ""}). ${result.token_cost} token${result.token_cost > 1 ? "s" : ""} consumido${result.token_cost > 1 ? "s" : ""}.${result.failed ? ` ${result.failed} falhou.` : ""}${result.skipped ? ` ${result.skipped} ficou de fora por tempo: envie de novo.` : ""}`,

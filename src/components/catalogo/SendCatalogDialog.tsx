@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
+import { sendCatalogInChunks } from "./sendCatalogChunks";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTokens } from "@/contexts/TokenContext";
 import { useToast } from "@/hooks/use-toast";
@@ -52,8 +52,8 @@ export function SendCatalogDialog({ open, onOpenChange, products, integrationId,
 
     setSending(true);
     try {
-      const { data, error } = await supabase.functions.invoke('whatsapp-send-catalog', {
-        body: {
+      const result = await sendCatalogInChunks(
+        {
           tenant_id: tenantId,
           integration_id: integrationId,
           phone: phone.trim(),
@@ -61,22 +61,19 @@ export function SendCatalogDialog({ open, onOpenChange, products, integrationId,
           include_stock: includeStock,
           send_as_document: false,
           photo_layout: joinPhotos ? 'collage' : 'separate',
-          products: products.map(p => ({
-            id: p.id,
-            name: p.name,
-            price: p.price,
-            stock: p.stock,
-            image_url: p.imageUrl,
-            image_urls: (p.sendImages?.length ? p.sendImages : p.images.slice(0, 1)).slice(0, MAX_CATALOG_PHOTOS),
-            variations: p.variations,
-            source: p.source,
-          })),
         },
-      });
-
-      if (error) throw error;
-
-      const result = data as { sent: number; failed: number; skipped?: number; images_sent?: number; token_cost: number };
+        products.map(p => ({
+          id: p.id,
+          name: p.name,
+          price: p.price,
+          stock: p.stock,
+          image_url: p.imageUrl,
+          image_urls: (p.sendImages?.length ? p.sendImages : p.images.slice(0, 1)).slice(0, MAX_CATALOG_PHOTOS),
+          variations: p.variations,
+          source: p.source,
+        })),
+        joinPhotos,
+      );
 
       toast({
         title: "Catálogo enviado!",
