@@ -4418,7 +4418,7 @@ export type Database = {
           customer_name: string | null
           customer_phone: string | null
           discount_percentage: number
-          expires_at: string
+          expires_at: string | null
           id: string
           integration_id: string | null
           issue_status: string
@@ -4453,7 +4453,7 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           discount_percentage: number
-          expires_at: string
+          expires_at?: string | null
           id?: string
           integration_id?: string | null
           issue_status?: string
@@ -4488,7 +4488,7 @@ export type Database = {
           customer_name?: string | null
           customer_phone?: string | null
           discount_percentage?: number
-          expires_at?: string
+          expires_at?: string | null
           id?: string
           integration_id?: string | null
           issue_status?: string

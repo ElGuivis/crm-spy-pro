@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict CLb0fDcrk9KZrr1rcKQbX73JYbBrLw39fr4aRLvBzVv9sRXQcDtOZ7dfiXpKz8N
+\restrict K4LWL6AuCwXmbfeiazqNtAbpo7fCz7gf4lOLuwh4e4887LONDtiLvltBhb6UNGw
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -5681,7 +5681,7 @@ CREATE TABLE public.generated_coupons (
     customer_email text,
     customer_phone text,
     order_id text,
-    expires_at timestamp with time zone NOT NULL,
+    expires_at timestamp with time zone,
     used_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     customer_name text,
@@ -9919,7 +9919,7 @@ CREATE UNIQUE INDEX conversations_csat_token_idx ON public.conversations USING b
 -- Name: generated_coupons_integration_code_uniq; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX generated_coupons_integration_code_uniq ON public.generated_coupons USING btree (integration_id, coupon_code) WHERE (integration_id IS NOT NULL);
+CREATE UNIQUE INDEX generated_coupons_integration_code_uniq ON public.generated_coupons USING btree (integration_id, coupon_code);
 
 
 --
@@ -19035,5 +19035,5 @@ ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict CLb0fDcrk9KZrr1rcKQbX73JYbBrLw39fr4aRLvBzVv9sRXQcDtOZ7dfiXpKz8N
+\unrestrict K4LWL6AuCwXmbfeiazqNtAbpo7fCz7gf4lOLuwh4e4887LONDtiLvltBhb6UNGw
 
