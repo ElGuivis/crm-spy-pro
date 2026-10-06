@@ -43,6 +43,8 @@ O stack usa **chaves assimétricas ES256** (mais as legadas HS256). Por compatib
 
 **URL das funções em SQL:** nunca escrever o domínio em cron/função; usar `public.functions_base_url() || '/functions/v1/<fn>'` (setting `app.settings.functions_url` ou padrão do servidor).
 
+**Falha segura (05/10/2026):** as comparações de segredo do guard são em tempo constante e um segredo ausente ou vazio nunca autoriza (antes, sem `SUPABASE_SERVICE_ROLE_KEY` no ambiente, uma requisição sem cabeçalho passava como interna: `undefined === undefined`). Testes unitários em `supabase/functions/tests/auth-guard-unit.test.ts` (12 casos).
+
 Catch handler de função deve repassar `Response` thrown pelo guard:
 ```ts
 } catch (err) {

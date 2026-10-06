@@ -28,6 +28,23 @@ function errorHeaders(req: Request): Record<string, string> {
   return { ...getRestrictedCorsHeaders(req), "Content-Type": "application/json" };
 }
 
+/** Comparação em tempo constante. Segredo ausente ou vazio NUNCA autoriza (evita undefined === undefined quando falta a variável de ambiente). */
+function secretMatches(given: string | null | undefined, secret: string | null | undefined): boolean {
+  if (!secret || !given || given.length !== secret.length) return false;
+  let diff = 0;
+  for (let i = 0; i < secret.length; i++) diff |= given.charCodeAt(i) ^ secret.charCodeAt(i);
+  return diff === 0;
+}
+
+/** True se a requisição traz a service_role ou o CRON_SECRET (Bearer ou x-cron-secret). */
+function isInternalRequest(req: Request): boolean {
+  const token = req.headers.get("Authorization")?.replace("Bearer ", "").trim();
+  const cronHeader = req.headers.get("x-cron-secret");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const cronSecret = Deno.env.get("CRON_SECRET");
+  return secretMatches(token, serviceRoleKey) || secretMatches(token, cronSecret) || secretMatches(cronHeader, cronSecret);
+}
+
 /** Validate JWT and resolve user's tenant. Throws Response on failure. */
 export async function requireUserAuth(req: Request): Promise<UserAuthResult> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -78,17 +95,7 @@ export async function requireUserAuth(req: Request): Promise<UserAuthResult> {
 
 /** Validate that the caller is an internal service (cron job or service_role). Throws Response on failure. */
 export function requireInternalAuth(req: Request): void {
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const cronSecret = Deno.env.get("CRON_SECRET");
-
-  const authHeader = req.headers.get("Authorization");
-  const token = authHeader?.replace("Bearer ", "").trim();
-  const cronHeader = req.headers.get("x-cron-secret");
-
-  const isServiceRole = token === serviceRoleKey;
-  const isCronSecret = cronSecret && (token === cronSecret || cronHeader === cronSecret);
-
-  if (!isServiceRole && !isCronSecret) {
+  if (!isInternalRequest(req)) {
     throw new Response(JSON.stringify({ error: "Unauthorized: internal access only" }), {
       status: 401,
       headers: errorHeaders(req),
@@ -98,16 +105,8 @@ export function requireInternalAuth(req: Request): void {
 
 /** Try user JWT first; if absent, require internal auth. Returns hybrid result. */
 export async function requireUserOrInternalAuth(req: Request): Promise<HybridAuthResult> {
-  const authHeader = req.headers.get("Authorization");
-  const token = authHeader?.replace("Bearer ", "").trim();
-
   // Check if it's an internal call first (service_role or cron)
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const cronSecret = Deno.env.get("CRON_SECRET");
-
-  if (token === serviceRoleKey || (cronSecret && (token === cronSecret || req.headers.get("x-cron-secret") === cronSecret))) {
-    return { isInternal: true };
-  }
+  if (isInternalRequest(req)) return { isInternal: true };
 
   // Otherwise, require valid user JWT
   const result = await requireUserAuth(req);
