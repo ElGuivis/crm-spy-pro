@@ -272,7 +272,7 @@ export function useIntegrationStatusChecker() {
     });
 
     await Promise.all(promises);
-  }, [checkEvolutionWhatsApp, checkLojaIntegrada, checkBling, checkMelhorEnvio, checkNuvemshop, checkMeta, checkAIProvider]);
+  }, [checkEvolutionWhatsApp, checkLojaIntegrada, checkBling, checkMelhorEnvio, checkNuvemshop, checkAIProvider]);
 
   return {
     statuses,

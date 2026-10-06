@@ -85,7 +85,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     const basePath = '/' + location.pathname.split('/')[1];
     const requiredPermission = routePermissionMap[basePath];
 
-    if (requiredPermission && !permissions.includes(requiredPermission as any)) {
+    if (requiredPermission && !(permissions as string[]).includes(requiredPermission)) {
       const firstAllowed = getFirstAllowedRoute(permissions);
 
       return (

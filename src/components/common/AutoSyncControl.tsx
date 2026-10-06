@@ -215,7 +215,7 @@ export function AutoSyncControl({ integrationId, syncType, onSyncTriggered }: Au
     } finally {
       setSaving(false);
     }
-  }, [integrationId, syncType, toast, onSyncTriggered, fields]);
+  }, [integrationId, integrationType, syncType, toast, onSyncTriggered, fields]);
 
   const handleToggle = useCallback((checked: boolean) => {
     setEnabled(checked);

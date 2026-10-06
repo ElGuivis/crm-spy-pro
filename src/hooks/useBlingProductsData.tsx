@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,13 @@ import { BLING_PRODUCT_SELECT } from "@/components/products/product-select-colum
 
 type BlingProduct = Tables<"bling_products">;
 type SortOption = "name_asc" | "name_desc" | "price_asc" | "price_desc" | "stock_asc" | "stock_desc";
+
+/** Estoque somado das variações que já vêm dentro do próprio produto. */
+const getInlineVariationStock = (product: BlingProduct): number => {
+  const variacoes = product.variacoes as Array<{ estoque?: { saldoVirtualTotal?: number } }> | null;
+  if (!variacoes?.length) return 0;
+  return variacoes.reduce((sum, v) => sum + (v.estoque?.saldoVirtualTotal || 0), 0);
+};
 
 export function useBlingProductsData(integrationId: string) {
   const { toast } = useToast();
@@ -77,16 +84,10 @@ export function useBlingProductsData(integrationId: string) {
     enabled: !!integrationId,
   });
 
-  const getInlineVariationStock = (product: BlingProduct): number => {
-    const variacoes = product.variacoes as Array<{ estoque?: { saldoVirtualTotal?: number } }> | null;
-    if (!variacoes?.length) return 0;
-    return variacoes.reduce((sum, v) => sum + (v.estoque?.saldoVirtualTotal || 0), 0);
-  };
-
-  const getTotalStock = (product: BlingProduct): number =>
+  const getTotalStock = useCallback((product: BlingProduct): number =>
     (product.estoque_atual || 0) +
     (variationData?.get(product.bling_id)?.stock || 0) +
-    getInlineVariationStock(product);
+    getInlineVariationStock(product), [variationData]);
 
   const getProductImage = (product: BlingProduct): string | null => {
     const imagens = product.imagens as Array<{ link: string }> | null;
@@ -138,7 +139,7 @@ export function useBlingProductsData(integrationId: string) {
           default: return 0;
         }
       });
-  }, [products, searchQuery, showOnlyInStock, sortBy, variationData]);
+  }, [products, searchQuery, showOnlyInStock, sortBy, variationData, getTotalStock]);
 
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
   const paginatedProducts = useMemo(() => {
