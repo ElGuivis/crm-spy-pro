@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { sendCatalogInChunks } from "@/components/catalogo/sendCatalogChunks";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTokens } from "@/contexts/TokenContext";
+import { useCatalogSend } from "@/contexts/CatalogSendContext";
 import { useToast } from "@/hooks/use-toast";
-import { MAX_CATALOG_PHOTOS, type CatalogProduct } from "@/components/catalogo/catalogoHelpers";
+import type { CatalogProduct } from "@/components/catalogo/catalogoHelpers";
+import { toCatalogPayload } from "@/components/catalogo/sendCatalogChunks";
 
 interface Options {
   integrationId: string;
@@ -12,57 +13,40 @@ interface Options {
   onSent: () => void;
 }
 
+/** Envio do catálogo dentro da conversa: o trabalho roda no popup global (CatalogSendContext), que segue ao trocar de tela. */
 export function useSendCatalog({ integrationId, contactPhone, onSendNote, onSent }: Options) {
   const { tenantId } = useAuth();
-  const { balance, refetchBalance } = useTokens();
+  const { balance } = useTokens();
   const { toast } = useToast();
-  const [sending, setSending] = useState(false);
+  const { start, running } = useCatalogSend();
   const [includePrice, setIncludePrice] = useState(true);
   /** junta as fotos de cada produto numa imagem só (colagem) com nome e preço na legenda; desligado manda uma mensagem por foto */
   const [joinPhotos, setJoinPhotos] = useState(true);
 
-  const send = async (selectedProducts: CatalogProduct[]) => {
-    if (!tenantId || selectedProducts.length === 0) return;
-    const tokenCost = selectedProducts.length;
-    if (balance < tokenCost) {
-      toast({ title: "Tokens insuficientes", description: `Você precisa de ${tokenCost} tokens. Saldo: ${balance}.`, variant: "destructive" });
+  const send = (selected: CatalogProduct[]) => {
+    if (!tenantId || selected.length === 0) return;
+    if (balance < selected.length) {
+      toast({ title: "Tokens insuficientes", description: `Você precisa de ${selected.length} tokens. Saldo: ${balance}.`, variant: "destructive" });
       return;
     }
-    setSending(true);
-    try {
-      const result = await sendCatalogInChunks(
-        {
-          tenant_id: tenantId,
-          integration_id: integrationId,
-          phone: contactPhone,
-          include_price: includePrice,
-          include_stock: false,
-          send_as_document: false,
-          photo_layout: joinPhotos ? "collage" : "separate",
-        },
-        selectedProducts.map(p => ({
-          id: p.id, name: p.name, price: p.price, stock: p.stock,
-          image_url: p.imageUrl, image_urls: (p.sendImages?.length ? p.sendImages : p.images.slice(0, 1)).slice(0, MAX_CATALOG_PHOTOS),
-          variations: p.variations, source: p.source,
-        })),
-        joinPhotos,
-      );
-      toast({
-        title: "Catálogo enviado!",
-        description: `${result.sent} produto${result.sent > 1 ? "s" : ""} (${result.images_sent ?? result.sent} foto${(result.images_sent ?? result.sent) > 1 ? "s" : ""}). ${result.token_cost} token${result.token_cost > 1 ? "s" : ""} consumido${result.token_cost > 1 ? "s" : ""}.${result.failed ? ` ${result.failed} falhou.` : ""}${result.skipped ? ` ${result.skipped} ficou de fora por tempo: envie de novo.` : ""}`,
-      });
-      const productList = selectedProducts
-        .map(p => `• ${p.name}${p.price ? ` — R$ ${p.price.toFixed(2).replace(".", ",")}` : ""}${(p.sendImages?.length ?? 1) > 1 ? ` (${p.sendImages!.length} fotos)` : ""}`)
-        .join("\n");
-      onSendNote(`📦 Catálogo enviado (${result.sent} produto${result.sent > 1 ? "s" : ""}):\n${productList}`);
-      await refetchBalance();
-      onSent();
-    } catch (error: any) {
-      toast({ title: "Erro ao enviar", description: error.message || "Não foi possível enviar.", variant: "destructive" });
-    } finally {
-      setSending(false);
-    }
+    const byId = new Map(selected.map(p => [p.id, p]));
+    const started = start({
+      base: {
+        tenant_id: tenantId, integration_id: integrationId, phone: contactPhone,
+        include_price: includePrice, include_stock: false, send_as_document: false,
+        photo_layout: joinPhotos ? "collage" : "separate",
+      },
+      products: selected.map(toCatalogPayload),
+      collage: joinPhotos,
+      label: contactPhone,
+      onDone: (delivered) => {
+        const list = delivered.map(d => byId.get(d.id)).filter((p): p is CatalogProduct => !!p)
+          .map(p => `• ${p.name}${p.price ? ` — R$ ${p.price.toFixed(2).replace(".", ",")}` : ""}${(p.sendImages?.length ?? 1) > 1 ? ` (${p.sendImages!.length} fotos)` : ""}`);
+        if (list.length) onSendNote(`📦 Catálogo enviado (${list.length} produto${list.length > 1 ? "s" : ""}):\n${list.join("\n")}`);
+      },
+    });
+    if (started) onSent();
   };
 
-  return { sending, includePrice, setIncludePrice, joinPhotos, setJoinPhotos, send };
+  return { sending: running, includePrice, setIncludePrice, joinPhotos, setJoinPhotos, send };
 }

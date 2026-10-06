@@ -105,6 +105,7 @@ Deno.serve(async (req) => {
     let skipped = 0;     // produtos que ficaram de fora por falta de tempo (não são cobrados)
     let imagesSent = 0;  // fotos entregues no total
     let collages = 0;    // produtos enviados com as fotos juntas numa imagem
+    const results: { id: string; status: 'sent' | 'failed' | 'skipped' }[] = []; // resultado por produto (o front reenvia o que falhou)
     const useCollage = photo_layout !== 'separate';
     const startedAt = Date.now();
     const TIME_BUDGET_MS = 110_000;
@@ -124,7 +125,7 @@ Deno.serve(async (req) => {
 
     for (let i = 0; i < products.length; i++) {
       const product = products[i];
-      if (Date.now() - startedAt > TIME_BUDGET_MS) { skipped += products.length - i; log.info(`[CATALOG] Tempo esgotado: ${products.length - i} produto(s) não enviado(s)`); break; }
+      if (Date.now() - startedAt > TIME_BUDGET_MS) { for (let k = i; k < products.length; k++) results.push({ id: String(products[k].id), status: 'skipped' }); skipped += products.length - i; log.info(`[CATALOG] Tempo esgotado: ${products.length - i} produto(s) não enviado(s)`); break; }
       try {
         // Legenda: nome + preço, só na primeira foto
         let caption = `*${product.name}*`;
@@ -135,7 +136,7 @@ Deno.serve(async (req) => {
         const images = pickCatalogImages(product).slice(0, MAX_CATALOG_PHOTOS);
         if (images.length === 0) {
           log.info(`[CATALOG] Skipping ${product.name} - no image`);
-          failed++;
+          failed++; results.push({ id: String(product.id), status: 'failed' });
           continue;
         }
 
@@ -146,7 +147,7 @@ Deno.serve(async (req) => {
           let collage: string | null = null;
           try { collage = await buildCollageBase64(images); } catch (e) { log.error(`[CATALOG] Colagem falhou para ${product.name}, enviando separadas:`, (e as Error).message); }
           if (collage && await sendImage(collage, caption, true)) {
-            sent++; imagesSent += images.length; collages++;
+            sent++; imagesSent += images.length; collages++; results.push({ id: String(product.id), status: 'sent' });
             log.info(`[CATALOG] ✅ Sent ${product.name} (colagem)`);
             if (i < products.length - 1) await new Promise(r => setTimeout(r, 1500));
             continue;
@@ -154,21 +155,21 @@ Deno.serve(async (req) => {
         }
 
         if (await sendImage(images[0], caption)) {
-          sent++; imagesSent++;
+          sent++; imagesSent++; results.push({ id: String(product.id), status: 'sent' });
           log.info(`[CATALOG] ✅ Sent ${product.name}`);
           for (const extra of images.slice(1)) {
             await new Promise(r => setTimeout(r, 1000));
             if (await sendImage(extra)) imagesSent++;
           }
         } else {
-          failed++;
+          failed++; results.push({ id: String(product.id), status: 'failed' });
         }
 
         // Rate limit delay (1.5s between products)
         if (i < products.length - 1) await new Promise(r => setTimeout(r, 1500));
       } catch (err) {
         log.error(`[CATALOG] Exception sending ${product.name}:`, err);
-        failed++;
+        failed++; results.push({ id: String(product.id), status: 'failed' });
       }
     }
 
@@ -183,7 +184,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ sent, failed, skipped, images_sent: imagesSent, collages, token_cost: sent }), {
+    return new Response(JSON.stringify({ sent, failed, skipped, images_sent: imagesSent, collages, token_cost: sent, results }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 

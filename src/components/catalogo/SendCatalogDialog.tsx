@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Send, Loader2, Phone } from "lucide-react";
+import { Send, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,14 +12,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { sendCatalogInChunks } from "./sendCatalogChunks";
+import { toCatalogPayload } from "./sendCatalogChunks";
 import { useAuth } from "@/contexts/AuthContext";
-import { useTokens } from "@/contexts/TokenContext";
+import { useCatalogSend } from "@/contexts/CatalogSendContext";
 import { useToast } from "@/hooks/use-toast";
-import { MAX_CATALOG_PHOTOS, type CatalogProduct } from "./catalogoHelpers";
-
-import { createLogger } from '@/lib/logger';
-const log = createLogger('SendCatalogDialog');
+import type { CatalogProduct } from "./catalogoHelpers";
 
 interface SendCatalogDialogProps {
   open: boolean;
@@ -31,67 +28,34 @@ interface SendCatalogDialogProps {
 
 export function SendCatalogDialog({ open, onOpenChange, products, integrationId, onSuccess }: SendCatalogDialogProps) {
   const { tenantId } = useAuth();
-  const { refetchBalance } = useTokens();
   const { toast } = useToast();
   const [phone, setPhone] = useState("");
   const [includePrice, setIncludePrice] = useState(true);
   const [includeStock, setIncludeStock] = useState(false);
   const [joinPhotos, setJoinPhotos] = useState(true);
   const hasMultiPhotos = products.some((p) => (p.sendImages?.length ?? 1) > 1);
-  const [sending, setSending] = useState(false);
 
+  const { start, running } = useCatalogSend();
   const tokenCost = products.length;
 
-  const handleSend = async () => {
+  const handleSend = () => {
     if (!phone.trim()) {
       toast({ title: "Número obrigatório", description: "Informe o número de WhatsApp do cliente.", variant: "destructive" });
       return;
     }
-
     if (!tenantId) return;
-
-    setSending(true);
-    try {
-      const result = await sendCatalogInChunks(
-        {
-          tenant_id: tenantId,
-          integration_id: integrationId,
-          phone: phone.trim(),
-          include_price: includePrice,
-          include_stock: includeStock,
-          send_as_document: false,
-          photo_layout: joinPhotos ? 'collage' : 'separate',
-        },
-        products.map(p => ({
-          id: p.id,
-          name: p.name,
-          price: p.price,
-          stock: p.stock,
-          image_url: p.imageUrl,
-          image_urls: (p.sendImages?.length ? p.sendImages : p.images.slice(0, 1)).slice(0, MAX_CATALOG_PHOTOS),
-          variations: p.variations,
-          source: p.source,
-        })),
-        joinPhotos,
-      );
-
-      toast({
-        title: "Catálogo enviado!",
-        description: `${result.sent} produto${result.sent > 1 ? 's' : ''} (${result.images_sent ?? result.sent} foto${(result.images_sent ?? result.sent) > 1 ? 's' : ''}) enviado${result.sent > 1 ? 's' : ''}. ${result.failed > 0 ? `${result.failed} falha(s).` : ''}${result.skipped ? ` ${result.skipped} ficou de fora por tempo: envie de novo.` : ''} ${result.token_cost} token${result.token_cost > 1 ? 's' : ''} consumido${result.token_cost > 1 ? 's' : ''}.`,
-      });
-
-      await refetchBalance();
-      onSuccess();
-    } catch (error: any) {
-      log.error('Send catalog error:', error);
-      toast({
-        title: "Erro ao enviar",
-        description: error.message || "Não foi possível enviar o catálogo.",
-        variant: "destructive",
-      });
-    } finally {
-      setSending(false);
-    }
+    // O envio roda no popup global (progresso, minimizar, interromper e reenviar o que falhar)
+    const started = start({
+      base: {
+        tenant_id: tenantId, integration_id: integrationId, phone: phone.trim(),
+        include_price: includePrice, include_stock: includeStock, send_as_document: false,
+        photo_layout: joinPhotos ? 'collage' : 'separate',
+      },
+      products: products.map(toCatalogPayload),
+      collage: joinPhotos,
+      label: phone.trim(),
+    });
+    if (started) onSuccess();
   };
 
   return (
@@ -149,12 +113,12 @@ export function SendCatalogDialog({ open, onOpenChange, products, integrationId,
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={sending}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
-          <Button onClick={handleSend} disabled={sending || !phone.trim()} className="gap-2">
-            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            {sending ? 'Enviando...' : `Enviar (${tokenCost} tokens)`}
+          <Button onClick={handleSend} disabled={running || !phone.trim()} className="gap-2">
+            <Send className="h-4 w-4" />
+            {running ? 'Envio em andamento...' : `Enviar (${tokenCost} tokens)`}
           </Button>
         </DialogFooter>
       </DialogContent>

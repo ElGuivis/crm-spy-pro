@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { TokenProvider } from "@/contexts/TokenContext";
+import { CatalogSendProvider } from "@/contexts/CatalogSendContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { NewOrdersProvider } from "@/contexts/NewOrdersContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -68,6 +69,7 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <TokenProvider>
+        <CatalogSendProvider>
         <NewOrdersProvider>
           <TooltipProvider>
             <Toaster />
@@ -126,6 +128,7 @@ const App = () => (
             </BrowserRouter>
           </TooltipProvider>
         </NewOrdersProvider>
+        </CatalogSendProvider>
       </TokenProvider>
     </AuthProvider>
   </QueryClientProvider>
