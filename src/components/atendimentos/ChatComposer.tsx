@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Textarea } from "@/components/ui/textarea";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Send, StickyNote, Paperclip, ShoppingBag, Keyboard, Sparkles, Loader2, Languages } from "lucide-react";
 import { MacroPicker } from "./MacroPicker";
@@ -35,6 +36,7 @@ export function ChatComposer({ onSend, disabled, contactName, channelProvider, c
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isMobile = useIsMobile();
   const dropZoneRef = useRef<HTMLDivElement>(null);
 
   const handleAISuggest = useCallback(async () => {
@@ -94,8 +96,8 @@ export function ChatComposer({ onSend, disabled, contactName, channelProvider, c
   }, [text, isNote, onSend]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Enter to send
-    if (e.key === 'Enter' && !e.shiftKey) {
+    // Enter envia no computador; no celular ele quebra a linha (enviar fica no botão), para não mandar mensagem sem querer
+    if (e.key === 'Enter' && !e.shiftKey && !isMobile) {
       e.preventDefault();
       handleSend();
     }
@@ -205,7 +207,7 @@ export function ChatComposer({ onSend, disabled, contactName, channelProvider, c
               type="button"
               onClick={() => setIsNote(!isNote)}
               className={cn(
-                "h-7 w-7",
+                "h-9 w-9 md:h-7 md:w-7",
                 isNote && "text-amber-600 bg-amber-100 dark:bg-amber-900/30"
               )}
             >
@@ -229,7 +231,7 @@ export function ChatComposer({ onSend, disabled, contactName, channelProvider, c
         {integrationId && (
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowCatalog(true)}>
+              <Button variant="ghost" size="icon" className="h-9 w-9 md:h-7 md:w-7" onClick={() => setShowCatalog(true)}>
                 <ShoppingBag className="h-3.5 w-3.5" />
               </Button>
             </TooltipTrigger>
@@ -239,7 +241,7 @@ export function ChatComposer({ onSend, disabled, contactName, channelProvider, c
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-7 w-7" disabled>
+            <Button variant="ghost" size="icon" className="h-9 w-9 md:h-7 md:w-7" disabled>
               <Paperclip className="h-3.5 w-3.5" />
             </Button>
           </TooltipTrigger>
@@ -255,7 +257,7 @@ export function ChatComposer({ onSend, disabled, contactName, channelProvider, c
             <Button
               variant="ghost"
               size="icon"
-              className={cn("h-7 w-7", isSuggesting && "text-primary")}
+              className={cn("h-9 w-9 md:h-7 md:w-7", isSuggesting && "text-primary")}
               onClick={handleAISuggest}
               disabled={isSuggesting || !conversationId}
             >
@@ -271,7 +273,7 @@ export function ChatComposer({ onSend, disabled, contactName, channelProvider, c
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-9 w-9 md:h-7 md:w-7"
               onClick={handleTranslate}
               disabled={isTranslating || !conversationId}
             >
@@ -282,23 +284,23 @@ export function ChatComposer({ onSend, disabled, contactName, channelProvider, c
         </Tooltip>
 
         {/* Keyboard shortcut hint */}
-        <div className="ml-auto flex items-center gap-1 text-[10px] text-muted-foreground/50">
+        <div className="ml-auto hidden md:flex items-center gap-1 text-[10px] text-muted-foreground/50">
           <Keyboard className="h-3 w-3" />
           <span>/</span>
         </div>
       </div>
 
       {/* Input area */}
-      <div className="flex gap-2 items-end px-3 pb-3 pt-1">
+      <div className="flex gap-2 items-end px-3 pt-1" style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}>
         <Textarea
           ref={textareaRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isNote ? "Escreva uma nota interna... (Esc para cancelar)" : "Digite uma mensagem... (/ para focar)"}
+          placeholder={isNote ? (isMobile ? "Nota interna..." : "Escreva uma nota interna... (Esc para cancelar)") : (isMobile ? "Mensagem" : "Digite uma mensagem... (/ para focar)")}
           disabled={disabled}
           className={cn(
-            "min-h-[40px] max-h-[120px] resize-none text-sm transition-colors",
+            "min-h-[40px] max-h-[120px] resize-none text-base md:text-sm transition-colors",
             isNote && "border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-900/10"
           )}
           rows={1}
@@ -307,7 +309,7 @@ export function ChatComposer({ onSend, disabled, contactName, channelProvider, c
           size="icon"
           onClick={handleSend}
           disabled={disabled || !text.trim()}
-          className={cn("shrink-0 h-9 w-9 transition-all", text.trim() && "shadow-sm")}
+          className={cn("shrink-0 h-11 w-11 md:h-9 md:w-9 transition-all", text.trim() && "shadow-sm")}
         >
           <Send className="h-4 w-4" />
         </Button>

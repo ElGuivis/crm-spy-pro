@@ -5,6 +5,7 @@ import { ConversationCard } from "./ConversationCard";
 import { useTags } from "@/hooks/useTags";
 import { Search, MessageSquare, Filter, X, Calendar, Tag, UserCheck } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +38,7 @@ const PRIORITY_OPTIONS = [
 
 export function ConversationList({ inboxId, selectedConversationId, onSelectConversation }: ConversationListProps) {
   const [search, setSearch] = useState('');
+  const isMobile = useIsMobile();
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
@@ -136,10 +138,10 @@ export function ConversationList({ inboxId, selectedConversationId, onSelectConv
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             ref={searchInputRef}
-            placeholder="Buscar nome, telefone, mensagem... (Ctrl+K)"
+            placeholder={isMobile ? "Buscar conversa" : "Buscar nome, telefone, mensagem... (Ctrl+K)"}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 pr-16 h-9 text-sm"
+            className="pl-9 pr-16 h-10 md:h-9 text-base md:text-sm"
           />
           <div className="absolute right-1 top-1 flex items-center gap-0.5">
             {search && (
@@ -251,8 +253,9 @@ export function ConversationList({ inboxId, selectedConversationId, onSelectConv
         </div>
       </div>
 
-      {/* Status tabs */}
-      <div className="flex items-center gap-0.5 px-2 py-1.5 border-b overflow-x-auto">
+      {/* Status tabs (no celular o fim da faixa esmaece para indicar que dá para rolar) */}
+      <div className="relative border-b">
+      <div className="flex items-center gap-0.5 px-2 py-1.5 overflow-x-auto">
         {STATUS_TABS.map(tab => {
           const count = counts[tab.key];
           return (
@@ -260,7 +263,7 @@ export function ConversationList({ inboxId, selectedConversationId, onSelectConv
               key={tab.key}
               onClick={() => setStatusFilter(tab.key)}
               className={cn(
-                "px-2.5 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-all duration-200",
+                "px-3 py-2 md:px-2.5 md:py-1 rounded-md text-sm md:text-xs font-medium whitespace-nowrap transition-all duration-200",
                 statusFilter === tab.key
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:bg-muted"
@@ -278,6 +281,8 @@ export function ConversationList({ inboxId, selectedConversationId, onSelectConv
             </button>
           );
         })}
+      </div>
+      <div className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-card to-transparent md:hidden" />
       </div>
 
       {/* Active filter chips */}

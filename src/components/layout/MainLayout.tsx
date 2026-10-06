@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { PageTransition } from "@/components/common/PageTransition";
 import { OnboardingTour } from "@/components/onboarding/OnboardingTour";
 import { ChangelogDialog } from "@/components/help/ChangelogDialog";
+import { MobileMenuProvider } from "@/contexts/MobileMenuContext";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -23,6 +24,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
+    <MobileMenuProvider value={() => setMobileMenuOpen(true)}>
     <div className="min-h-screen bg-background">
       {/* Mobile Nav Header */}
       {isMobile && !isFullscreen && (
@@ -54,7 +56,7 @@ export function MainLayout({ children }: MainLayoutProps) {
 
         {/* Page Content with transition */}
         <div className={isFullscreen 
-          ? (isMobile ? "h-[calc(100vh-3.5rem)]" : "h-screen") 
+          ? (isMobile ? "h-dvh" : "h-screen") 
           : "p-4 md:p-6"
         }>
           {isFullscreen ? children : (
@@ -66,5 +68,6 @@ export function MainLayout({ children }: MainLayoutProps) {
       </main>
       <OnboardingTour />
     </div>
+    </MobileMenuProvider>
   );
 }

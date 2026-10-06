@@ -128,9 +128,9 @@ export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(function C
     <div className="flex flex-col h-full">
       {/* Chat header */}
       {conversation && (
-        <div className="border-b px-3 md:px-4 py-2 flex items-center gap-2 md:gap-3 bg-card shrink-0">
+        <div className="border-b px-3 md:px-4 py-2 flex items-center max-md:flex-wrap gap-2 md:gap-3 bg-card shrink-0">
           {onBack && (
-            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onBack}>
+            <Button variant="ghost" size="icon" className="h-10 w-10 md:h-8 md:w-8 shrink-0" onClick={onBack} aria-label="Voltar à lista">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           )}
@@ -147,6 +147,8 @@ export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(function C
             </div>
           </div>
 
+          {/* no celular o secundário (intenção, avisos, assumir, resumo) desce para uma segunda linha; no computador segue na mesma linha */}
+          <div className="contents max-md:flex max-md:order-last max-md:w-full max-md:flex-wrap max-md:items-center max-md:gap-2">
           {intent && (
             <Badge variant="outline" className={cn("gap-1 text-xs", INTENT_CLASS[intent])}>
               <Brain className="h-3 w-3" />
@@ -179,12 +181,13 @@ export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(function C
               conversationId={conversationId!}
             />
           )}
+          </div>
 
           {/* Search toggle */}
           <Button
             variant={showSearch ? "secondary" : "ghost"}
             size="icon"
-            className="h-8 w-8"
+            className="h-10 w-10 md:h-8 md:w-8"
             onClick={() => { setShowSearch(!showSearch); if (!showSearch) setTimeout(() => searchInputRef.current?.focus(), 100); }}
             title="Buscar mensagens (Ctrl+F)"
           >
@@ -195,7 +198,7 @@ export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(function C
             <Button
               variant={isPanelOpen ? "secondary" : "ghost"}
               size="icon"
-              className="h-8 w-8"
+              className="h-10 w-10 md:h-8 md:w-8"
               onClick={onTogglePanel}
               title="Painel do cliente"
             >

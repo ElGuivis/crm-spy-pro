@@ -18,6 +18,17 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { AtendimentosMobileHeader, type AtendimentosSection } from "@/components/atendimentos/AtendimentosMobileHeader";
+
+const SECTIONS: AtendimentosSection[] = [
+  { value: "conversas", label: "Conversas", icon: <MessageSquare className="h-5 w-5" /> },
+  { value: "inboxes", label: "Inboxes", icon: <Inbox className="h-5 w-5" /> },
+  { value: "chatbot", label: "Chatbot", icon: <Bot className="h-5 w-5" /> },
+  { value: "agente-ia", label: "Agente IA", icon: <Brain className="h-5 w-5" /> },
+  { value: "canais", label: "Canais", icon: <Smartphone className="h-5 w-5" /> },
+  { value: "flows", label: "Flows", icon: <Workflow className="h-5 w-5" /> },
+  { value: "relatorios", label: "Relatórios", icon: <BarChart3 className="h-5 w-5" /> },
+];
 
 export default function Atendimentos() {
   const { inboxes } = useInboxes();
@@ -62,7 +73,18 @@ export default function Atendimentos() {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header with tabs */}
+      {/* Celular: cabeçalho próprio (menu, seção, inbox); some com a conversa aberta, que tem o seu */}
+      {isMobile && !(activeTab === "conversas" && mobileView === "chat") && (
+        <AtendimentosMobileHeader
+          sections={SECTIONS}
+          active={activeTab}
+          onChange={setActiveTab}
+          inboxSelector={activeTab === "conversas" ? <InboxSelector inboxes={inboxes} selectedInboxId={selectedInboxId} onSelect={setSelectedInboxId} /> : undefined}
+        />
+      )}
+
+      {/* Header with tabs (computador) */}
+      {!isMobile && (
       <div className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 border-b bg-card shrink-0">
         <Headset className="h-5 w-5 text-primary shrink-0 hidden md:block" />
         <h1 className="text-base font-semibold text-foreground hidden md:block">Atendimentos</h1>
@@ -110,6 +132,7 @@ export default function Atendimentos() {
           </div>
         )}
       </div>
+      )}
 
       {/* Tab content */}
       {activeTab === "conversas" && (
