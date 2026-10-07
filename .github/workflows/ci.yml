@@ -71,6 +71,13 @@ jobs:
       - name: Check file sizes (blocks on critical violations)
         run: deno run --allow-read --allow-env scripts/check-file-sizes.ts
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Check broken relative imports in edge functions
+        run: node scripts/check-missing-imports.cjs
+
   schema-drift:
     name: Schema Drift Check
     runs-on: ubuntu-latest
