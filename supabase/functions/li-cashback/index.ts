@@ -11,35 +11,9 @@ import { getCorrelationId, createLogger, type Logger } from "../_shared/correlat
 import { ensureAutomationConversation } from "../_shared/automation-conversation.ts";
 import { sendWhatsAppMessage as sharedSendWhatsApp, type WhatsAppConfig } from "../_shared/whatsapp-sender.ts";
 import { sendEmail as sharedSendEmail, getEmailConfig } from "../_shared/email-sender.ts";
+import type { CashbackPayload } from "./types.ts";
 
 let log: Logger = createLogger("li-cashback", "init");
-
-
-interface CashbackPayload {
-  order_id: number;
-  order_number: string;
-  customer_name: string;
-  customer_email: string;
-  customer_phone: string;
-  customer_cpf?: string;
-  order_total: number;
-  tenant_id?: string; // Optional: if provided, use this tenant instead of config lookup
-  integration_id?: string; // FIX: Add integration_id for proper store isolation
-}
-
-// ============= UTILITY FUNCTIONS =============
-
-function formatPhoneNumber(phone: string): string {
-  let cleaned = phone.replace(/\D/g, '');
-  if (cleaned.startsWith('0')) {
-    cleaned = cleaned.substring(1);
-  }
-  if (!cleaned.startsWith('55') && cleaned.length <= 11) {
-    cleaned = '55' + cleaned;
-  }
-  return cleaned;
-}
-
 
 // ============= MAIN HANDLER =============
 

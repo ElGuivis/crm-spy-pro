@@ -6,6 +6,8 @@ import { ensureBlingToken } from "../_shared/bling-token-refresh.ts";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
+const log = createLogger("get-store-statuses", "shared"); // usado pelas funcoes auxiliares (o handler tem o proprio, com correlation id)
+
 const BLING_API_BASE = 'https://www.bling.com.br/Api/v3';
 const CACHE_TTL_HOURS = 24;
 
