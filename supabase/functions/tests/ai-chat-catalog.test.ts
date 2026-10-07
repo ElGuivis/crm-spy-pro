@@ -30,7 +30,7 @@ Deno.test("ultima pergunta do contato pela data, ignorando o bot", () => {
 
 Deno.test("bloco: sem resultado em busca manda nao citar produto", () => {
   assertStringIncludes(formatCatalogBlock([], true), "Não cite produto");
-  assertEquals(formatCatalogBlock([], false), "");
+  assertStringIncludes(formatCatalogBlock([], false), "nenhum produto está disponível");
 });
 
 Deno.test("bloco: com resultado manda citar so os listados", () => {

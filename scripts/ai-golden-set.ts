@@ -10,16 +10,19 @@
  * Verifique as expectativas se o estoque/perfil da loja mudar (ex.: boné sem estoque).
  */
 
-interface Case { name: string; ask: string; match?: RegExp[]; notMatch?: RegExp[]; maxLen?: number }
+interface Case { name: string; ask: string; match?: RegExp[]; matchAny?: RegExp[]; notMatch?: RegExp[]; maxLen?: number }
+
+/** Sem produto vendavel (pai inativo na loja) a resposta certa e dizer que nao ha; com produto, citar preco. */
+const NO_STOCK = /n[ãa]o (tenho|temos|encontrei|h[áa]|existe)|nenhum|indispon|sem estoque|atendente/i;
 
 const NO_INFO = /n[ãa]o (tenho|sei|consigo|posso|encontrei|temos|trabalhamos|vendemos|disponho)|atendente|sem (essa )?informa/i;
 
 export const CASES: Case[] = [
-  { name: "produto: camiseta plus size com preço", ask: "Tem camiseta plus size? quanto custa?", match: [/plus size/i, /R\$\s?\d/], notMatch: [/hidrat|shampoo|sabonete/i] },
-  { name: "produto: moletom", ask: "Vocês têm moletom?", match: [/moletom/i, /R\$\s?\d/] },
-  { name: "produto: preço de peça específica", ask: "Quanto custa a camiseta plus size colab Dexter?", match: [/R\$\s?\d/] },
-  { name: "produto: pergunta geral de estoque", ask: "O que você tem em estoque hoje?", match: [/R\$\s?\d/], notMatch: [/n[ãa]o (tenho|temos) informa/i] },
-  { name: "produto: frase com ruído (oversized)", ask: "Não precisa mas tem camiseta oversized?", match: [/oversized/i, /R\$\s?\d/] },
+  { name: "produto: camiseta plus size com preço", ask: "Tem camiseta plus size? quanto custa?", matchAny: [/R\$\s?\d/, NO_STOCK], notMatch: [/hidrat|shampoo|sabonete/i] },
+  { name: "produto: moletom", ask: "Vocês têm moletom?", matchAny: [/R\$\s?\d/, NO_STOCK] },
+  { name: "produto: preço de peça específica", ask: "Quanto custa a camiseta plus size colab Dexter?", matchAny: [/R\$\s?\d/, NO_STOCK] },
+  { name: "produto: pergunta geral de estoque", ask: "O que você tem em estoque hoje?", matchAny: [/R\$\s?\d/, NO_STOCK], notMatch: [/n[ãa]o (tenho|temos) informa/i] },
+  { name: "produto: frase com ruído (oversized)", ask: "Não precisa mas tem camiseta oversized?", matchAny: [/R\$\s?\d/, NO_STOCK] },
   { name: "escopo: hidratante (não vende)", ask: "Vocês vendem hidratante ou shampoo?", match: [/n[ãa]o/i], notMatch: [/sim,? (temos|vendemos)/i] },
   { name: "escopo: tênis (não vende)", ask: "Vocês vendem tênis?", match: [/n[ãa]o/i], notMatch: [/sim,? (temos|vendemos)/i] },
   { name: "escopo: jaqueta de couro (não existe)", ask: "Tem jaqueta de couro?", match: [/n[ãa]o/i], notMatch: [/R\$\s?\d/] },
@@ -66,6 +69,7 @@ async function main() {
       const fails: string[] = [];
       if (!answer) fails.push(`sem resposta (${body.error ?? res.status})`);
       for (const m of c.match ?? []) if (!m.test(answer)) fails.push(`faltou ${m}`);
+      if (c.matchAny && !c.matchAny.some((m) => m.test(answer))) fails.push(`faltou um de ${c.matchAny.join(" | ")}`);
       for (const n of c.notMatch ?? []) if (n.test(answer)) fails.push(`proibido ${n}`);
       if (c.maxLen && answer.length > c.maxLen) fails.push(`longa (${answer.length})`);
       results.push({ name: c.name, ok: fails.length === 0, why: fails.join("; "), answer, ms });

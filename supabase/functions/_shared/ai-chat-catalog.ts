@@ -51,8 +51,8 @@ interface BlingRow { nome: string; preco: number | null; estoque_atual: number |
 export function formatCatalogBlock(lines: string[], searched: boolean): string {
   if (!lines.length) {
     return searched
-      ? '\n=== PRODUTOS DISPONÍVEIS (busca pela pergunta) ===\nNenhum produto em estoque encontrado para essa busca. Não cite produto nem preço; ofereça um atendente.\n'
-      : '';
+      ? '\n=== PRODUTOS DISPONÍVEIS (busca pela pergunta) ===\nNenhum produto disponível para venda encontrado para essa busca. Não cite produto nem preço; ofereça um atendente.\n'
+      : '\n=== PRODUTOS DISPONÍVEIS ===\nNo momento nenhum produto está disponível para venda no estoque. Diga isso com clareza, não cite produto nem preço e ofereça um atendente.\n';
   }
   return `\n=== PRODUTOS DISPONÍVEIS EM ESTOQUE (${lines.length}) ===\n${lines.join('\n')}\nCite SOMENTE estes produtos e preços; o que não está aqui não é confirmado.\n`;
 }

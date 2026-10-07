@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict vuNZPYIgXyMd1UYtd2SHC2pOIkWbtkPBBifR1OCHLFpubtWssI9KFsAIQ9ZZhur
+\restrict wK4VNCcLhhOyc0ebWv9zlay8fR3RYSgHvzF9dZBbHoKq9jN7SnL8yaqX0LhMfor
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -4035,7 +4035,16 @@ CREATE FUNCTION public.search_available_products(p_tenant uuid, p_terms text[], 
     AS $$
   SELECT p.name, p.price, p.promotional_price, p.stock
   FROM public.li_products p
+  LEFT JOIN public.li_products par
+    ON par.tenant_id = p.tenant_id
+   AND par.integration_id = p.integration_id
+   AND ('/api/v1/produto/' || par.loja_integrada_product_id) = p.raw_json->>'pai'
   WHERE p.tenant_id = p_tenant AND p.active AND p.stock > 0
+    AND coalesce((p.raw_json->>'bloqueado')::boolean, false) = false
+    AND (
+      (p.raw_json->>'pai' IS NULL)
+      OR (par.id IS NOT NULL AND par.active AND coalesce((par.raw_json->>'bloqueado')::boolean, false) = false)
+    )
     AND (
       coalesce(array_length(p_terms, 1), 0) = 0
       OR (p_mode = 'any' AND public.immutable_unaccent(lower(p.name)) LIKE ANY (
@@ -19352,5 +19361,5 @@ ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict vuNZPYIgXyMd1UYtd2SHC2pOIkWbtkPBBifR1OCHLFpubtWssI9KFsAIQ9ZZhur
+\unrestrict wK4VNCcLhhOyc0ebWv9zlay8fR3RYSgHvzF9dZBbHoKq9jN7SnL8yaqX0LhMfor
 
