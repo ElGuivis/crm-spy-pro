@@ -7,11 +7,19 @@ import { MelhorEnvioShipment } from "@/hooks/useMelhorEnvio";
 
 interface ShipmentTabEntregaProps { shipment: MelhorEnvioShipment; }
 
-import { jsonAs, type ShipmentAddress, type ShipmentDimensions } from "./shipment-json";
+import { jsonAs, jsonArray, type ShipmentAddress, type ShipmentDimensions, type ShipmentVolume } from "./shipment-json";
 export function ShipmentTabEntrega({ shipment }: ShipmentTabEntregaProps) {
   const toAddress = jsonAs<ShipmentAddress>(shipment.to_address);
   const fromAddress = jsonAs<ShipmentAddress>(shipment.from_address);
   const agencyAddress = jsonAs<ShipmentAddress>(shipment.agency_address);
+  // `dimensions` vem com nulos na maioria dos envios; o 1º volume (valores em texto) tem as medidas reais
+  const dimensions = jsonAs<ShipmentDimensions>(shipment.dimensions);
+  const volume = jsonArray<ShipmentVolume>(shipment.volumes)[0];
+  const dims = {
+    height: dimensions?.height || shipment.height || (volume?.height ? Number(volume.height) : "-"),
+    width: dimensions?.width || shipment.width || (volume?.width ? Number(volume.width) : "-"),
+    length: dimensions?.length || shipment.length || (volume?.length ? Number(volume.length) : "-"),
+  };
 
   return (
     <TabsContent value="entrega" className="space-y-6 m-0">
@@ -77,9 +85,7 @@ export function ShipmentTabEntrega({ shipment }: ShipmentTabEntregaProps) {
             <CardContent className="pt-4">
               <p className="text-sm text-muted-foreground flex items-center gap-1"><Ruler className="h-3 w-3" />Dimensões</p>
               <p className="font-medium">
-                {jsonAs<ShipmentDimensions>(shipment.dimensions)?.height || shipment.height}x
-                {jsonAs<ShipmentDimensions>(shipment.dimensions)?.width || shipment.width}x
-                {jsonAs<ShipmentDimensions>(shipment.dimensions)?.length || shipment.length} cm
+                {dims.height}x{dims.width}x{dims.length} cm
               </p>
             </CardContent>
           </Card>

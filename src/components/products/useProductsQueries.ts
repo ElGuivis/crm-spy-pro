@@ -5,7 +5,7 @@ import { Product } from "./products-helpers";
 import { LI_PRODUCT_SELECT } from './product-select-columns';
 
 /** Consultas dos produtos da Loja Integrada + realtime + atualização ao concluir a sincronização. */
-export function useProductsQueries(integrationId: string, syncStatusValue: string) {
+export function useProductsQueries(integrationId: string, syncStatusValue: string, includeInactive = false) {
   const queryClient = useQueryClient();
 
   const { data: integration } = useQuery({
@@ -21,13 +21,29 @@ export function useProductsQueries(integrationId: string, syncStatusValue: strin
   });
 
   const { data: totalProductsCount } = useQuery({
-    queryKey: ['li-products-count', integrationId],
+    queryKey: ['li-products-count', integrationId, includeInactive],
+    queryFn: async () => {
+      let countQuery = supabase
+        .from('li_products')
+        .select('id', { count: 'exact', head: true })
+        .eq('integration_id', integrationId);
+      if (!includeInactive) countQuery = countQuery.eq('active', true);
+      const { count, error } = await countQuery;
+      if (error) throw error;
+      return count || 0;
+    },
+    enabled: !!integrationId,
+  });
+
+  // produtos desativados na loja (a lista só os mostra quando o usuário pede)
+  const { data: inactiveCount = 0 } = useQuery({
+    queryKey: ['li-products-inactive-count', integrationId],
     queryFn: async () => {
       const { count, error } = await supabase
         .from('li_products')
         .select('id', { count: 'exact', head: true })
         .eq('integration_id', integrationId)
-        .eq('active', true);
+        .eq('active', false);
       if (error) throw error;
       return count || 0;
     },
@@ -35,17 +51,18 @@ export function useProductsQueries(integrationId: string, syncStatusValue: strin
   });
 
   const { data: allProducts, isLoading, refetch: refetchProducts } = useQuery({
-    queryKey: ['li-products-all', integrationId],
+    queryKey: ['li-products-all', integrationId, includeInactive],
     queryFn: async () => {
       const pageSize = 1000;
       let from = 0;
       const allRows: Product[] = [];
       while (true) {
-        const { data, error } = await supabase
+        let pageQuery = supabase
           .from('li_products')
           .select(LI_PRODUCT_SELECT)
-          .eq('integration_id', integrationId)
-          .eq('active', true)
+          .eq('integration_id', integrationId);
+        if (!includeInactive) pageQuery = pageQuery.eq('active', true);
+        const { data, error } = await pageQuery
           .order('name', { ascending: true })
           .range(from, from + pageSize - 1)
           .returns<Product[]>();
@@ -88,5 +105,5 @@ export function useProductsQueries(integrationId: string, syncStatusValue: strin
     }
   }, [syncStatusValue, integrationId, queryClient]);
 
-  return { integration, totalProductsCount, allProducts, isLoading };
+  return { integration, totalProductsCount, allProducts, isLoading, inactiveCount };
 }

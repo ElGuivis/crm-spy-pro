@@ -11141,6 +11141,18 @@ export type Database = {
         }
         Returns: boolean
       }
+      churn_at_risk_count: { Args: { p_threshold: number }; Returns: number }
+      churn_at_risk_customers: {
+        Args: { p_tenant_id: string; p_threshold: number }
+        Returns: {
+          churn_probability: number
+          customer_email: string
+          customer_id: string
+          customer_name: string
+          customer_phone: string
+          revenue_total: number
+        }[]
+      }
       claim_domain_events: {
         Args: { p_limit?: number }
         Returns: {

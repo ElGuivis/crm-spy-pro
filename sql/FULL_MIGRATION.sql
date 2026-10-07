@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict uKLgtmYxpXBQJB6tx5xGwGDd25loClMzBfEwvcvWiprAXRRAaRXtfjS1Sy5tKYn
+\restrict sTjlqIhWnSR7GVMzdnp4GocEUDk8IRbRZJbVwlzsD9uVOi9UrgabvpMW1LPf0MU
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -358,6 +358,45 @@ BEGIN
   SELECT hits INTO v_hits FROM public.public_rate_limits WHERE bucket = left(p_bucket, 200) AND window_start = v_window;
   RETURN COALESCE(v_hits, 0) < p_max;
 END;
+$$;
+
+
+--
+-- Name: churn_at_risk_count(numeric); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.churn_at_risk_count(p_threshold numeric) RETURNS bigint
+    LANGUAGE sql STABLE
+    SET search_path TO 'public', 'pg_catalog'
+    AS $$
+  SELECT count(*) FROM public.churn_at_risk_customers((SELECT public.get_user_tenant_id(auth.uid())), p_threshold);
+$$;
+
+
+--
+-- Name: churn_at_risk_customers(uuid, numeric); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.churn_at_risk_customers(p_tenant_id uuid, p_threshold numeric) RETURNS TABLE(customer_id text, customer_name text, customer_email text, customer_phone text, churn_probability numeric, revenue_total numeric)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public', 'pg_catalog'
+    AS $$
+  -- 1 linha por pessoa (snapshot mais recente) e depois 1 por telefone: pessoas com e-mails diferentes
+  -- mas o mesmo telefone receberiam a mensagem duas vezes
+  SELECT DISTINCT ON (regexp_replace(s.customer_phone, '\D', '', 'g'))
+         s.customer_id, s.customer_name, s.customer_email, s.customer_phone, s.churn_probability, s.revenue_total
+  FROM (
+    SELECT DISTINCT ON (customer_key(customer_email, customer_phone))
+           customer_id, customer_name, customer_email, customer_phone, churn_probability, revenue_total
+    FROM public.customer_rfm_snapshots
+    WHERE tenant_id = p_tenant_id
+      AND customer_key(customer_email, customer_phone) IS NOT NULL
+    ORDER BY customer_key(customer_email, customer_phone), reference_date DESC, created_at DESC
+  ) s
+  WHERE s.churn_probability >= p_threshold
+    AND s.customer_phone IS NOT NULL
+    AND length(regexp_replace(s.customer_phone, '\D', '', 'g')) >= 10
+  ORDER BY regexp_replace(s.customer_phone, '\D', '', 'g'), s.churn_probability DESC, s.revenue_total DESC NULLS LAST;
 $$;
 
 
@@ -2985,7 +3024,6 @@ CREATE FUNCTION public.process_churn_campaigns() RETURNS void
 DECLARE
   cfg           RECORD;
   cutoff_ts     TIMESTAMPTZ;
-  excluded_ids  TEXT[];
   campaign_id   UUID;
   eligible_cnt  INTEGER;
   inserted_cnt  INTEGER;
@@ -2998,22 +3036,23 @@ BEGIN
   LOOP
     cutoff_ts := NOW() - (cfg.cooldown_days || ' days')::INTERVAL;
 
-    SELECT ARRAY_AGG(customer_id) INTO excluded_ids
-    FROM public.churn_campaign_triggers
-    WHERE config_id = cfg.id
-      AND triggered_at >= cutoff_ts;
+    -- elegíveis: 1 linha por pessoa (snapshot mais recente), fora do período de espera, congelados numa
+    -- tabela temporária para que a campanha e o registro de disparos usem exatamente a mesma lista
+    DROP TABLE IF EXISTS _churn_eligible;
+    CREATE TEMP TABLE _churn_eligible ON COMMIT DROP AS
+      SELECT e.*
+      FROM public.churn_at_risk_customers(cfg.tenant_id, cfg.churn_threshold) e
+      WHERE NOT EXISTS (
+        SELECT 1 FROM public.churn_campaign_triggers t
+        WHERE t.config_id = cfg.id
+          AND t.triggered_at >= cutoff_ts
+          AND customer_key(t.customer_email, t.customer_phone) = customer_key(e.customer_email, e.customer_phone)
+      )
+      ORDER BY e.churn_probability DESC, e.revenue_total DESC NULLS LAST
+      LIMIT 500;
 
-    SELECT COUNT(*) INTO eligible_cnt
-    FROM public.customer_rfm_snapshots
-    WHERE tenant_id        = cfg.tenant_id
-      AND churn_probability >= cfg.churn_threshold
-      AND customer_phone IS NOT NULL
-      AND (excluded_ids IS NULL OR customer_id != ALL(excluded_ids));
-
+    SELECT COUNT(*) INTO eligible_cnt FROM _churn_eligible;
     CONTINUE WHEN eligible_cnt = 0;
-
-    -- Cap at 500 contacts per run to avoid overloading
-    eligible_cnt := LEAST(eligible_cnt, 500);
 
     IF cfg.channel = 'whatsapp'
        AND cfg.whatsapp_integration_id IS NOT NULL
@@ -3033,12 +3072,9 @@ BEGIN
         'scheduled', NOW()
       ) RETURNING id INTO campaign_id;
 
-      INSERT INTO public.campaign_contacts
-        (campaign_id, tenant_id, name, phone, variables, status)
+      INSERT INTO public.campaign_contacts (campaign_id, tenant_id, name, phone, variables, status)
       SELECT
-        campaign_id,
-        cfg.tenant_id,
-        customer_name,
+        campaign_id, cfg.tenant_id, customer_name,
         REGEXP_REPLACE(COALESCE(customer_phone, ''), '\D', '', 'g'),
         JSONB_BUILD_OBJECT(
           'nome',          COALESCE(customer_name, ''),
@@ -3046,35 +3082,18 @@ BEGIN
           'email',         COALESCE(customer_email, '')
         ),
         'pending'
-      FROM public.customer_rfm_snapshots
-      WHERE tenant_id        = cfg.tenant_id
-        AND churn_probability >= cfg.churn_threshold
-        AND customer_phone IS NOT NULL
-        AND (excluded_ids IS NULL OR customer_id != ALL(excluded_ids))
-      LIMIT 500;
+      FROM _churn_eligible;
 
-      -- Fix total_contacts to reflect actual rows inserted
       GET DIAGNOSTICS inserted_cnt = ROW_COUNT;
-      UPDATE public.bulk_campaigns
-      SET total_contacts = inserted_cnt
-      WHERE id = campaign_id;
+      UPDATE public.bulk_campaigns SET total_contacts = inserted_cnt WHERE id = campaign_id;
 
       INSERT INTO public.churn_campaign_triggers
         (tenant_id, config_id, customer_id, customer_name, customer_email, customer_phone, churn_probability, channel)
-      SELECT
-        cfg.tenant_id, cfg.id,
-        customer_id, customer_name, customer_email, customer_phone,
-        churn_probability, cfg.channel
-      FROM public.customer_rfm_snapshots
-      WHERE tenant_id        = cfg.tenant_id
-        AND churn_probability >= cfg.churn_threshold
-        AND customer_phone IS NOT NULL
-        AND (excluded_ids IS NULL OR customer_id != ALL(excluded_ids))
-      LIMIT 500;
+      SELECT cfg.tenant_id, cfg.id, customer_id, customer_name, customer_email, customer_phone,
+             churn_probability, cfg.channel
+      FROM _churn_eligible;
 
-      UPDATE public.churn_campaign_configs
-      SET last_run_at = NOW(), updated_at = NOW()
-      WHERE id = cfg.id;
+      UPDATE public.churn_campaign_configs SET last_run_at = NOW(), updated_at = NOW() WHERE id = cfg.id;
     END IF;
   END LOOP;
 END;
@@ -19066,5 +19085,5 @@ ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict uKLgtmYxpXBQJB6tx5xGwGDd25loClMzBfEwvcvWiprAXRRAaRXtfjS1Sy5tKYn
+\unrestrict sTjlqIhWnSR7GVMzdnp4GocEUDk8IRbRZJbVwlzsD9uVOi9UrgabvpMW1LPf0MU
 

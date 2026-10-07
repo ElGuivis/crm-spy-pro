@@ -1,6 +1,13 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4'
 type ServiceClient = ReturnType<typeof createClient>;
 import { scoreRecency, scoreFrequency, scoreMonetary, determineSegment } from './rfm-scoring.ts'
+import { fetchByIds, fetchLiCategoryNames } from './rfm-fetch.ts'
+
+/** Pedido sem `customer_id`: o cálculo principal usa `li_<id do cliente na loja>`; aqui igual. */
+function liCustomerKey(rawJson: unknown): string | null {
+  const cliente = (rawJson as Record<string, unknown> | null)?.cliente as Record<string, unknown> | undefined
+  return cliente?.id ? `li_${Math.round(Number(cliente.id))}` : null
+}
 
 type Log = { info: (...a: unknown[]) => void; warn: (...a: unknown[]) => void; error: (...a: unknown[]) => void };
 
@@ -52,43 +59,27 @@ export async function runRfmBackground(ctx: RfmBackgroundContext): Promise<void>
       const categoryMetrics: CategoryCustomerMetrics[] = []
 
       if (source_type === 'loja_integrada') {
-        const allOrders = (cachedLiOrders || []).map(o => ({ id: o.id, customer_id: o.customer_id, created_at_remote: o.created_at_remote }))
+        const allOrders = (cachedLiOrders || []).map(o => ({ id: o.id, customer_id: o.customer_id, raw_json: o.raw_json, created_at_remote: o.created_at_remote }))
 
         if (allOrders && allOrders.length > 0) {
           const orderIds = allOrders.map(o => o.id)
-          const orderCustomerMap = new Map(allOrders.map(o => [o.id, { customer_id: o.customer_id, date: o.created_at_remote }]))
+          const orderCustomerMap = new Map(allOrders.map(o => [o.id, { customer_id: o.customer_id || liCustomerKey(o.raw_json), date: o.created_at_remote }]))
 
-          const allItems: Record<string, unknown>[] = []
-          for (let i = 0; i < orderIds.length; i += 500) {
-            const batchIds = orderIds.slice(i, i + 500)
-            const { data: items } = await supabase
-              .from('li_order_items')
-              .select('order_id, loja_integrada_product_id, name, price, qty')
-              .in('order_id', batchIds)
-            if (items) allItems.push(...items)
-          }
-
+          const allItems = await fetchByIds(supabase, 'li_order_items', 'order_id, loja_integrada_product_id, name, price, qty', 'order_id', orderIds)
+          log.info(`[RFM] Category step: ${orderIds.length} orders, ${allItems.length} items`)
           const productIds = [...new Set(allItems.map(it => it.loja_integrada_product_id).filter(Boolean))]
           const productCategoryMap = new Map<number, string>()
 
-          for (let i = 0; i < productIds.length; i += 500) {
-            const batchPids = productIds.slice(i, i + 500)
-            const { data: products } = await supabase
-              .from('li_products')
-              .select('loja_integrada_product_id, name, raw_json')
-              .in('loja_integrada_product_id', batchPids)
-            if (products) {
-              for (const p of products as Record<string, unknown>[]) {
-                const cats = (p.raw_json as Record<string, unknown>)?.categorias as unknown[] || []
-                if (cats.length > 0) {
-                  const catUri = typeof cats[0] === 'string' ? cats[0] : ''
-                  const catId = (catUri as string).split('/').pop() || 'sem_categoria'
-                  productCategoryMap.set(p.loja_integrada_product_id as number, `cat_${catId}`)
-                }
-              }
-            }
+          const liProducts = await fetchByIds(supabase, 'li_products', 'loja_integrada_product_id, name, raw_json', 'loja_integrada_product_id', productIds)
+          const categoryNames = await fetchLiCategoryNames(supabase, integration_id, log)
+          for (const p of liProducts) {
+            const cats = (p.raw_json as Record<string, unknown>)?.categorias as unknown[] || []
+            const catUri = typeof cats[0] === 'string' ? cats[0] : ''
+            if (!catUri) continue
+            const catId = catUri.split('/').pop() || 'sem_categoria'
+            productCategoryMap.set(p.loja_integrada_product_id as number, categoryNames.get(catId) || `cat_${catId}`)
           }
-
+          log.info(`[RFM] Category step: ${productIds.length} products, ${productCategoryMap.size} with category`)
           const custCatGroup = new Map<string, { customer_id: string; customer_name: string | null; category: string; revenue: number; orders: Set<string>; lastDate: string }>()
           const customerNameMap = new Map(customerMetrics.map(c => [c.customer_id, c.customer_name]))
 
@@ -122,30 +113,13 @@ export async function runRfmBackground(ctx: RfmBackgroundContext): Promise<void>
           const orderIds = paidOrders.map(o => o.id)
           const orderInfoMap = new Map(paidOrders.map(o => [o.id, { customer_id: String(o.cliente_id || 'unknown'), customer_name: o.cliente_nome, date: o.data_criacao }]))
 
-          const allItems: Record<string, unknown>[] = []
-          for (let i = 0; i < orderIds.length; i += 500) {
-            const batchIds = orderIds.slice(i, i + 500)
-            const { data: items } = await supabase
-              .from('bling_order_items')
-              .select('order_id, produto_id, produto_nome, valor_total, quantidade')
-              .in('order_id', batchIds)
-            if (items) allItems.push(...items)
-          }
-
+          const allItems = await fetchByIds(supabase, 'bling_order_items', 'order_id, produto_id, produto_nome, valor_total, quantidade', 'order_id', orderIds)
           const productIds = [...new Set(allItems.map(it => it.produto_id).filter(Boolean))]
           const productCategoryMap = new Map<number, string>()
 
-          for (let i = 0; i < productIds.length; i += 500) {
-            const batchPids = productIds.slice(i, i + 500)
-            const { data: products } = await supabase
-              .from('bling_products')
-              .select('bling_id, categoria_nome')
-              .in('bling_id', batchPids)
-            if (products) {
-              for (const p of products as Record<string, unknown>[]) {
-                if (p.categoria_nome) productCategoryMap.set(p.bling_id as number, p.categoria_nome as string)
-              }
-            }
+          const blingProducts = await fetchByIds(supabase, 'bling_products', 'bling_id, categoria_nome', 'bling_id', productIds)
+          for (const p of blingProducts) {
+            if (p.categoria_nome) productCategoryMap.set(p.bling_id as number, p.categoria_nome as string)
           }
 
           const custCatGroup = new Map<string, { customer_id: string; customer_name: string | null; category: string; revenue: number; orders: Set<string>; lastDate: string }>()

@@ -159,6 +159,12 @@ export function ProductsContent({ integrationId }: ProductsContentProps) {
           />
         </div>
 
+        {data.inactiveCount > 0 && (
+          <Button variant={data.showInactive ? "secondary" : "outline"} onClick={() => data.setShowInactive(!data.showInactive)}>
+            {data.showInactive ? "Ocultar inativos" : `Mostrar inativos (${data.inactiveCount})`}
+          </Button>
+        )}
+
         <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline" className="gap-2">
@@ -238,6 +244,9 @@ export function ProductsContent({ integrationId }: ProductsContentProps) {
         <div className="text-center py-12">
           <Package className="h-12 w-12 mx-auto text-muted-foreground/50 mb-3" />
           <p className="text-muted-foreground">Nenhum produto encontrado</p>
+          {!data.showInactive && data.parentCount === 0 && data.inactiveCount > 0 && (
+            <p className="text-sm text-muted-foreground mt-1">Todos os {data.inactiveCount} produtos estão inativos na loja. Use "Mostrar inativos" para vê-los.</p>
+          )}
           {!data.filteredProducts?.length && (
             <Button variant="outline" className="mt-4" onClick={data.handleSync} disabled={data.syncStatus.isActive}>Sincronizar Produtos</Button>
           )}
@@ -259,6 +268,7 @@ export function ProductsContent({ integrationId }: ProductsContentProps) {
                   <div className="absolute top-2 left-2 flex flex-col gap-1">
                     {isDestaque && <Badge className="bg-yellow-500 text-white gap-1 text-xs px-1.5"><Star className="h-3 w-3" />Destaque</Badge>}
                     {isBloqueado && <Badge className="bg-destructive text-destructive-foreground gap-1 text-xs px-1.5"><Ban className="h-3 w-3" />Bloqueado</Badge>}
+                    {!product.active && <Badge variant="secondary" className="text-xs px-1.5">Inativo</Badge>}
                   </div>
                   <div className="absolute top-2 right-2">{getStockBadge(totalStock)}</div>
                 </div>

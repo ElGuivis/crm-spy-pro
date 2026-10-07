@@ -38,7 +38,8 @@ export function useProductsData(integrationId: string) {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(24);
 
-  const { integration, totalProductsCount, allProducts, isLoading } = useProductsQueries(integrationId, syncStatus.status);
+  const [showInactive, setShowInactive] = useState(false);
+  const { integration, totalProductsCount, allProducts, isLoading, inactiveCount } = useProductsQueries(integrationId, syncStatus.status, showInactive);
 
   const { parentProducts, variationDataMap, parentCount, variationCount: totalVariationCount } = useMemo(
     () => splitParentsAndVariations(allProducts),
@@ -148,6 +149,9 @@ export function useProductsData(integrationId: string) {
     parentCount,
     totalVariationCount,
     totalProductsCount,
+    showInactive,
+    setShowInactive,
+    inactiveCount,
     filteredProducts,
     paginatedProducts,
     isLoading,

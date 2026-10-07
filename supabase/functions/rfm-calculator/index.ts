@@ -4,7 +4,7 @@ import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts"
 import { requireResource } from "../_shared/resource-guard.ts"
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
-import { scoreRecency, scoreFrequency, scoreMonetary, determineSegment, determineChurnRisk } from './rfm-scoring.ts'
+import { scoreRecency, scoreFrequency, scoreMonetary, determineSegment, determineChurnRisk, predictRepurchase } from './rfm-scoring.ts'
 import { runRfmBackground } from './rfm-background.ts'
 import type { CustomerMetrics } from './rfm-background.ts'
 
@@ -230,35 +230,13 @@ Deno.serve(async (req) => {
         Math.min(1, avgInterval && avgInterval > 0 ? recencyDays / (avgInterval * 2.5) : recencyDays / 180) * 100
       ) / 100
 
-      let predicted_next_purchase_date: string | null = null
-      let purchase_probability_7d: number | null = null
-      let purchase_probability_15d: number | null = null
-      let purchase_probability_30d: number | null = null
-      let ideal_offer_window_start: number | null = null
-      let ideal_offer_window_end: number | null = null
-
-      if (avgInterval && avgInterval > 0) {
-        const lastOrderDate = new Date(c.last_order_date)
-        const predictedDate = new Date(lastOrderDate.getTime() + avgInterval * 24 * 60 * 60 * 1000)
-        predicted_next_purchase_date = predictedDate.toISOString().split('T')[0]
-
-        const sigma = stdDevInterval || (avgInterval * 0.3)
-        const calcProb = (windowDays: number): number => {
-          const daysUntilWindow = recencyDays + windowDays
-          const zScore = (avgInterval! - daysUntilWindow) / Math.max(sigma, 1)
-          const prob = 1 / (1 + Math.exp(zScore * 1.5))
-          return Math.round(Math.min(99, Math.max(1, prob * 100)) * 10) / 10
-        }
-
-        purchase_probability_7d = calcProb(7)
-        purchase_probability_15d = calcProb(15)
-        purchase_probability_30d = calcProb(30)
-
-        const daysUntilPredicted = Math.max(0, Math.floor((predictedDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
-        const buffer = Math.round(sigma || avgInterval * 0.2)
-        ideal_offer_window_start = Math.max(0, daysUntilPredicted - Math.round(buffer * 0.5))
-        ideal_offer_window_end = daysUntilPredicted + buffer
-      }
+      const prediction = c.last_order_date && avgInterval
+        ? predictRepurchase(new Date(c.last_order_date), recencyDays, avgInterval, stdDevInterval, now)
+        : predictRepurchase(now, 0, 0, null, now)
+      const {
+        predicted_next_purchase_date, purchase_probability_7d, purchase_probability_15d,
+        purchase_probability_30d, ideal_offer_window_start, ideal_offer_window_end,
+      } = prediction
 
       return {
         tenant_id: tenantId, integration_id, source_type,

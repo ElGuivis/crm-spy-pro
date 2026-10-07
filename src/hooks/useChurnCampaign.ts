@@ -50,14 +50,13 @@ export function useChurnCampaign() {
 
       const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
 
-      const [{ count: triggeredCount }, { count: atRiskCount }] = await Promise.all([
+      const [{ count: triggeredCount }, { data: atRiskCount }] = await Promise.all([
         supabase.from("churn_campaign_triggers").select("id", { count: "exact", head: true })
           .eq("tenant_id", tenantId).gte("triggered_at", monthStart),
-        supabase.from("customer_rfm_snapshots").select("customer_id", { count: "exact", head: true })
-          .eq("tenant_id", tenantId).gte("churn_probability", threshold),
+        supabase.rpc("churn_at_risk_count", { p_threshold: threshold }),
       ]);
 
-      return { totalTriggeredThisMonth: triggeredCount || 0, atRiskCount: atRiskCount || 0 };
+      return { totalTriggeredThisMonth: triggeredCount || 0, atRiskCount: Number(atRiskCount) || 0 };
     },
     enabled: !!tenantId,
   });
