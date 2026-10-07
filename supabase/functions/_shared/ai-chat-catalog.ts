@@ -16,6 +16,11 @@ const STOPWORDS = new Set([
   'preco', 'preço', 'valor', 'produto', 'produtos', 'disponivel', 'disponíveis', 'estoque', 'mais', 'muito',
   'pode', 'podem', 'sobre', 'como', 'onde', 'qual', 'dos', 'das', 'nos', 'nas', 'meu', 'minha', 'entre',
   'tudo', 'bem', 'obrigado', 'obrigada', 'valeu', 'blz', 'beleza', 'entao', 'então', 'favor', 'ajuda', 'ajudar',
+  // negacao/tempo/conversa: nunca sao nome de produto
+  'nao', 'não', 'sim', 'precisa', 'preciso', 'hoje', 'agora', 'atualmente', 'momento', 'ainda', 'mas', 'tambem',
+  'algum', 'alguma', 'alguns', 'algumas', 'todos', 'todas', 'outro', 'outra', 'outros', 'outras', 'ver', 'mostrar',
+  'mostra', 'listar', 'lista', 'tipo', 'tipos', 'modelo', 'modelos', 'opcoes', 'opção', 'opcao', 'opções', 'existe',
+  'existem', 'havendo', 'haver', 'seria', 'esta', 'está', 'estao', 'estão', 'tinha', 'tenho', 'temos', 'ficou',
 ]);
 
 const normalize = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();

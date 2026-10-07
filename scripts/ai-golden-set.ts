@@ -18,6 +18,8 @@ export const CASES: Case[] = [
   { name: "produto: camiseta plus size com preço", ask: "Tem camiseta plus size? quanto custa?", match: [/plus size/i, /R\$\s?\d/], notMatch: [/hidrat|shampoo|sabonete/i] },
   { name: "produto: moletom", ask: "Vocês têm moletom?", match: [/moletom/i, /R\$\s?\d/] },
   { name: "produto: preço de peça específica", ask: "Quanto custa a camiseta plus size colab Dexter?", match: [/R\$\s?\d/] },
+  { name: "produto: pergunta geral de estoque", ask: "O que você tem em estoque hoje?", match: [/R\$\s?\d/], notMatch: [/n[ãa]o (tenho|temos) informa/i] },
+  { name: "produto: frase com ruído (oversized)", ask: "Não precisa mas tem camiseta oversized?", match: [/oversized/i, /R\$\s?\d/] },
   { name: "escopo: hidratante (não vende)", ask: "Vocês vendem hidratante ou shampoo?", match: [/n[ãa]o/i], notMatch: [/sim,? (temos|vendemos)/i] },
   { name: "escopo: tênis (não vende)", ask: "Vocês vendem tênis?", match: [/n[ãa]o/i], notMatch: [/sim,? (temos|vendemos)/i] },
   { name: "escopo: jaqueta de couro (não existe)", ask: "Tem jaqueta de couro?", match: [/n[ãa]o/i], notMatch: [/R\$\s?\d/] },

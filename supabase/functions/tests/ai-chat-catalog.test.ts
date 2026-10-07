@@ -8,6 +8,12 @@ Deno.test("termos: tira acento, stopwords e palavras curtas", () => {
   assertEquals(extractSearchTerms("a b c"), []);
 });
 
+Deno.test("termos: frases reais da conversa de teste (07/10) nao viram termos de produto", () => {
+  assertEquals(extractSearchTerms("Não precisa mas tem camiseta oversized?"), ["camiseta", "oversized"]);
+  assertEquals(extractSearchTerms("O que você tem em estoque hoje?"), []);
+  assertEquals(extractSearchTerms("Quais camisetas vocês têm agora?"), ["camisetas"]);
+});
+
 Deno.test("termos: limita a 4 e remove repetidos", () => {
   assertEquals(extractSearchTerms("camiseta camiseta verde preta azul rosa amarela").length, 4);
 });

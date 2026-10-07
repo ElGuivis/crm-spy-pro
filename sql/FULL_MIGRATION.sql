@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict THb9hqt9ooB8fyK3q2bWJMQWZWXG4ipwMofP5saoTgqfUcMTnGn5HeNYw6SSK91
+\restrict vuNZPYIgXyMd1UYtd2SHC2pOIkWbtkPBBifR1OCHLFpubtWssI9KFsAIQ9ZZhur
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -4043,7 +4043,10 @@ CREATE FUNCTION public.search_available_products(p_tenant uuid, p_terms text[], 
       OR (p_mode <> 'any' AND public.immutable_unaccent(lower(p.name)) LIKE ALL (
             ARRAY(SELECT '%' || public.immutable_unaccent(lower(t)) || '%' FROM unnest(p_terms) t)))
     )
-  ORDER BY p.stock DESC, p.name
+  ORDER BY
+    (SELECT count(*) FROM unnest(coalesce(p_terms, ARRAY[]::text[])) t
+      WHERE public.immutable_unaccent(lower(p.name)) LIKE '%' || public.immutable_unaccent(lower(t)) || '%') DESC,
+    p.stock DESC, p.name
   LIMIT greatest(1, least(coalesce(p_limit, 20), 50));
 $$;
 
@@ -19349,5 +19352,5 @@ ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict THb9hqt9ooB8fyK3q2bWJMQWZWXG4ipwMofP5saoTgqfUcMTnGn5HeNYw6SSK91
+\unrestrict vuNZPYIgXyMd1UYtd2SHC2pOIkWbtkPBBifR1OCHLFpubtWssI9KFsAIQ9ZZhur
 
