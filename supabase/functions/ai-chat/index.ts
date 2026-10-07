@@ -50,7 +50,7 @@ serve(async (req) => {
     // ── Load agent ────────────────────────────────────────────────────
     const { data: conversationData } = await supabase
       .from('conversations')
-      .select('kanban_column_id, current_ai_agent_id, verification_state, verification_data')
+      .select('kanban_column_id, current_ai_agent_id, inbox_id, verification_state, verification_data')
       .eq('id', payload.conversation_id)
       .eq('tenant_id', payload.tenant_id)
       .single();
@@ -66,6 +66,18 @@ serve(async (req) => {
     if (!aiAgent && conversationData?.kanban_column_id) {
       const { data: asgn } = await supabase.from('ai_agent_column_assignments').select('agent_id, ai_agents(*)').eq('column_id', conversationData.kanban_column_id).eq('tenant_id', payload.tenant_id).single();
       if (asgn?.ai_agents) { aiAgent = Array.isArray(asgn.ai_agents) ? asgn.ai_agents[0] : asgn.ai_agents; log.info('🤖 Column agent:', aiAgent?.name); }
+    }
+
+    if (!aiAgent && conversationData?.inbox_id) {
+      const { data: inbox } = await supabase.from('inboxes').select('ai_agent_id').eq('id', conversationData.inbox_id).maybeSingle();
+      if (inbox?.ai_agent_id) {
+        const { data: a } = await supabase.from('ai_agents').select(AI_AGENT_COLUMNS).eq('id', inbox.ai_agent_id).eq('is_active', true).single();
+        if (a) {
+          aiAgent = a;
+          log.info('🤖 Agent from inbox:', aiAgent.name);
+          await supabase.from('conversations').update({ current_ai_agent_id: aiAgent.id }).eq('id', payload.conversation_id);
+        }
+      }
     }
 
     let { data: aiConfig } = await supabase.from('ai_assistant_configs').select('*, default_ai_agent:ai_agents(*)').eq('tenant_id', payload.tenant_id).single();
@@ -133,7 +145,8 @@ serve(async (req) => {
     log.info(`🏪 Store: ${storeInfo?.type || 'none'} (${storeInfo?.integrationId || 'N/A'})`);
 
     // ── Auto-initialize verification ──────────────────────────────────
-    const canInit = hasOrderVerification && !verificationState && verificationState !== 'verified' && aiAgent && (isShippingVerification || storeInfo);
+    // So inicia a verificacao quando o fluxo pede (menu/recepcionista); pergunta comum segue para a IA.
+    const canInit = initializationOnly && hasOrderVerification && !verificationState && verificationState !== 'verified' && aiAgent && (isShippingVerification || storeInfo);
     log.info(`🔐 Auto-init: hasVerification=${hasOrderVerification}, state=${verificationState}, canInit=${canInit}`);
     if (canInit) {
       log.info('🔐 Auto-initializing verification...');
@@ -141,7 +154,7 @@ serve(async (req) => {
       await supabase.from('conversations').update({ verification_state: initialState, verification_data: null, current_ai_agent_id: aiAgent.id }).eq('id', payload.conversation_id);
       const welcomeMsg = verificationMode === 'simultaneous' ? verificationMessages.ask_both : (aiAgent.welcome_message || verificationMessages.ask_order_number);
       await sendWhatsAppMessage(evolutionApiUrl, evolutionApiKey, payload.integration_id, payload.contact_phone, welcomeMsg, supabase, payload.conversation_id);
-      await supabase.from('messages').insert({ conversation_id: payload.conversation_id, tenant_id: payload.tenant_id, sender_type: 'bot', content: welcomeMsg, status: 'sent' });
+      await supabase.from('messages').insert({ conversation_id: payload.conversation_id, tenant_id: payload.tenant_id, sender_type: 'bot', direction: 'outbound', content: welcomeMsg, status: 'sent' });
       await supabase.rpc('deduct_tokens', { _tenant_id: payload.tenant_id, _amount: 1, _type: 'ai_message', _description: 'Verificação: boas-vindas', _reference_id: payload.conversation_id });
       return new Response(JSON.stringify({ success: true, action: 'order_verification_initialized', agent: aiAgent.name, mode: verificationMode }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }

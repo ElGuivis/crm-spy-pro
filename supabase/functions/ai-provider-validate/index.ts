@@ -18,7 +18,7 @@ interface ProviderConfig {
 const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
   openai: { url: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini', successMessage: 'OpenAI conectado com sucesso!' },
   google: { url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', model: 'gemini-2.0-flash', successMessage: 'Google AI conectado com sucesso!' },
-  groq: { url: 'https://api.groq.com/openai/v1/chat/completions', model: 'llama-3.1-8b-instant', successMessage: 'Groq conectado com sucesso!' },
+  groq: { url: 'https://api.groq.com/openai/v1/chat/completions', model: 'openai/gpt-oss-20b', successMessage: 'Groq conectado com sucesso!' },
   mistral: { url: 'https://api.mistral.ai/v1/chat/completions', model: 'mistral-small-latest', successMessage: 'Mistral AI conectado com sucesso!' },
 };
 

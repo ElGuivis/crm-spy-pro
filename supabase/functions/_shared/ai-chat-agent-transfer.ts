@@ -44,11 +44,11 @@ export async function handleAgentTransfer(opts: AgentTransferOpts): Promise<Agen
 
     const transferMsg = `Entendi! Vou transferir você para ${targetAgent.name}. Um momento... 🔄`;
     await sendWhatsAppMessage(evolutionApiUrl, evolutionApiKey, integrationId, contactPhone, transferMsg, supabase);
-    await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', content: transferMsg, status: 'sent' });
+    await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: transferMsg, status: 'sent' });
 
     if (targetAgent.welcome_message) {
       await sendWhatsAppMessage(evolutionApiUrl, evolutionApiKey, integrationId, contactPhone, targetAgent.welcome_message, supabase);
-      await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', content: targetAgent.welcome_message, status: 'sent' });
+      await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: targetAgent.welcome_message, status: 'sent' });
     }
 
     updatedAgent = targetAgent;
@@ -69,7 +69,7 @@ export async function handleAgentTransfer(opts: AgentTransferOpts): Promise<Agen
 
     if ((rule.action_type === 'send_response' || rule.action_type === 'send_and_move') && rule.response_message) {
       await sendWhatsAppMessage(evolutionApiUrl, evolutionApiKey, integrationId, contactPhone, rule.response_message, supabase);
-      await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', content: rule.response_message, status: 'sent' });
+      await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: rule.response_message, status: 'sent' });
       responseSent = true;
     }
 
@@ -93,7 +93,7 @@ export async function handleAgentTransfer(opts: AgentTransferOpts): Promise<Agen
     await supabase.from('conversations').update({ status: 'pending', ai_enabled: false, current_ai_agent_id: null, ...(targetColumnId && { kanban_column_id: targetColumnId }) }).eq('id', conversationId);
     const transferMsg = 'Entendi! Vou transferir você para um de nossos atendentes. Aguarde um momento, por favor. 🙋';
     await sendWhatsAppMessage(evolutionApiUrl, evolutionApiKey, integrationId, contactPhone, transferMsg, supabase);
-    await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', content: transferMsg, status: 'sent' });
+    await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: transferMsg, status: 'sent' });
     return { updatedAgent, response: new Response(JSON.stringify({ success: true, transferred: true, message: transferMsg }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }) };
   }
 

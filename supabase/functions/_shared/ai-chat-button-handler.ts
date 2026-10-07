@@ -53,7 +53,7 @@ export async function handleButtonClick(
   if (clickedButton.action_type === 'send_response' && clickedButton.response_message) {
     log.info('📤 Sending pre-programmed response');
     await sendWhatsAppMessage(evolutionApiUrl, evolutionApiKey, payload.integration_id, payload.contact_phone, clickedButton.response_message, supabase, payload.conversation_id);
-    await supabase.from('messages').insert({ conversation_id: payload.conversation_id, tenant_id: payload.tenant_id, sender_type: 'bot', content: clickedButton.response_message, status: 'sent' });
+    await supabase.from('messages').insert({ conversation_id: payload.conversation_id, tenant_id: payload.tenant_id, sender_type: 'bot', direction: 'outbound', content: clickedButton.response_message, status: 'sent' });
     return new Response(JSON.stringify({ success: true, action: 'button_response', button_id: payload.button_click_id }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -65,7 +65,7 @@ export async function handleButtonClick(
     await supabase.from('conversations').update({ status: 'pending', ai_enabled: false, current_ai_agent_id: null, ...(targetColumnId && { kanban_column_id: targetColumnId }) }).eq('id', payload.conversation_id);
     const transferMessage = 'Entendi! Vou transferir você para um de nossos atendentes. Aguarde um momento, por favor. 🙋';
     await sendWhatsAppMessage(evolutionApiUrl, evolutionApiKey, payload.integration_id, payload.contact_phone, transferMessage, supabase, payload.conversation_id);
-    await supabase.from('messages').insert({ conversation_id: payload.conversation_id, tenant_id: payload.tenant_id, sender_type: 'bot', content: transferMessage, status: 'sent' });
+    await supabase.from('messages').insert({ conversation_id: payload.conversation_id, tenant_id: payload.tenant_id, sender_type: 'bot', direction: 'outbound', content: transferMessage, status: 'sent' });
     return new Response(JSON.stringify({ success: true, transferred: true, action: 'button_transfer_human' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -79,11 +79,11 @@ export async function handleButtonClick(
       await supabase.from('conversations').update({ current_ai_agent_id: targetAgent.id }).eq('id', payload.conversation_id);
       const transferMessage = `Entendi! Vou transferir você para ${targetAgent.name}. Um momento... 🔄`;
       await sendWhatsAppMessage(evolutionApiUrl, evolutionApiKey, payload.integration_id, payload.contact_phone, transferMessage, supabase, payload.conversation_id);
-      await supabase.from('messages').insert({ conversation_id: payload.conversation_id, tenant_id: payload.tenant_id, sender_type: 'bot', content: transferMessage, status: 'sent' });
+      await supabase.from('messages').insert({ conversation_id: payload.conversation_id, tenant_id: payload.tenant_id, sender_type: 'bot', direction: 'outbound', content: transferMessage, status: 'sent' });
 
       if (targetAgent.welcome_message) {
         await sendWhatsAppMessage(evolutionApiUrl, evolutionApiKey, payload.integration_id, payload.contact_phone, targetAgent.welcome_message, supabase, payload.conversation_id);
-        await supabase.from('messages').insert({ conversation_id: payload.conversation_id, tenant_id: payload.tenant_id, sender_type: 'bot', content: targetAgent.welcome_message, status: 'sent' });
+        await supabase.from('messages').insert({ conversation_id: payload.conversation_id, tenant_id: payload.tenant_id, sender_type: 'bot', direction: 'outbound', content: targetAgent.welcome_message, status: 'sent' });
       }
 
       if (targetAgent.interactive_buttons && (targetAgent.interactive_buttons as InteractiveButton[]).length > 0) {

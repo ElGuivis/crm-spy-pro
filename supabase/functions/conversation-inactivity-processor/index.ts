@@ -258,6 +258,7 @@ serve(async (req) => {
                       conversation_id: conversation.id,
                       tenant_id: tenantId,
                       sender_type: 'bot',
+                      direction: 'outbound',
                       content: messageToSend,
                       content_type: 'text',
                       metadata: { type: 'inactivity_closure' },

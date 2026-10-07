@@ -27,7 +27,7 @@ interface OrderVerificationOpts {
 async function sendAndSave(opts: OrderVerificationOpts, content: string): Promise<void> {
   const { supabase, evolutionApiUrl, evolutionApiKey, conversationId, tenantId, integrationId, contactPhone } = opts;
   await sendWhatsAppMessage(evolutionApiUrl, evolutionApiKey, integrationId, contactPhone, content, supabase, conversationId);
-  await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', content, status: 'sent' });
+  await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content, status: 'sent' });
   await supabase.rpc('deduct_tokens', { _tenant_id: tenantId, _amount: 1, _type: 'ai_message', _description: 'Verificação de pedido', _reference_id: conversationId });
 }
 

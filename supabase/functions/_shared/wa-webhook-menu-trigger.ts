@@ -34,7 +34,7 @@ export async function handleMenuTrigger(ctx: WaCtx): Promise<Response | null> {
         }).eq('id', conversation.id);
         const handoffMessage = receptionistConfig.human_handoff_message || 'Aguarde, um atendente irá te atender em breve.';
         const handoffResult = await sendTextWithTokenCharge(whatsAppConfig, phone, handoffMessage, supabase, tenantId, 'receptionist', 'Recepcionista: transferência para humano (numérico)', conversation.id);
-        await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', content: handoffMessage, status: handoffResult.success ? 'sent' : 'failed' });
+        await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: handoffMessage, status: handoffResult.success ? 'sent' : 'failed' });
         return new Response(JSON.stringify({ success: true, action: 'receptionist_numeric_transfer_human', selected_option: selectedOption.label, conversation_id: conversation.id }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -64,7 +64,7 @@ export async function handleMenuTrigger(ctx: WaCtx): Promise<Response | null> {
 
       if (selectedOption.action_type === 'send_message' && selectedOption.response_message) {
         const msgResult = await sendTextWithTokenCharge(whatsAppConfig, phone, selectedOption.response_message, supabase, tenantId, 'receptionist', 'Recepcionista: resposta numérica', conversation.id);
-        await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', content: selectedOption.response_message, status: msgResult.success ? 'sent' : 'failed' });
+        await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: selectedOption.response_message, status: msgResult.success ? 'sent' : 'failed' });
         return new Response(JSON.stringify({ success: true, action: 'receptionist_numeric_send_message', selected_option: selectedOption.label, conversation_id: conversation.id }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -98,7 +98,7 @@ export async function handleMenuTrigger(ctx: WaCtx): Promise<Response | null> {
       supabase, tenantId, conversationId: conversation.id,
       tokenDescription: 'Recepcionista: menu re-exibido', skipWelcome: true,
     });
-    await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', content: menuText, status: menuSent ? 'sent' : 'failed' });
+    await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: menuText, status: menuSent ? 'sent' : 'failed' });
     return new Response(JSON.stringify({ success: true, action: 'receptionist_menu_reshown', conversation_id: conversation.id }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

@@ -252,12 +252,11 @@ serve(async (req) => {
           } else if (selectedBtn.action === 'respond' && selectedBtn.response) {
             response = selectedBtn.response;
           } else if (selectedBtn.action === 'delegate_ai' && hasAI) {
+            // A escolha do botao ("4") nao e uma pergunta: pede a duvida e passa as proximas mensagens para a IA.
             newState.stage = 'ai';
-            log.info('🧠 Menu selection triggered AI delegation (explicit delegate_ai action)');
-            await supabase.from('conversations').update({ bot_state_json: newState, bot_locked_until: null }).eq('id', conversation.id);
-            return new Response(JSON.stringify({ action: 'delegate_to_ai', agent_id: agentId }), {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            });
+            newState.context = { ai_mode: true };
+            log.info('🧠 Menu selection entered AI mode (explicit delegate_ai action)');
+            response = selectedBtn.response || '😊 Pode perguntar! Digite *menu* a qualquer momento para voltar às opções.';
           }
         } else {
           if (hasStructuredMenu) {
@@ -277,7 +276,8 @@ serve(async (req) => {
       }
 
       case 'ai': {
-        if (hasStructuredMenu) {
+        // Com menu estruturado so volta ao menu se a IA nao foi pedida pelo botao (ai_mode); "menu" sempre volta.
+        if (hasStructuredMenu && !state.context?.ai_mode) {
           log.info('🔄 AI stage but agent has structured menu — returning to menu');
           newState.stage = 'menu';
           response = buildMenuOnlyText();

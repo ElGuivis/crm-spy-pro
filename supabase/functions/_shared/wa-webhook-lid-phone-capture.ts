@@ -118,7 +118,7 @@ export async function handleLidPhoneCapture(ctx: WaCtx): Promise<Response | null
     whatsAppConfig, phone, retryMessage, payload.data.key.id,
     supabase, tenantId, 'receptionist', 'Recepcionista: retry solicitação telefone', conversation.id,
   );
-  await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', content: retryMessage, status: retryResult.success ? 'sent' : 'failed' });
+  await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: retryMessage, status: retryResult.success ? 'sent' : 'failed' });
 
   return new Response(JSON.stringify({ success: true, action: 'retry_ask_phone', conversation_id: conversation.id }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },

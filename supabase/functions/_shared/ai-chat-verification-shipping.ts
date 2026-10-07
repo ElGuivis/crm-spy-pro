@@ -32,7 +32,7 @@ async function transferToHumanOnMaxAttempts(opts: ShippingVerificationOpts, atte
   await supabase.from('conversations').update({ verification_state: null, verification_data: null, status: 'pending', ai_enabled: false, current_ai_agent_id: null, kanban_column_id: targetColumnId }).eq('id', conversationId);
   const maxMsg = verificationMessages.cpf_max_attempts || verificationMessages.max_attempts;
   await sendWhatsAppMessage(evolutionApiUrl, evolutionApiKey, integrationId, contactPhone, maxMsg, supabase, conversationId);
-  await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', content: maxMsg, status: 'sent' });
+  await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: maxMsg, status: 'sent' });
   log.info(`[AI-CHAT] Max shipping attempts reached, transferring to human`);
   return new Response(JSON.stringify({ success: true, action: 'shipping_verification_failed_transfer', attempts, movedToColumn: targetColumnId }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -42,7 +42,7 @@ async function transferToHumanOnMaxAttempts(opts: ShippingVerificationOpts, atte
 async function sendAndSave(opts: ShippingVerificationOpts, content: string): Promise<void> {
   const { supabase, evolutionApiUrl, evolutionApiKey, conversationId, tenantId, integrationId, contactPhone } = opts;
   await sendWhatsAppMessage(evolutionApiUrl, evolutionApiKey, integrationId, contactPhone, content, supabase, conversationId);
-  await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', content, status: 'sent' });
+  await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content, status: 'sent' });
   await supabase.rpc('deduct_tokens', { _tenant_id: tenantId, _amount: 1, _type: 'ai_message', _description: 'Verificação de entrega', _reference_id: conversationId });
 }
 
@@ -109,7 +109,7 @@ export async function handleShippingVerification(opts: ShippingVerificationOpts)
 
     // No order number found
     await sendWhatsAppMessage(opts.evolutionApiUrl, opts.evolutionApiKey, opts.integrationId, opts.contactPhone, verificationMessages.ask_order_number, supabase, conversationId);
-    await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', content: verificationMessages.ask_order_number, status: 'sent' });
+    await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: verificationMessages.ask_order_number, status: 'sent' });
     return new Response(JSON.stringify({ success: true, action: 'shipping_order_number_not_found' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
@@ -135,7 +135,7 @@ export async function handleShippingVerification(opts: ShippingVerificationOpts)
     }
     const ask = `Por favor, informe os *3 primeiros dígitos do CPF* cadastrado na entrega do pedido *#${verificationData.order_number}*.\n\n_Exemplo: se o CPF for 123.456.789-00, digite apenas *123*._`;
     await sendWhatsAppMessage(opts.evolutionApiUrl, opts.evolutionApiKey, opts.integrationId, opts.contactPhone, ask, supabase, conversationId);
-    await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', content: ask, status: 'sent' });
+    await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: ask, status: 'sent' });
     return new Response(JSON.stringify({ success: true, action: 'shipping_cpf_digits_not_found' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
@@ -161,7 +161,7 @@ export async function handleShippingVerification(opts: ShippingVerificationOpts)
     }
     const ask = `Por favor, informe os *4 últimos dígitos do telefone* cadastrado na entrega do pedido *#${verificationData.order_number}*.\n\n_Exemplo: se o telefone for (11) 98765-4321, digite apenas *4321*._`;
     await sendWhatsAppMessage(opts.evolutionApiUrl, opts.evolutionApiKey, opts.integrationId, opts.contactPhone, ask, supabase, conversationId);
-    await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', content: ask, status: 'sent' });
+    await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: ask, status: 'sent' });
     return new Response(JSON.stringify({ success: true, action: 'shipping_phone_digits_not_found' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 

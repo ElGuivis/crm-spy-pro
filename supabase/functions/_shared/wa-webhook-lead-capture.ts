@@ -26,7 +26,7 @@ export async function handleLeadCapture(ctx: WaCtx): Promise<Response | null> {
 
     const phoneMessage = (receptionistConfig?.lead_capture_phone_message || 'Obrigado, {nome}! Agora me informe seu número de telefone com DDD:').replace(/{nome}/g, userName);
     const phoneResult = await sendTextWithTokenCharge(whatsAppConfig, phone, phoneMessage, supabase, tenantId, 'receptionist', 'Recepcionista: captura de lead - telefone', conversation.id);
-    await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', content: phoneMessage, status: phoneResult.success ? 'sent' : 'failed' });
+    await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: phoneMessage, status: phoneResult.success ? 'sent' : 'failed' });
 
     return new Response(JSON.stringify({ success: true, action: 'lead_capture_ask_phone', name: userName, conversation_id: conversation.id }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -59,7 +59,7 @@ export async function handleLeadCapture(ctx: WaCtx): Promise<Response | null> {
 
       const successMessage = (receptionistConfig?.lead_capture_success_message || 'Perfeito, {nome}! Seus dados foram salvos. Agora vamos ao seu atendimento...').replace(/{nome}/g, userName);
       const successResult = await sendTextWithTokenCharge(whatsAppConfig, phone, successMessage, supabase, tenantId, 'receptionist', 'Recepcionista: captura de lead - sucesso', conversation.id);
-      await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', content: successMessage, status: successResult.success ? 'sent' : 'failed' });
+      await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: successMessage, status: successResult.success ? 'sent' : 'failed' });
 
       if (receptionistConfig?.is_active) {
         const { success: menuSent, menuText } = await sendReceptionistMenu({
@@ -67,7 +67,7 @@ export async function handleLeadCapture(ctx: WaCtx): Promise<Response | null> {
           supabase, tenantId, conversationId: conversation.id,
           tokenDescription: 'Recepcionista: menu após captura de lead', skipWelcome: true,
         });
-        await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', content: menuText, status: menuSent ? 'sent' : 'failed' });
+        await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: menuText, status: menuSent ? 'sent' : 'failed' });
       }
 
       return new Response(JSON.stringify({ success: true, action: 'lead_capture_completed', lead: { name: userName, phone: normalizedPhone }, conversation_id: conversation.id }), {
@@ -79,7 +79,7 @@ export async function handleLeadCapture(ctx: WaCtx): Promise<Response | null> {
     log.info('⚠️ Invalid phone format in lead capture:', messageContent);
     const retryMessage = 'Não consegui identificar um número válido. Por favor, envie seu telefone com DDD (ex: 11999998888):';
     const retryResult = await sendTextWithTokenCharge(whatsAppConfig, phone, retryMessage, supabase, tenantId, 'receptionist', 'Recepcionista: captura de lead - retry telefone', conversation.id);
-    await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', content: retryMessage, status: retryResult.success ? 'sent' : 'failed' });
+    await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: retryMessage, status: retryResult.success ? 'sent' : 'failed' });
 
     return new Response(JSON.stringify({ success: true, action: 'lead_capture_retry_phone', conversation_id: conversation.id }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

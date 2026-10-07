@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict uXT8VSMOP06tarKbsuaaVZC7JU52jl0Pqwru95f4WV8PZwqC2BgN8RoZLrtmnd1
+\restrict qhXRwwYsM79Derzoa7oYQfrhwQ2KaZah5hPtAr6OIMzCh50fkZ10fBrszDPBCzi
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -1458,6 +1458,30 @@ CREATE FUNCTION public.get_best_send_hours(p_tenant_id uuid) RETURNS TABLE(hour_
     AND created_at >= NOW() - INTERVAL '90 days'
   GROUP BY 1
   ORDER BY COUNT(*) DESC;
+$$;
+
+
+--
+-- Name: get_catalog_summary(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_catalog_summary() RETURNS jsonb
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  WITH base AS (
+    SELECT lower(split_part(btrim(name), ' ', 1)) AS kind
+    FROM public.li_products
+    WHERE tenant_id = (SELECT public.get_user_tenant_id((SELECT auth.uid())))
+      AND raw_json->>'pai' IS NULL
+      AND btrim(coalesce(name, '')) <> ''
+  ), grouped AS (
+    SELECT kind, count(*) AS total FROM base GROUP BY kind ORDER BY count(*) DESC, kind LIMIT 30
+  )
+  SELECT jsonb_build_object(
+    'total', (SELECT count(*) FROM base),
+    'kinds', coalesce((SELECT jsonb_agg(jsonb_build_object('kind', kind, 'count', total) ORDER BY total DESC, kind) FROM grouped), '[]'::jsonb)
+  );
 $$;
 
 
@@ -7964,6 +7988,29 @@ CREATE TABLE public.tenant_api_keys (
 
 
 --
+-- Name: tenant_business_profiles; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tenant_business_profiles (
+    tenant_id uuid NOT NULL,
+    store_name text,
+    segment text,
+    about text,
+    sells text,
+    does_not_sell text,
+    audience text,
+    tone text,
+    policies jsonb DEFAULT '{}'::jsonb NOT NULL,
+    extra_rules text,
+    draft_generated_at timestamp with time zone,
+    updated_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT tenant_business_profiles_size_check CHECK (((COALESCE(length(store_name), 0) <= 200) AND (COALESCE(length(segment), 0) <= 200) AND (COALESCE(length(about), 0) <= 4000) AND (COALESCE(length(sells), 0) <= 4000) AND (COALESCE(length(does_not_sell), 0) <= 2000) AND (COALESCE(length(audience), 0) <= 2000) AND (COALESCE(length(tone), 0) <= 1000) AND (COALESCE(length(extra_rules), 0) <= 4000) AND (length((policies)::text) <= 12000)))
+);
+
+
+--
 -- Name: tenant_tokens; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -9898,6 +9945,14 @@ ALTER TABLE ONLY public.tenant_ai_credentials
 
 ALTER TABLE ONLY public.tenant_api_keys
     ADD CONSTRAINT tenant_api_keys_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: tenant_business_profiles tenant_business_profiles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tenant_business_profiles
+    ADD CONSTRAINT tenant_business_profiles_pkey PRIMARY KEY (tenant_id);
 
 
 --
@@ -12593,6 +12648,13 @@ CREATE TRIGGER update_tenant_ai_credentials_updated_at BEFORE UPDATE ON public.t
 
 
 --
+-- Name: tenant_business_profiles update_tenant_business_profiles_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER update_tenant_business_profiles_updated_at BEFORE UPDATE ON public.tenant_business_profiles FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
 -- Name: tenant_tokens update_tenant_tokens_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -15150,6 +15212,14 @@ ALTER TABLE ONLY public.tenant_api_keys
 
 
 --
+-- Name: tenant_business_profiles tenant_business_profiles_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tenant_business_profiles
+    ADD CONSTRAINT tenant_business_profiles_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
 -- Name: tenant_tokens tenant_tokens_plan_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -15369,6 +15439,13 @@ CREATE POLICY "Tenant admins can manage bling_connections" ON public.bling_conne
 --
 
 CREATE POLICY "Tenant admins can manage business hours" ON public.business_hours TO authenticated USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id)));
+
+
+--
+-- Name: tenant_business_profiles Tenant admins can manage business profile; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant admins can manage business profile" ON public.tenant_business_profiles TO authenticated USING (((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id))) WITH CHECK (((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id)));
 
 
 --
@@ -17131,6 +17208,13 @@ CREATE POLICY "Users can view their tenant's business hours" ON public.business_
 
 
 --
+-- Name: tenant_business_profiles Users can view their tenant's business profile; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can view their tenant's business profile" ON public.tenant_business_profiles FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
 -- Name: abandonment_flow_sends; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -18559,6 +18643,12 @@ ALTER TABLE public.tenant_ai_credentials ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tenant_api_keys ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: tenant_business_profiles; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.tenant_business_profiles ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: instagram_ad_welcome_flows tenant_delete; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -19129,5 +19219,5 @@ ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict uXT8VSMOP06tarKbsuaaVZC7JU52jl0Pqwru95f4WV8PZwqC2BgN8RoZLrtmnd1
+\unrestrict qhXRwwYsM79Derzoa7oYQfrhwQ2KaZah5hPtAr6OIMzCh50fkZ10fBrszDPBCzi
 

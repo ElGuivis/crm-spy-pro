@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Brain, Plus, Trash2, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { AIAgentEditor } from "./AIAgentEditor";
+import { StoreProfileCard } from "./StoreProfileCard";
 
 export function AIAgentBuilder() {
   const { aiAgents: agents, isLoading } = useAIAgents();
@@ -35,6 +36,8 @@ export function AIAgentBuilder() {
 
   return (
     <div className="space-y-6 max-w-5xl">
+      <StoreProfileCard />
+
       <Card className="border-dashed bg-muted/30">
         <CardContent className="pt-5 pb-4">
           <div className="flex gap-3">

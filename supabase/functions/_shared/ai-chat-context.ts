@@ -8,7 +8,8 @@ import { getStoreIntegration, getTrackingCode, type StoreIntegrationInfo } from 
 import { extractFromMessages } from "./ai-chat-smart-search.ts";
 import { createLogger } from "./correlation.ts";
 import { getStoreColumns } from "./select-columns.ts";
-import { buildCashbackInfo, buildCatalogProductsInfo, buildCouponsInfo, buildFeaturedProductsInfo } from "./ai-chat-context-extras.ts";
+import { buildCashbackInfo, buildCouponsInfo } from "./ai-chat-context-extras.ts";
+import { buildAvailableProductsInfo } from "./ai-chat-catalog.ts";
 
 const log = createLogger("ai-chat-context", "shared");
 
@@ -147,11 +148,11 @@ export async function buildEnrichedContext(params: ContextBuildParams): Promise<
 
   // ========== PRODUCTS ==========
   let productsInfo = '';
-  if ((dataAccess.products_featured || dataAccess.products) && storeInfo) {
-    productsInfo = await buildFeaturedProductsInfo(supabase, storeInfo, tenantId);
-  }
-  if (dataAccess.products_catalog && storeInfo) {
-    productsInfo += await buildCatalogProductsInfo(supabase, storeInfo, tenantId);
+  if ((dataAccess.products_featured || dataAccess.products || dataAccess.products_catalog) && storeInfo) {
+    const lastQuestion = messageHistory
+      .filter((m) => m.sender_type === 'contact')
+      .reduce((latest, m) => (m.created_at > latest.created_at ? m : latest), { content: '', created_at: '' }).content;
+    productsInfo = await buildAvailableProductsInfo(supabase, storeInfo, tenantId, lastQuestion);
   }
 
   // ========== COUPONS ==========

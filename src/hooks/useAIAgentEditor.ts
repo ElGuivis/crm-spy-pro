@@ -14,9 +14,9 @@ export const PROVIDER_MODELS: Record<string, { value: string; label: string; des
     { value: "gemini-2.0-pro", label: "Gemini 2.0 Pro", desc: "Alta capacidade · Contexto longo" },
   ],
   groq: [
-    { value: "llama-3.1-70b-versatile", label: "Llama 3.1 70B", desc: "Potente · Versátil" },
-    { value: "llama-3.1-8b-instant", label: "Llama 3.1 8B", desc: "Ultra-rápido · Leve" },
-    { value: "mixtral-8x7b-32768", label: "Mixtral 8x7B", desc: "Balanceado · Contexto longo" },
+    { value: "openai/gpt-oss-120b", label: "GPT-OSS 120B", desc: "Potente · Raciocínio" },
+    { value: "openai/gpt-oss-20b", label: "GPT-OSS 20B", desc: "Ultra-rápido · Leve" },
+    { value: "qwen/qwen3.8-27b", label: "Qwen 3.8 27B", desc: "Balanceado · Multilíngue" },
   ],
   mistral: [
     { value: "mistral-small-latest", label: "Mistral Small", desc: "Rápido · Eficiente" },

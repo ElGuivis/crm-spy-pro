@@ -24,7 +24,7 @@ async function executeReceptionistAction(
     }).eq('id', conversation.id);
     const handoffMessage = receptionistConfig.human_handoff_message || 'Aguarde, um atendente irá te atender em breve.';
     const handoffResult = await sendTextWithTokenCharge(whatsAppConfig, phone, handoffMessage, supabase, tenantId, 'receptionist', `${logPrefix}: transferência para humano`, conversation.id);
-    await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', content: handoffMessage, status: handoffResult.success ? 'sent' : 'failed' });
+    await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: handoffMessage, status: handoffResult.success ? 'sent' : 'failed' });
     return new Response(JSON.stringify({ success: true, action: 'receptionist_transfer_human', conversation_id: conversation.id }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -54,7 +54,7 @@ async function executeReceptionistAction(
 
   if (selectedOption.action_type === 'send_message' && selectedOption.response_message) {
     const msgResult = await sendTextWithTokenCharge(whatsAppConfig, phone, selectedOption.response_message, supabase, tenantId, 'receptionist', `${logPrefix}: resposta de opção do menu`, conversation.id);
-    await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', content: selectedOption.response_message, status: msgResult.success ? 'sent' : 'failed' });
+    await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: selectedOption.response_message, status: msgResult.success ? 'sent' : 'failed' });
     return new Response(JSON.stringify({ success: true, action: 'receptionist_send_message', conversation_id: conversation.id }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -99,7 +99,7 @@ export async function handleNewConversationReceptionist(ctx: WaCtx): Promise<Res
       await supabase.from('conversations').update({ lead_capture_state: 'awaiting_name', lead_capture_data: {} }).eq('id', conversation.id);
       const nameMessage = receptionistConfig.lead_capture_name_message || 'Para um melhor atendimento, qual é o seu nome? 😊';
       const nameResult = await sendTextWithTokenCharge(whatsAppConfig, phone, nameMessage, supabase, tenantId, 'receptionist', 'Recepcionista: captura de lead - nome', conversation.id);
-      await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', content: nameMessage, status: nameResult.success ? 'sent' : 'failed' });
+      await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: nameMessage, status: nameResult.success ? 'sent' : 'failed' });
       return new Response(JSON.stringify({ success: true, action: 'lead_capture_ask_name', conversation_id: conversation.id }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -110,14 +110,14 @@ export async function handleNewConversationReceptionist(ctx: WaCtx): Promise<Res
   log.info('🤵 Sending welcome message + menu...');
   const welcomeMsg = replaceMessagePlaceholders(receptionistConfig.welcome_message, contact.name);
   const welcomeResult = await sendTextWithTokenCharge(whatsAppConfig, phone, welcomeMsg, supabase, tenantId, 'receptionist', 'Recepcionista: boas-vindas', conversation.id);
-  await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', content: welcomeMsg, status: welcomeResult.success ? 'sent' : 'failed' });
+  await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: welcomeMsg, status: welcomeResult.success ? 'sent' : 'failed' });
 
   const { success: menuSent, menuText } = await sendReceptionistMenu({
     config: receptionistConfig, whatsAppConfig, phone, contactName: contact.name,
     supabase, tenantId, conversationId: conversation.id,
     tokenDescription: 'Recepcionista: menu', skipWelcome: true,
   });
-  await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', content: menuText, status: menuSent ? 'sent' : 'failed' });
+  await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: menuText, status: menuSent ? 'sent' : 'failed' });
 
   return new Response(JSON.stringify({ success: true, contact_id: contact.id, conversation_id: conversation.id, message_id: message.id, receptionist: true }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },

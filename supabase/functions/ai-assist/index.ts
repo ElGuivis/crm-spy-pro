@@ -65,7 +65,7 @@ function getModel(provider: string): string {
   const models: Record<string, string> = {
     openai: 'gpt-4o-mini',
     google: 'gemini-2.0-flash',
-    groq: 'llama-3.1-70b-versatile',
+    groq: 'openai/gpt-oss-120b',
     mistral: 'mistral-small-latest',
   };
   return models[provider] || 'gpt-4o-mini';

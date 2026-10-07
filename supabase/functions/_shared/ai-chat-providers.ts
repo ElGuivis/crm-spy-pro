@@ -20,7 +20,7 @@ export interface AIProviderConfig {
 const PROVIDER_ENDPOINTS: Record<string, { url: string; defaultModel: string }> = {
   openai: { url: 'https://api.openai.com/v1/chat/completions', defaultModel: 'gpt-4o-mini' },
   google: { url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', defaultModel: 'gemini-2.0-flash' },
-  groq: { url: 'https://api.groq.com/openai/v1/chat/completions', defaultModel: 'llama-3.1-70b-versatile' },
+  groq: { url: 'https://api.groq.com/openai/v1/chat/completions', defaultModel: 'openai/gpt-oss-120b' },
   mistral: { url: 'https://api.mistral.ai/v1/chat/completions', defaultModel: 'mistral-small-latest' },
 };
 
@@ -44,12 +44,21 @@ const MODEL_MAPS: Record<string, Record<string, string>> = {
     'mistral-large-latest': 'gemini-2.0-pro',
   },
   groq: {
-    'gemini-2.0-flash': 'llama-3.1-70b-versatile',
-    'gemini-2.0-pro': 'llama-3.1-70b-versatile',
-    'gpt-4o': 'llama-3.1-70b-versatile',
-    'gpt-4o-mini': 'llama-3.1-8b-instant',
-    'mistral-small-latest': 'mixtral-8x7b-32768',
-    'mistral-large-latest': 'llama-3.1-70b-versatile',
+    'gemini-2.0-flash': 'openai/gpt-oss-120b',
+    'gemini-2.0-pro': 'openai/gpt-oss-120b',
+    'gpt-4o': 'openai/gpt-oss-120b',
+    'gpt-4o-mini': 'openai/gpt-oss-20b',
+    'mistral-small-latest': 'openai/gpt-oss-20b',
+    'mistral-large-latest': 'openai/gpt-oss-120b',
+    // nomes nativos da Groq (o prefixo "openai/" faz parte do nome, não pode ser removido)
+    'openai/gpt-oss-120b': 'openai/gpt-oss-120b',
+    'openai/gpt-oss-20b': 'openai/gpt-oss-20b',
+    'qwen/qwen3.8-27b': 'qwen/qwen3.8-27b',
+    // A Groq desativou Llama/Mixtral: agentes salvos com esses nomes seguem funcionando
+    'llama-3.1-70b-versatile': 'openai/gpt-oss-120b',
+    'llama-3.3-70b-versatile': 'openai/gpt-oss-120b',
+    'llama-3.1-8b-instant': 'openai/gpt-oss-20b',
+    'mixtral-8x7b-32768': 'openai/gpt-oss-20b',
   },
   mistral: {
     'gemini-2.0-flash': 'mistral-small-latest',
@@ -65,7 +74,7 @@ const MODEL_MAPS: Record<string, Record<string, string>> = {
 const DEFAULT_MODELS: Record<string, string> = {
   openai: 'gpt-4o-mini',
   google: 'gemini-2.0-flash',
-  groq: 'llama-3.1-70b-versatile',
+  groq: 'openai/gpt-oss-120b',
   mistral: 'mistral-small-latest',
 };
 

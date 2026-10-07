@@ -2,6 +2,7 @@ import { sendWhatsAppMessage, sendWhatsAppButtons, type InteractiveButton } from
 import { getAIConfig, callAIWithFallback } from "./ai-chat-providers.ts";
 import { buildEnrichedContext, type DataAccess } from "./ai-chat-context.ts";
 import type { StoreIntegrationInfo } from "./ai-chat-store.ts";
+import { buildStoreProfileBlock, fetchStoreProfile, GROUNDING_RULES } from "./ai-chat-store-profile.ts";
 
 interface AICallerOpts {
   supabase: any;
@@ -62,7 +63,13 @@ export async function callAI(opts: AICallerOpts): Promise<Response> {
   const baseSystemPrompt = aiAgent?.system_prompt || aiConfig?.system_prompt || DEFAULT_SYSTEM_PROMPT;
   log.info(`📝 System prompt source: ${aiAgent?.system_prompt ? `AI Agent (${aiAgent.name})` : aiConfig?.system_prompt ? 'Global Config' : 'Default'}`);
 
+  const storeProfileBlock = buildStoreProfileBlock(await fetchStoreProfile(supabase, tenantId));
+  log.info(`🏬 Store profile: ${storeProfileBlock ? 'loaded' : 'none'}`);
+
   const fullSystemPrompt = `${baseSystemPrompt}
+
+${storeProfileBlock}
+${GROUNDING_RULES}
 
 ${extractedDataContext}
 ${specificOrderInfo}
@@ -130,8 +137,18 @@ INSTRUÇÕES IMPORTANTES:
   }
 
   // Interactive buttons
-  if (aiAgent?.interactive_buttons && (aiAgent.interactive_buttons as InteractiveButton[]).length > 0) {
-    const buttons = aiAgent.interactive_buttons as InteractiveButton[];
+  // Os agentes gravam o rotulo em `text`; o envio espera `display_text`.
+  const agentButtons = ((aiAgent?.interactive_buttons || []) as Array<Record<string, unknown>>)
+    .map((b) => ({ ...b, display_text: String(b.display_text ?? b.text ?? '') }))
+    .filter((b) => b.display_text) as unknown as InteractiveButton[];
+  // Se a caixa de entrada usa o menu do bot-engine, ele e o dono dos botoes: nao reenviar o menu apos cada resposta da IA.
+  let botOwnsMenu = false;
+  if (conversation?.inbox_id) {
+    const { data: inbox } = await supabase.from('inboxes').select('bot_enabled').eq('id', conversation.inbox_id).maybeSingle();
+    botOwnsMenu = !!inbox?.bot_enabled;
+  }
+  if (agentButtons.length > 0 && !botOwnsMenu) {
+    const buttons = agentButtons;
     const { data: hasButtonTokens } = await supabase.rpc('has_enough_tokens', { _tenant_id: tenantId, _amount: 1 });
     if (hasButtonTokens) {
       const buttonsSent = await sendWhatsAppButtons(evolutionApiUrl, evolutionApiKey, integrationId, contactPhone, aiAgent.name, 'Posso ajudar com mais alguma coisa?', buttons, supabase);
@@ -150,7 +167,7 @@ INSTRUÇÕES IMPORTANTES:
     }
   }
 
-  const { data: botMessage } = await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', content: botReply, status: messageSent ? 'sent' : 'failed' }).select().single();
+  const { data: botMessage } = await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: botReply, status: messageSent ? 'sent' : 'failed' }).select().single();
   await supabase.from('conversations').update({ last_message_at: new Date().toISOString() }).eq('id', conversationId);
 
   return new Response(JSON.stringify({ success: true, message_id: botMessage?.id, response: botReply, provider: aiResult.provider, model: aiResult.model, usage: { tokens_input: tokensInput, tokens_output: tokensOutput } }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

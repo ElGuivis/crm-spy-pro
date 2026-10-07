@@ -10708,6 +10708,65 @@ export type Database = {
           },
         ]
       }
+      tenant_business_profiles: {
+        Row: {
+          about: string | null
+          audience: string | null
+          created_at: string
+          does_not_sell: string | null
+          draft_generated_at: string | null
+          extra_rules: string | null
+          policies: Json
+          segment: string | null
+          sells: string | null
+          store_name: string | null
+          tenant_id: string
+          tone: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          about?: string | null
+          audience?: string | null
+          created_at?: string
+          does_not_sell?: string | null
+          draft_generated_at?: string | null
+          extra_rules?: string | null
+          policies?: Json
+          segment?: string | null
+          sells?: string | null
+          store_name?: string | null
+          tenant_id: string
+          tone?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          about?: string | null
+          audience?: string | null
+          created_at?: string
+          does_not_sell?: string | null
+          draft_generated_at?: string | null
+          extra_rules?: string | null
+          policies?: Json
+          segment?: string | null
+          sells?: string | null
+          store_name?: string | null
+          tenant_id?: string
+          tone?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_business_profiles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_tokens: {
         Row: {
           balance: number
@@ -11282,6 +11341,7 @@ export type Database = {
           open_count: number
         }[]
       }
+      get_catalog_summary: { Args: never; Returns: Json }
       get_contact_blockers: {
         Args: {
           p_emails: string[]
