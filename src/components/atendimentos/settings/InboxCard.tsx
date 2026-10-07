@@ -1,4 +1,5 @@
 import { useUpdateInbox, useDeleteInbox } from "@/hooks/useAtendimentoSettings";
+import type { InboxFull } from "@/hooks/useInboxSettings";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -7,10 +8,10 @@ import { toast } from "sonner";
 import { Bot, Clock, Store, Trash2, BrainCircuit, Pencil } from "lucide-react";
 
 interface InboxCardProps {
-  inbox: any;
+  inbox: InboxFull;
   storeIntegrations: { id: string; name: string; type: string }[];
   agents: { id: string; name: string }[];
-  onEdit: (inbox: any) => void;
+  onEdit: (inbox: InboxFull) => void;
 }
 
 export function InboxCard({ inbox, storeIntegrations, agents, onEdit }: InboxCardProps) {
@@ -66,14 +67,14 @@ export function InboxCard({ inbox, storeIntegrations, agents, onEdit }: InboxCar
           variant={inbox.bot_enabled ? "secondary" : "outline"}
           size="sm"
           className="h-7 text-xs gap-1"
-          onClick={() => updateInbox.mutate({ id: inbox.id, bot_enabled: !inbox.bot_enabled } as any)}
+          onClick={() => updateInbox.mutate({ id: inbox.id, bot_enabled: !inbox.bot_enabled })}
         >
           <Bot className="h-3.5 w-3.5" />
           {inbox.bot_enabled ? 'Bot ON' : 'Bot OFF'}
         </Button>
         <Switch
           checked={inbox.is_active}
-          onCheckedChange={() => updateInbox.mutate({ id: inbox.id, is_active: !inbox.is_active } as any)}
+          onCheckedChange={() => updateInbox.mutate({ id: inbox.id, is_active: !inbox.is_active })}
         />
         <AlertDialog>
           <AlertDialogTrigger asChild>

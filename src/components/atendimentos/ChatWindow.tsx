@@ -94,7 +94,7 @@ export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(function C
 
   const isMetaOutsideWindow = useMemo(() => {
     if (channelProvider !== 'meta' || !conversation) return false;
-    const lastInbound = (conversation as any).last_inbound_at;
+    const lastInbound = conversation.last_inbound_at;
     if (!lastInbound) return true;
     const diff = Date.now() - new Date(lastInbound).getTime();
     return diff > 24 * 60 * 60 * 1000;

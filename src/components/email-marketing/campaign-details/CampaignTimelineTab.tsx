@@ -8,9 +8,10 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { eventTypeLabels } from "./campaignDetailsHelpers";
 
+import type { CampaignEvent } from "@/hooks/useCampaignMetrics";
 interface Props {
   isLoading: boolean;
-  events: any[] | undefined;
+  events: CampaignEvent[] | undefined;
 }
 
 export function CampaignTimelineTab({ isLoading, events }: Props) {

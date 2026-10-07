@@ -3,11 +3,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FlaskConical, Trophy } from "lucide-react";
 
+import type { EmailCampaign } from "@/hooks/useEmailCampaigns";
+import type { CampaignMetrics } from "@/hooks/useCampaignMetrics";
+type AbCampaign = Pick<EmailCampaign, "subject" | "status">;
+
 interface Props {
-  campaign: any;
-  siblingCampaign: any;
-  metrics: any;
-  siblingMetrics: any;
+  campaign: AbCampaign | null | undefined;
+  siblingCampaign: AbCampaign | null | undefined;
+  metrics: CampaignMetrics | null | undefined;
+  siblingMetrics: CampaignMetrics | null | undefined;
 }
 
 export function CampaignABCompareTab({ campaign, siblingCampaign, metrics, siblingMetrics }: Props) {

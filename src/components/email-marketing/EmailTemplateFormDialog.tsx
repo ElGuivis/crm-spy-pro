@@ -208,7 +208,7 @@ export function EmailTemplateFormDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)} className="flex-1">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="flex-1">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="details">Detalhes</TabsTrigger>
               <TabsTrigger value="content">Design</TabsTrigger>

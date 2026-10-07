@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -46,16 +46,7 @@ export function BlingStoreSelectorDialog({
   const [loading, setLoading] = useState(true);
   const [syncAll, setSyncAll] = useState(false);
 
-  useEffect(() => {
-    if (open) {
-      fetchStores();
-      // Reset state when opening
-      setSyncAll(false);
-      setSelectedStoreIds([]);
-    }
-  }, [open, integrationId]);
-
-  const fetchStores = async () => {
+  const fetchStores = useCallback(async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('bling-stores', {
@@ -74,7 +65,16 @@ export function BlingStoreSelectorDialog({
     } finally {
       setLoading(false);
     }
-  };
+  }, [integrationId]);
+
+  useEffect(() => {
+    if (open) {
+      fetchStores();
+      // Reset state when opening
+      setSyncAll(false);
+      setSelectedStoreIds([]);
+    }
+  }, [open, integrationId, fetchStores]);
 
   const toggleStore = (storeId: number) => {
     setSelectedStoreIds((prev) =>

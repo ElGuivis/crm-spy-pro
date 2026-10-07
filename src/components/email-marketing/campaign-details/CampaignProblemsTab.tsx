@@ -7,8 +7,9 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { eventTypeLabels } from "./campaignDetailsHelpers";
 
+import type { CampaignEvent } from "@/hooks/useCampaignMetrics";
 interface Props {
-  problems: any[];
+  problems: CampaignEvent[];
 }
 
 export function CampaignProblemsTab({ problems }: Props) {

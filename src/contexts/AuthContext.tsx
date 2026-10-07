@@ -73,92 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [permissions, setPermissions] = useState<ModulePermission[]>([]);
   const [availableTenants, setAvailableTenants] = useState<UserTenant[]>([]);
 
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        if (session?.user) {
-          setTimeout(() => {
-            fetchUserData(session.user.id);
-          }, 0);
-        } else {
-          resetState();
-        }
-      }
-    );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        fetchUserData(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const resetState = () => {
-    setProfile(null);
-    setTenant(null);
-    setIsOwner(false);
-    setIsAdmin(false);
-    setPermissions([]);
-    setAvailableTenants([]);
-    setLoading(false);
-  };
-
-  const fetchUserData = async (userId: string) => {
-    try {
-      // Fetch profile
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('id, user_id, owner_name, avatar_url, company_name, active_tenant_id, onboarding_completed, checklist_dismissed, notification_prefs, created_at, updated_at')
-        .eq('user_id', userId)
-        .single();
-      
-      if (profileData) {
-        setProfile(profileData as unknown as Profile);
-      }
-
-      // Fetch all tenants the user has access to
-      const { data: userTenants } = await supabase.rpc('get_user_tenants', { _user_id: userId });
-      const tenantsList: UserTenant[] = (userTenants as UserTenant[]) || [];
-      setAvailableTenants(tenantsList);
-
-      // Resolve active tenant using the DB function (respects active_tenant_id)
-      const { data: activeTenantId } = await supabase.rpc('get_user_tenant_id', { _user_id: userId });
-
-      let tenantData: Tenant | null = null;
-      if (activeTenantId) {
-        const { data: tenantRow } = await supabase
-          .from('tenants')
-          .select('id, name, owner_id, created_at, updated_at')
-          .eq('id', activeTenantId)
-          .maybeSingle();
-        tenantData = tenantRow;
-      }
-
-      if (tenantData) {
-        setTenant(tenantData);
-        setIsOwner(tenantData.owner_id === userId);
-      }
-
-      // Check role and permissions for the active tenant
-      await resolvePermissions(userId, tenantData);
-    } catch (error) {
-      logger.error('Error fetching user data', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const resolvePermissions = async (userId: string, tenantData: Tenant | null) => {
+  const resolvePermissions = useCallback(async (userId: string, tenantData: Tenant | null) => {
     // Owner check: user owns the active tenant — no team_members record needed
     const ownerFlag = tenantData?.owner_id === userId;
 
@@ -201,7 +116,92 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // No team membership and not owner — grant all only if no tenantData context
       setPermissions(tenantData ? [] : [...ALL_PERMISSIONS]);
     }
-  };
+  }, []);
+
+  const fetchUserData = useCallback(async (userId: string) => {
+    try {
+      // Fetch profile
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('id, user_id, owner_name, avatar_url, company_name, active_tenant_id, onboarding_completed, checklist_dismissed, notification_prefs, created_at, updated_at')
+        .eq('user_id', userId)
+        .single();
+      
+      if (profileData) {
+        setProfile(profileData as unknown as Profile);
+      }
+
+      // Fetch all tenants the user has access to
+      const { data: userTenants } = await supabase.rpc('get_user_tenants', { _user_id: userId });
+      const tenantsList: UserTenant[] = (userTenants as UserTenant[]) || [];
+      setAvailableTenants(tenantsList);
+
+      // Resolve active tenant using the DB function (respects active_tenant_id)
+      const { data: activeTenantId } = await supabase.rpc('get_user_tenant_id', { _user_id: userId });
+
+      let tenantData: Tenant | null = null;
+      if (activeTenantId) {
+        const { data: tenantRow } = await supabase
+          .from('tenants')
+          .select('id, name, owner_id, created_at, updated_at')
+          .eq('id', activeTenantId)
+          .maybeSingle();
+        tenantData = tenantRow;
+      }
+
+      if (tenantData) {
+        setTenant(tenantData);
+        setIsOwner(tenantData.owner_id === userId);
+      }
+
+      // Check role and permissions for the active tenant
+      await resolvePermissions(userId, tenantData);
+    } catch (error) {
+      logger.error('Error fetching user data', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [resolvePermissions]);
+
+  const resetState = useCallback(() => {
+    setProfile(null);
+    setTenant(null);
+    setIsOwner(false);
+    setIsAdmin(false);
+    setPermissions([]);
+    setAvailableTenants([]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          setTimeout(() => {
+            fetchUserData(session.user.id);
+          }, 0);
+        } else {
+          resetState();
+        }
+      }
+    );
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        fetchUserData(session.user.id);
+      } else {
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [fetchUserData, resetState]);
 
   const switchTenant = useCallback(async (newTenantId: string): Promise<boolean> => {
     if (!user) return false;
@@ -218,7 +218,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     await fetchUserData(user.id);
     return true;
-  }, [user]);
+  }, [user, fetchUserData]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({

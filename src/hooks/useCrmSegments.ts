@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import type { Json } from "@/integrations/supabase/types";
 
 export interface CrmSegment {
   id: string;
@@ -34,7 +35,7 @@ export function useCrmSegments() {
   });
 
   const createSegment = useMutation({
-    mutationFn: async (seg: { name: string; filters: any[] }) => {
+    mutationFn: async (seg: { name: string; filters: Json }) => {
       if (!tenantId) throw new Error("No tenant");
       const { error } = await supabase.from("crm_segments").insert({
         tenant_id: tenantId,
@@ -44,7 +45,7 @@ export function useCrmSegments() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: key }); toast.success("Segmento criado!"); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e) => toast.error(e.message),
   });
 
   const deleteSegment = useMutation({
@@ -53,7 +54,7 @@ export function useCrmSegments() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: key }); toast.success("Segmento removido!"); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e) => toast.error(e.message),
   });
 
   return { segments, isLoading, createSegment, deleteSegment };

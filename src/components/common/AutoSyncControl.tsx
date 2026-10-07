@@ -95,14 +95,15 @@ export function AutoSyncControl({ integrationId, syncType, onSyncTriggered }: Au
         if (error) throw error;
 
         if (data) {
-          const enabledValue = (data as any)[fields.enabled];
-          const intervalValue = (data as any)[fields.interval];
-          const lastSyncValue = (data as any)[fields.lastSync];
+          const row = data as unknown as Record<string, unknown>;
+          const enabledValue = row[fields.enabled] as boolean | null;
+          const intervalValue = row[fields.interval];
+          const lastSyncValue = row[fields.lastSync] as string | null;
           
           setEnabled(enabledValue || false);
           setInterval(String(intervalValue || 5));
           setLastAutoSync(lastSyncValue);
-          setIntegrationType((data as any).type || null);
+          setIntegrationType((row.type as string | undefined) || null);
         }
       } catch (error) {
         log.error('Failed to load auto-sync config:', error);
@@ -149,7 +150,7 @@ export function AutoSyncControl({ integrationId, syncType, onSyncTriggered }: Au
           filter: `id=eq.${integrationId}`
         },
         (payload) => {
-          const newData = payload.new as any;
+          const newData = payload.new as Record<string, string | null>;
           const newLastSync = newData[fields.lastSync];
           if (newLastSync !== lastAutoSync) {
             setLastAutoSync(newLastSync);

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
 
@@ -55,7 +55,19 @@ export function TokenProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const fetchBalance = async () => {
+  const refetchBalance = async () => {
+    await fetchBalance();
+  };
+
+  const refetchUsage = async () => {
+    await fetchUsage();
+  };
+
+  useEffect(() => {
+    fetchPlans();
+  }, []);
+
+  const fetchBalance = useCallback(async () => {
     if (!tenantId) return;
 
     const { data } = await supabase
@@ -75,9 +87,9 @@ export function TokenProvider({ children }: { children: ReactNode }) {
         });
       }
     }
-  };
+  }, [tenantId]);
 
-  const fetchUsage = async () => {
+  const fetchUsage = useCallback(async () => {
     if (!tenantId) return;
 
     const { data } = await supabase
@@ -97,19 +109,7 @@ export function TokenProvider({ children }: { children: ReactNode }) {
         balance_after: t.balance_after,
       })));
     }
-  };
-
-  const refetchBalance = async () => {
-    await fetchBalance();
-  };
-
-  const refetchUsage = async () => {
-    await fetchUsage();
-  };
-
-  useEffect(() => {
-    fetchPlans();
-  }, []);
+  }, [tenantId]);
 
   useEffect(() => {
     if (tenantId) {
@@ -151,7 +151,7 @@ export function TokenProvider({ children }: { children: ReactNode }) {
         supabase.removeChannel(channel);
       };
     }
-  }, [tenantId]);
+  }, [tenantId, fetchBalance, fetchUsage]);
 
   return (
     <TokenContext.Provider

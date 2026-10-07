@@ -27,6 +27,7 @@ import { Loader2 } from 'lucide-react';
 import { TestTrackingPanel } from './TestTrackingPanel';
 
 import { createLogger } from '@/lib/logger';
+import { getErrorMessage } from "@/lib/error-message";
 const log = createLogger('SendTestEmailDialog');
 
 const formSchema = z.object({
@@ -85,9 +86,9 @@ export function SendTestEmailDialog({
       } else {
         throw new Error(data?.error || 'Erro ao enviar teste');
       }
-    } catch (error: any) {
+    } catch (error) {
       log.error('Error sending test:', error);
-      toast.error(error.message || 'Erro ao enviar teste');
+      toast.error(getErrorMessage(error) || 'Erro ao enviar teste');
     } finally {
       setSending(false);
     }

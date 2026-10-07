@@ -34,7 +34,7 @@ export function ChatbotFlowManager() {
     queryKey: ["chatbot-flows", tenantId],
     queryFn: async () => {
       const { data } = await supabase
-        .from("chatbot_flows" as any)
+        .from("chatbot_flows")
         .select("id,name,description,is_active,is_published,trigger_keywords,created_at,updated_at")
         .eq("tenant_id", tenantId!)
         .order("created_at", { ascending: false });
@@ -60,7 +60,7 @@ export function ChatbotFlowManager() {
     setCreating(true);
     try {
       const { data, error } = await supabase
-        .from("chatbot_flows" as any)
+        .from("chatbot_flows")
         .insert({ tenant_id: tenantId!, name: newName.trim() })
         .select()
         .single();
@@ -77,20 +77,20 @@ export function ChatbotFlowManager() {
 
   const handleDelete = async (id: string) => {
     if (!confirm("Excluir este flow? Todos os nós e conexões serão removidos.")) return;
-    const { error } = await supabase.from("chatbot_flows" as any).delete().eq("id", id);
+    const { error } = await supabase.from("chatbot_flows").delete().eq("id", id);
     if (error) { toast.error("Erro ao excluir flow"); return; }
     queryClient.invalidateQueries({ queryKey: ["chatbot-flows"] });
     toast.success("Flow excluído");
   };
 
   const handleToggle = async (id: string, current: boolean) => {
-    await supabase.from("chatbot_flows" as any).update({ is_active: !current }).eq("id", id);
+    await supabase.from("chatbot_flows").update({ is_active: !current }).eq("id", id);
     queryClient.invalidateQueries({ queryKey: ["chatbot-flows"] });
   };
 
   const handleKeywordsChange = async (id: string, raw: string) => {
     const keywords = raw.split(",").map((k) => k.trim()).filter(Boolean);
-    const { error } = await supabase.from("chatbot_flows" as any).update({ trigger_keywords: keywords }).eq("id", id);
+    const { error } = await supabase.from("chatbot_flows").update({ trigger_keywords: keywords }).eq("id", id);
     if (error) { toast.error("Erro ao salvar keywords"); return; }
     queryClient.invalidateQueries({ queryKey: ["chatbot-flows"] });
   };

@@ -86,7 +86,7 @@ export function useIntegrationData({ category }: UseIntegrationDataOptions) {
       // Fetch integrations by type with new columns
       const { data: integrationsData, error: intError } = await supabase
         .from('integrations')
-        .select('id, tenant_id, type, name, status, api_key, metadata, bling_store_ids, store_integration_id, auto_sync_enabled, auto_sync_interval_minutes, last_sync_at, last_orders_sync_at, last_products_sync_at, last_customers_sync_at, error_message, created_at, updated_at')
+        .select('id, tenant_id, type, name, status, api_key, metadata, bling_store_ids, store_integration_id, auto_sync_enabled, auto_sync_interval_minutes, last_sync_at, last_sync_orders_at, last_sync_products_at, last_sync_customers_at, initial_sync_completed, last_orders_sync_at, last_products_sync_at, last_customers_sync_at, error_message, created_at, updated_at')
         .eq('tenant_id', tenantId)
         .in('type', types)
         .order('created_at', { ascending: false });
@@ -177,7 +177,7 @@ export function useIntegrationData({ category }: UseIntegrationDataOptions) {
       }
 
       // Helper function to get the most recent sync date
-      const getMostRecentSync = (integration: any): string | null => {
+      const getMostRecentSync = (integration: { last_sync_at?: string | null; last_sync_orders_at?: string | null; last_sync_products_at?: string | null; last_sync_customers_at?: string | null }): string | null => {
         const dates = [
           integration.last_sync_at,
           integration.last_sync_orders_at,
@@ -201,13 +201,13 @@ export function useIntegrationData({ category }: UseIntegrationDataOptions) {
         category: getCategoryFromType(integration.type),
         lastSyncAt: getMostRecentSync(integration),
         lastSyncByType: {
-          orders: (integration as any).last_sync_orders_at || null,
-          customers: (integration as any).last_sync_customers_at || null,
-          products: (integration as any).last_sync_products_at || null,
+          orders: integration.last_sync_orders_at || null,
+          customers: integration.last_sync_customers_at || null,
+          products: integration.last_sync_products_at || null,
         },
-        initialSyncCompleted: (integration as any).initial_sync_completed || false,
+        initialSyncCompleted: integration.initial_sync_completed || false,
         createdAt: integration.created_at,
-        metadata: integration.metadata as any | null,
+        metadata: integration.metadata as IntegrationData["metadata"],
         stats: statsByIntegration[integration.id] || {},
       }));
 

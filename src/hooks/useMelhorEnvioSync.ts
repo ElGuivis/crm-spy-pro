@@ -21,7 +21,7 @@ export function useMelhorEnvioSync(integrationId?: string) {
 
     try {
       let done = false;
-      let lastResult: any = null;
+      let lastResult: Record<string, unknown> | null = null;
       let consecutiveErrors = 0;
       const MAX_CONSECUTIVE_ERRORS = 15;
       const MAX_TOTAL_RETRIES = 500;
@@ -109,7 +109,7 @@ export function useMelhorEnvioSync(integrationId?: string) {
           description: `${lastResult.items_saved || lastResult.synced || 0} envios sincronizados, ${lastResult.items_linked || 0} vinculados a pedidos`
         });
       } else if (lastResult?.status === 'failed') {
-        throw new Error(lastResult.error_message || lastResult.error || 'Falha na sincronização');
+        throw new Error(String(lastResult.error_message || lastResult.error || 'Falha na sincronização'));
       }
 
       return { success: true, ...lastResult };

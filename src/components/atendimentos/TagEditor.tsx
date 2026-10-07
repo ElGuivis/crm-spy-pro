@@ -27,7 +27,7 @@ export function TagEditor({ conversationId }: TagEditorProps) {
     if (!newTagName.trim()) return;
     const tag = await createTag.mutateAsync({ name: newTagName.trim(), color: newTagColor });
     if (tag) {
-      await toggleTag.mutateAsync({ conversationId, tagId: (tag as any).id, add: true });
+      await toggleTag.mutateAsync({ conversationId, tagId: tag.id, add: true });
       refetch();
     }
     setNewTagName('');

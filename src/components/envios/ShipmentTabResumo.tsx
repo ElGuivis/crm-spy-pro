@@ -12,8 +12,9 @@ interface ShipmentTabResumoProps {
   onCopy: (text: string, fieldName: string) => void;
 }
 
+import { jsonAs, type ShipmentServiceDetails } from "./shipment-json";
 export function ShipmentTabResumo({ shipment, copiedField, onCopy }: ShipmentTabResumoProps) {
-  const serviceDetails = shipment.service_details as any;
+  const serviceDetails = jsonAs<ShipmentServiceDetails>(shipment.service_details);
 
   return (
     <TabsContent value="resumo" className="space-y-4 m-0">

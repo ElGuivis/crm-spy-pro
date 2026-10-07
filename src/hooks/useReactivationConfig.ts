@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import type { Json } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import type { TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
@@ -71,9 +72,9 @@ export function useReactivationConfig({ open, editingId, onSave, onOpenChange }:
           delayDays: s.delay_days,
           messageTemplate: s.message_template,
           isActive: s.is_active,
-          useCustomCoupon: (s as any).use_custom_coupon ?? false,
-          couponDiscountPercent: (s as any).coupon_discount_percent ?? null,
-          couponDurationDays: (s as any).coupon_duration_days ?? null,
+          useCustomCoupon: s.use_custom_coupon ?? false,
+          couponDiscountPercent: s.coupon_discount_percent ?? null,
+          couponDurationDays: s.coupon_duration_days ?? null,
         }));
       } else {
         cycleSteps = [{
@@ -90,7 +91,7 @@ export function useReactivationConfig({ open, editingId, onSave, onOpenChange }:
         integrationId: data.integration_id,
         whatsappIntegrationId: data.whatsapp_integration_id,
         inactivityDays: data.inactivity_days,
-        maxCycles: (data as any).max_cycles ?? 0,
+        maxCycles: data.max_cycles ?? 0,
         couponDiscountPercent: Number(data.coupon_discount_percent),
         couponDurationDays: data.coupon_duration_days,
         isActive: data.is_active ?? false,
@@ -207,10 +208,10 @@ export function useReactivationConfig({ open, editingId, onSave, onOpenChange }:
           coupon_discount_percent: step.useCustomCoupon ? step.couponDiscountPercent : null,
           coupon_duration_days: step.useCustomCoupon ? step.couponDurationDays : null,
         }));
-        const { error: stepsError } = await (supabase.rpc as any)("replace_reactivation_cycle_steps", {
+        const { error: stepsError } = await supabase.rpc("replace_reactivation_cycle_steps", {
           p_config_id: configId,
           p_tenant_id: tenant?.id,
-          p_steps: stepsPayload,
+          p_steps: stepsPayload as unknown as Json,
         });
         if (stepsError) throw stepsError;
       }

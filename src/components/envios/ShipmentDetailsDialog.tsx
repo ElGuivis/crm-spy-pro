@@ -20,12 +20,13 @@ interface ShipmentDetailsDialogProps {
   isRefreshing?: boolean;
 }
 
+import { jsonAs, type ShipmentServiceDetails } from "./shipment-json";
 export function ShipmentDetailsDialog({ shipment, open, onOpenChange, onRefresh, isRefreshing = false }: ShipmentDetailsDialogProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   if (!shipment) return null;
 
-  const serviceDetails = shipment.service_details as any;
+  const serviceDetails = jsonAs<ShipmentServiceDetails>(shipment.service_details);
 
   const copyToClipboard = async (text: string, fieldName: string) => {
     try {

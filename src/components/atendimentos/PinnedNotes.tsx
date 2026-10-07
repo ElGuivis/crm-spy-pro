@@ -40,7 +40,7 @@ export function PinnedNotes({ conversationId }: PinnedNotesProps) {
         .order('created_at', { ascending: false })
         .limit(20);
       if (error) throw error;
-      return (data || []).map((m: any) => ({
+      return (data || []).map((m) => ({
         id: m.id,
         content: m.content,
         created_at: m.created_at,

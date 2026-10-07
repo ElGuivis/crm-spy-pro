@@ -6,6 +6,7 @@ import { useIntegrationStatusChecker } from "@/hooks/useIntegrationStatusChecker
 import { useAuth } from "@/contexts/AuthContext";
 import { createLogger } from "@/lib/logger";
 import type { Integration, EmailIntegration } from "@/components/integrations/integrationsHelpers";
+import { getErrorMessage } from "@/lib/error-message";
 
 const log = createLogger("useIntegrationsPage");
 
@@ -157,7 +158,7 @@ export function useIntegrationsPage() {
         toast.error("Sincronização não suportada para este tipo de integração");
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Falha ao iniciar sincronização";
+      const msg = err instanceof Error ? getErrorMessage(err) : "Falha ao iniciar sincronização";
       toast.error("Erro ao sincronizar", { description: msg });
     }
   };
@@ -172,7 +173,7 @@ export function useIntegrationsPage() {
       if (!data?.success) throw new Error(data?.error || "Erro ao remover");
       toast.success("Integração removida com sucesso!");
       await fetchIntegrations();
-    } catch (error: any) {
+    } catch (error) {
       log.error("Error deleting integration:", error);
       toast.error("Erro ao remover integração");
     } finally {

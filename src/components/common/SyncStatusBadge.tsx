@@ -49,7 +49,8 @@ export function SyncStatusBadge({ integrationId, syncType }: SyncStatusBadgeProp
         .single();
 
       if (data) {
-        setLastSync((data as any)[field] || (data as any).last_sync_at || null);
+        const row = data as unknown as Record<string, string | null>;
+        setLastSync(row[field] || row.last_sync_at || null);
       }
       setLoading(false);
     };
@@ -70,7 +71,7 @@ export function SyncStatusBadge({ integrationId, syncType }: SyncStatusBadgeProp
           filter: `id=eq.${integrationId}`
         },
         (payload) => {
-          const newData = payload.new as any;
+          const newData = payload.new as Record<string, string | null>;
           const newLastSync = newData[field] || newData.last_sync_at;
           if (newLastSync) {
             setLastSync(newLastSync);

@@ -18,6 +18,8 @@ import { useToast } from "@/hooks/use-toast";
 import { BlingClientTimeline } from "./BlingClientTimeline";
 import { ClientLoyaltyPanel } from "./ClientLoyaltyPanel";
 import type { Tables } from "@/integrations/supabase/types";
+import { jsonAs } from "@/lib/json-access";
+import type { BlingAddress } from "@/lib/store-json";
 
 interface BlingClientDetailsDialogProps {
   client: Tables<"bling_customers"> | null;
@@ -88,7 +90,8 @@ const BlingClientDetailsDialog = ({ client, open, onOpenChange }: BlingClientDet
     name ? name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() : "??";
 
   const phone = client.celular || client.telefone || null;
-  const endereco = (client.endereco as any)?.geral || (client.endereco as any) || null;
+  const enderecoRaw = jsonAs<{ geral?: BlingAddress } & BlingAddress>(client.endereco);
+  const endereco = enderecoRaw?.geral || enderecoRaw || null;
   const rfmColor = rfm?.segment_name ? (RFM_COLORS[rfm.segment_name] || "bg-muted text-muted-foreground") : "";
   const customerKey = phone || client.nome || "";
   const integrationId = client.integration_id || "";
@@ -102,7 +105,7 @@ const BlingClientDetailsDialog = ({ client, open, onOpenChange }: BlingClientDet
     if (p) window.open(`https://wa.me/55${p}`, "_blank");
   };
 
-  const getStatusVariant = (s: string | null) => {
+  const getStatusVariant = (s: string | null): "default" | "destructive" | "secondary" => {
     if (!s) return "secondary";
     const sl = s.toLowerCase();
     if (sl.includes("pago") || sl.includes("aprovado") || sl.includes("entregue") || sl.includes("atendido")) return "default";
@@ -235,7 +238,7 @@ const BlingClientDetailsDialog = ({ client, open, onOpenChange }: BlingClientDet
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="text-right">
-                              <Badge variant={getStatusVariant(order.situacao_nome) as any} className="text-xs">{order.situacao_nome || "Sem status"}</Badge>
+                              <Badge variant={getStatusVariant(order.situacao_nome)} className="text-xs">{order.situacao_nome || "Sem status"}</Badge>
                               <p className="text-sm font-semibold mt-1">{fmt(order.valor_total)}</p>
                             </div>
                             {expandedOrderId === order.id ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}

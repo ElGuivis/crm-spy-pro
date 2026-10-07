@@ -7,10 +7,11 @@ import { MelhorEnvioShipment } from "@/hooks/useMelhorEnvio";
 
 interface ShipmentTabEntregaProps { shipment: MelhorEnvioShipment; }
 
+import { jsonAs, type ShipmentAddress, type ShipmentDimensions } from "./shipment-json";
 export function ShipmentTabEntrega({ shipment }: ShipmentTabEntregaProps) {
-  const toAddress = shipment.to_address as any;
-  const fromAddress = shipment.from_address as any;
-  const agencyAddress = shipment.agency_address as any;
+  const toAddress = jsonAs<ShipmentAddress>(shipment.to_address);
+  const fromAddress = jsonAs<ShipmentAddress>(shipment.from_address);
+  const agencyAddress = jsonAs<ShipmentAddress>(shipment.agency_address);
 
   return (
     <TabsContent value="entrega" className="space-y-6 m-0">
@@ -76,9 +77,9 @@ export function ShipmentTabEntrega({ shipment }: ShipmentTabEntregaProps) {
             <CardContent className="pt-4">
               <p className="text-sm text-muted-foreground flex items-center gap-1"><Ruler className="h-3 w-3" />Dimensões</p>
               <p className="font-medium">
-                {(shipment.dimensions as any)?.height || shipment.height}x
-                {(shipment.dimensions as any)?.width || shipment.width}x
-                {(shipment.dimensions as any)?.length || shipment.length} cm
+                {jsonAs<ShipmentDimensions>(shipment.dimensions)?.height || shipment.height}x
+                {jsonAs<ShipmentDimensions>(shipment.dimensions)?.width || shipment.width}x
+                {jsonAs<ShipmentDimensions>(shipment.dimensions)?.length || shipment.length} cm
               </p>
             </CardContent>
           </Card>

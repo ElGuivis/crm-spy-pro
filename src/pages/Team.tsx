@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { Json } from "@/integrations/supabase/types";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -76,7 +77,7 @@ export default function Team() {
   const updatePermissionsMutation = useMutation({
     mutationFn: async ({ memberId, permissions }: { memberId: string; permissions: Record<string, { view: boolean; edit: boolean }> }) => {
       const permissionsPayload = Object.entries(permissions).filter(([_, p]) => p.view || p.edit).map(([module, p]) => ({ permission: module, can_view: p.view, can_edit: p.edit }));
-      const { error } = await (supabase.rpc as any)('replace_member_permissions', { p_team_member_id: memberId, p_permissions: permissionsPayload });
+      const { error } = await supabase.rpc('replace_member_permissions', { p_team_member_id: memberId, p_permissions: permissionsPayload as unknown as Json });
       if (error) throw error;
     },
     onSuccess: () => {

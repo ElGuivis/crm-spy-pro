@@ -73,13 +73,13 @@ export function LoyaltyConfigCard({ integrationId }: LoyaltyConfigCardProps) {
       setPointsToBrl(String(program.points_to_brl));
       setChampionMultiplier(String(program.champion_multiplier));
       setIsActive(program.is_active);
-      setNotifyWhatsapp((program as any).notify_via_whatsapp ?? false);
-      setWaIntegrationId((program as any).whatsapp_integration_id ?? "");
-      if ((program as any).notification_template_earn) {
-        setTemplateEarn((program as any).notification_template_earn);
+      setNotifyWhatsapp(program.notify_via_whatsapp ?? false);
+      setWaIntegrationId(program.whatsapp_integration_id ?? "");
+      if (program.notification_template_earn) {
+        setTemplateEarn(program.notification_template_earn);
       }
-      if ((program as any).notification_template_redeem) {
-        setTemplateRedeem((program as any).notification_template_redeem);
+      if (program.notification_template_redeem) {
+        setTemplateRedeem(program.notification_template_redeem);
       }
     } else {
       setName("Programa de Pontos");
@@ -117,10 +117,10 @@ export function LoyaltyConfigCard({ integrationId }: LoyaltyConfigCardProps) {
         updated_at: new Date().toISOString(),
       };
       if (program) {
-        const { error } = await supabase.from("loyalty_programs" as any).update(payload).eq("id", program.id);
+        const { error } = await supabase.from("loyalty_programs").update(payload).eq("id", program.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("loyalty_programs" as any).insert(payload);
+        const { error } = await supabase.from("loyalty_programs").insert(payload);
         if (error) throw error;
       }
     },

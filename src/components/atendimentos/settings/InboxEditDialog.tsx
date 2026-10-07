@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useUpdateInbox, useChannels } from "@/hooks/useAtendimentoSettings";
+import type { InboxFull } from "@/hooks/useInboxSettings";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -32,7 +33,7 @@ function useStoreIntegrations() {
 }
 
 interface InboxEditDialogProps {
-  inbox: any | null;
+  inbox: InboxFull | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -75,7 +76,7 @@ export function InboxEditDialog({ inbox, open, onOpenChange }: InboxEditDialogPr
         integration_id: form.integration_id || null,
         ai_agent_id: form.ai_agent_id || null,
         is_active: form.is_active,
-      } as any);
+      });
       toast.success('Inbox atualizada');
       onOpenChange(false);
     } catch {

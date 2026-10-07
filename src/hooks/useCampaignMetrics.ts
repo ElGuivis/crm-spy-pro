@@ -84,7 +84,7 @@ export function useCampaignMetrics(campaignId: string | undefined) {
       if (logsError) throw logsError;
 
       // Count errors from logs
-      const totalErrors = (logs as any[])?.filter((l) => l.status === "error").length || 0;
+      const totalErrors = (logs ?? []).filter((l) => l.status === "error").length;
 
       // Calculate metrics
       const totalSent = campaign?.total_sent || 0;

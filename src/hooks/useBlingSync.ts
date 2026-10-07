@@ -6,6 +6,7 @@ import {
   type BlingSyncStatus,
   type BlingSyncJob,
 } from "./useBlingSyncRealtime";
+import { jsonAs } from "@/lib/json-access";
 
 const log = createLogger("useBlingSync");
 
@@ -70,7 +71,7 @@ export function useBlingSync(integrationId: string, syncType: string = "all"): U
       }
 
       const { data: integration } = await supabase.from("integrations").select("id, metadata").eq("id", integrationId).single();
-      const savedStoreIds = (integration as any)?.metadata?.bling_store_ids as number[] | null;
+      const savedStoreIds = jsonAs<{ bling_store_ids?: number[] }>(integration?.metadata)?.bling_store_ids ?? null;
 
       const { data, error } = await supabase.functions.invoke("bling-sync", {
         body: { integrationId, syncType, storeIds: savedStoreIds, incremental: true },

@@ -7,10 +7,14 @@ import { ptBR } from "date-fns/locale";
 import { MetricCard } from "./MetricCard";
 import { SendProgressBanner } from "./SendProgressBanner";
 
+import type { EmailCampaign } from "@/hooks/useEmailCampaigns";
+import type { CampaignMetrics } from "@/hooks/useCampaignMetrics";
+type SummaryCampaign = Pick<EmailCampaign, "id" | "status" | "subject" | "sender_name" | "sender_email" | "created_at" | "sent_at" | "error_message">;
+
 interface Props {
   isLoading: boolean;
-  metrics: any;
-  campaign: any;
+  metrics: CampaignMetrics | null | undefined;
+  campaign: SummaryCampaign | null | undefined;
 }
 
 export function CampaignSummaryTab({ isLoading, metrics, campaign }: Props) {

@@ -44,7 +44,7 @@ export function RFMAudienceBuilder({ integrationId, allSegments }: RFMAudienceBu
   const handleCreate = () => {
     if (!name.trim()) return;
     createAudience({ name, description, rules }, {
-      onSuccess: (data: any) => {
+      onSuccess: (data) => {
         // Auto-recalculate after creation
         if (data) {
           recalculateAudience(data as RFMAudience);
@@ -61,19 +61,19 @@ export function RFMAudienceBuilder({ integrationId, allSegments }: RFMAudienceBu
     setRules({});
   };
 
-  const updateRule = (key: keyof AudienceRule, value: any) => {
+  const updateRule = (key: keyof AudienceRule, value: string | number | null | undefined) => {
     setRules(prev => {
       const next = { ...prev };
       if (value === '' || value === undefined || value === null) {
         delete next[key];
       } else {
-        (next as any)[key] = key === 'segment_name' || key === 'churn_risk' ? value : Number(value);
+        Object.assign(next, { [key]: key === 'segment_name' || key === 'churn_risk' ? String(value) : Number(value) });
       }
       return next;
     });
   };
 
-  const activeRulesCount = Object.keys(rules).filter(k => (rules as any)[k] !== undefined).length;
+  const activeRulesCount = Object.keys(rules).filter(k => rules[k as keyof AudienceRule] !== undefined).length;
 
   const handleExportToCampaign = (audience: RFMAudience) => {
     // Navigate to campaigns with audience context

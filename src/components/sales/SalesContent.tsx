@@ -17,6 +17,7 @@ import { mapOrder, getMostRecentSync, formatLastSync, formatCurrency } from "./s
 import { SalesHeader } from "./SalesHeader";
 import { SalesFiltersCard } from "./SalesFiltersCard";
 import { SalesOrdersTable } from "./SalesOrdersTable";
+import { getErrorMessage } from "@/lib/error-message";
 
 const log = createLogger('SalesContent');
 
@@ -67,13 +68,13 @@ export function SalesContent({ integrationId }: SalesContentProps) {
     return q;
   }, [integrationId, statusFilter, getDateRange]);
 
-  const fetchAvailableStatuses = async () => {
+  const fetchAvailableStatuses = useCallback(async () => {
     const { data } = await supabase.from('li_orders').select('status_name').eq('integration_id', integrationId).not('status_name', 'is', null);
     if (data) {
       const unique = [...new Set(data.map(d => d.status_name).filter(Boolean))] as string[];
       setAvailableStatuses(unique.sort());
     }
-  };
+  }, [integrationId]);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -90,7 +91,7 @@ export function SalesContent({ integrationId }: SalesContentProps) {
       log.error('Error fetching orders:', error);
       toast({ title: "Erro ao carregar pedidos", description: "Não foi possível carregar os pedidos.", variant: "destructive" });
     } finally { setLoading(false); }
-  }, [currentPage, pageSize, buildFilteredQuery]);
+  }, [currentPage, pageSize, buildFilteredQuery, toast]);
 
   const silentRefresh = useCallback(async () => {
     try {
@@ -102,7 +103,7 @@ export function SalesContent({ integrationId }: SalesContentProps) {
     } catch (error) { log.error('Error in silent refresh:', error); }
   }, [currentPage, pageSize, buildFilteredQuery]);
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
       const [ordersResult, integrationResult] = await Promise.all([
         supabase.from('li_orders').select('id', { count: 'exact', head: true }).eq('integration_id', integrationId),
@@ -110,16 +111,19 @@ export function SalesContent({ integrationId }: SalesContentProps) {
       ]);
       setStats({ orders: ordersResult.count || 0, lastOrdersSync: integrationResult.data ? getMostRecentSync(integrationResult.data) : null });
     } catch (error) { log.error('Error fetching stats:', error); }
-  };
+  }, [integrationId]);
 
-  const fetchIntegrationName = async () => {
+  const fetchIntegrationName = useCallback(async () => {
     const { data } = await supabase.from('integrations').select('name, last_sync_at, last_sync_orders_at, last_orders_sync_at').eq('id', integrationId).single();
     if (data) { setIntegrationName(data.name); setStats(prev => ({ ...prev, lastOrdersSync: getMostRecentSync(data) })); }
-  };
+  }, [integrationId]);
 
-  useEffect(() => { fetchOrders(); fetchStats(); fetchIntegrationName(); fetchAvailableStatuses(); }, [integrationId]);
+  useEffect(() => { fetchStats(); fetchIntegrationName(); fetchAvailableStatuses(); }, [fetchStats, fetchIntegrationName, fetchAvailableStatuses]);
   useEffect(() => { setCurrentPage(0); }, [statusFilter, dateFilter, dateFrom, dateTo]);
-  useEffect(() => { fetchOrders(); }, [currentPage, pageSize, statusFilter, dateFilter, dateFrom, dateTo]);
+  // fetchOrders muda com página, tamanho, filtros e integração: um único efeito cobre todos
+  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+  const fetchOrdersRef = useRef(fetchOrders);
+  fetchOrdersRef.current = fetchOrders;
 
   useEffect(() => {
     const channel = supabase.channel(`orders-${integrationId}`)
@@ -128,18 +132,18 @@ export function SalesContent({ integrationId }: SalesContentProps) {
         debounceTimerRef.current = setTimeout(() => { silentRefresh(); fetchStats(); }, 500);
       }).subscribe();
     return () => { if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current); supabase.removeChannel(channel); };
-  }, [integrationId, silentRefresh]);
+  }, [integrationId, silentRefresh, fetchStats]);
 
   useEffect(() => {
     if (syncStatus.status === 'completed') {
-      fetchOrders(); fetchStats();
+      fetchOrdersRef.current(); fetchStats();
       supabase.from('integrations').update({ last_orders_sync_at: new Date().toISOString(), initial_sync_completed: true }).eq('id', integrationId);
     }
-  }, [syncStatus.status, integrationId]);
+  }, [syncStatus.status, integrationId, fetchStats]);
 
   const handleSync = async () => {
     try { toast({ title: "Sincronização iniciada", description: "Sincronizando pedidos em segundo plano..." }); await startSync(); }
-    catch (error: any) { log.error('Sync error:', error); toast({ title: "Erro na sincronização", description: error.message || "Não foi possível iniciar.", variant: "destructive" }); }
+    catch (error) { log.error('Sync error:', error); toast({ title: "Erro na sincronização", description: getErrorMessage(error) || "Não foi possível iniciar.", variant: "destructive" }); }
   };
 
   const handleCheckNewOrders = async () => {
@@ -150,9 +154,9 @@ export function SalesContent({ integrationId }: SalesContentProps) {
       if (error) throw error;
       await Promise.all([fetchOrders(), fetchStats()]);
       toast({ title: "Verificação concluída", description: "Pedidos atualizados." });
-    } catch (error: any) {
+    } catch (error) {
       log.error('Check new orders error:', error);
-      toast({ title: "Erro ao verificar", description: error.message || "Erro.", variant: "destructive" });
+      toast({ title: "Erro ao verificar", description: getErrorMessage(error) || "Erro.", variant: "destructive" });
     } finally { setCheckingNew(false); }
   };
 

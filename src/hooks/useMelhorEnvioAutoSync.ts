@@ -26,7 +26,7 @@ export function useMelhorEnvioAutoSync(integrationId: string) {
   // Fetch config
   const fetchConfig = useCallback(async () => {
     try {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('me_auto_sync_configs')
         .select('id, integration_id, tenant_id, sync_type, is_active, interval_minutes, last_sync_at, next_sync_at, created_at')
         .eq('integration_id', integrationId)
@@ -58,7 +58,7 @@ export function useMelhorEnvioAutoSync(integrationId: string) {
           ? new Date(Date.now() + config.interval_minutes * 60 * 1000).toISOString()
           : null;
 
-        const { error } = await (supabase as any)
+        const { error } = await supabase
           .from('me_auto_sync_configs')
           .update({ 
             is_active: enabled,
@@ -86,7 +86,7 @@ export function useMelhorEnvioAutoSync(integrationId: string) {
           ? new Date(Date.now() + intervalMinutes * 60 * 1000).toISOString()
           : null;
 
-        const { data, error } = await (supabase as any)
+        const { data, error } = await supabase
           .from('me_auto_sync_configs')
           .insert({
             integration_id: integrationId,
@@ -131,7 +131,7 @@ export function useMelhorEnvioAutoSync(integrationId: string) {
         ? new Date(Date.now() + minutes * 60 * 1000).toISOString()
         : null;
 
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('me_auto_sync_configs')
         .update({ 
           interval_minutes: minutes,
@@ -185,7 +185,7 @@ export function useMelhorEnvioAutoSync(integrationId: string) {
 
       // Update last_sync_at
       if (config) {
-        await (supabase as any)
+        await supabase
           .from('me_auto_sync_configs')
           .update({ last_sync_at: new Date().toISOString() })
           .eq('id', config.id);

@@ -10,9 +10,10 @@ interface ShipmentTabFinanceiroProps {
   onCopy: (text: string, fieldName: string) => void;
 }
 
+import { jsonAs, type ShipmentConciliation, type ShipmentInvoice } from "./shipment-json";
 export function ShipmentTabFinanceiro({ shipment, copiedField, onCopy }: ShipmentTabFinanceiroProps) {
-  const conciliation = shipment.conciliation as any;
-  const invoice = shipment.invoice as any;
+  const conciliation = jsonAs<ShipmentConciliation>(shipment.conciliation);
+  const invoice = jsonAs<ShipmentInvoice>(shipment.invoice);
 
   return (
     <TabsContent value="financeiro" className="space-y-4 m-0">

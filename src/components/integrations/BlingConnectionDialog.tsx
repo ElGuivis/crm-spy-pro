@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 import { createLogger } from '@/lib/logger';
+import { getErrorMessage } from "@/lib/error-message";
 const log = createLogger('BlingConnectionDialog');
 
 interface BlingConnectionDialogProps {
@@ -49,23 +50,7 @@ export function BlingConnectionDialog({
   const [isDisconnecting, setIsDisconnecting] = useState(false);
 
   // Fetch connection status when dialog opens
-  useEffect(() => {
-    if (open && tenantId) {
-      fetchConnection();
-    }
-  }, [open, tenantId]);
-
-  // Reset state when dialog closes or mode changes
-  useEffect(() => {
-    if (!open) {
-      setTimeout(() => {
-        setStep('initial');
-        setErrorMessage('');
-      }, 200);
-    }
-  }, [open]);
-
-  const fetchConnection = async () => {
+  const fetchConnection = useCallback(async () => {
     setIsLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("bling-oauth", {
@@ -83,7 +68,23 @@ export function BlingConnectionDialog({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [tenantId]);
+
+  useEffect(() => {
+    if (open && tenantId) {
+      fetchConnection();
+    }
+  }, [open, tenantId, fetchConnection]);
+
+  // Reset state when dialog closes or mode changes
+  useEffect(() => {
+    if (!open) {
+      setTimeout(() => {
+        setStep('initial');
+        setErrorMessage('');
+      }, 200);
+    }
+  }, [open]);
 
   const handleConnect = async () => {
     if (!tenantId || !user?.id) {
@@ -111,10 +112,10 @@ export function BlingConnectionDialog({
       } else {
         throw new Error("URL de autenticação não retornada");
       }
-    } catch (error: any) {
+    } catch (error) {
       log.error("Error starting OAuth:", error);
       setStep('error');
-      setErrorMessage(error.message || "Erro ao iniciar conexão");
+      setErrorMessage(getErrorMessage(error) || "Erro ao iniciar conexão");
     }
   };
 
@@ -138,9 +139,9 @@ export function BlingConnectionDialog({
 
       toast.success("Token renovado com sucesso!");
       await fetchConnection();
-    } catch (error: any) {
+    } catch (error) {
       log.error("Error refreshing token:", error);
-      toast.error(error.message || "Erro ao renovar token");
+      toast.error(getErrorMessage(error) || "Erro ao renovar token");
     } finally {
       setIsRefreshing(false);
     }
@@ -164,9 +165,9 @@ export function BlingConnectionDialog({
       setConnection(null);
       onSuccess?.();
       onOpenChange(false);
-    } catch (error: any) {
+    } catch (error) {
       log.error("Error disconnecting:", error);
-      toast.error(error.message || "Erro ao desconectar");
+      toast.error(getErrorMessage(error) || "Erro ao desconectar");
     } finally {
       setIsDisconnecting(false);
     }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow, format } from "date-fns";
@@ -32,11 +32,7 @@ export function SyncLogsDialog({ open, onOpenChange, integrationName, integratio
   const [isLoading, setIsLoading] = useState(true);
   const [isClearing, setIsClearing] = useState(false);
 
-  useEffect(() => {
-    if (open && integrationId) fetchEvents();
-  }, [open, integrationId]);
-
-  const fetchEvents = async () => {
+  const fetchEvents = useCallback(async () => {
     setIsLoading(true);
     const { data, error } = await supabase
       .from("li_webhook_events")
@@ -46,7 +42,11 @@ export function SyncLogsDialog({ open, onOpenChange, integrationName, integratio
       .limit(50);
     if (!error) setEvents(data || []);
     setIsLoading(false);
-  };
+  }, [integrationId]);
+
+  useEffect(() => {
+    if (open && integrationId) fetchEvents();
+  }, [open, integrationId, fetchEvents]);
 
   const handleClearLogs = async () => {
     setIsClearing(true);

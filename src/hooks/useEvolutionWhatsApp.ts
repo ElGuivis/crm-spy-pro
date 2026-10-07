@@ -243,10 +243,10 @@ export function useEvolutionWhatsApp({ open, reconnectIntegration, onSuccess, on
 
       // Fallback: ensure whatsapp_channels record exists (edge fn also does this)
       try {
-        const { data: existingCh } = await supabase.from("whatsapp_channels" as any)
+        const { data: existingCh } = await supabase.from("whatsapp_channels")
           .select("id").eq("integration_id", integId).maybeSingle();
         if (!existingCh && tenantId) {
-          await supabase.from("whatsapp_channels" as any).insert({
+          await supabase.from("whatsapp_channels").insert({
             tenant_id: tenantId, provider: "evolution", display_name: name,
             status: "connected", integration_id: integId,
           });

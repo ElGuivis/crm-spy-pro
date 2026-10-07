@@ -12,9 +12,10 @@ interface ShipmentTabProdutosRastreioProps {
   onCopy: (text: string, fieldName: string) => void;
 }
 
+import { jsonAs, jsonArray, type ShipmentProduct, type ShipmentVolume, type ShipmentTrackingEvent, type ShipmentAdditionalInfo } from "./shipment-json";
 export function ShipmentTabProdutos({ shipment }: Pick<ShipmentTabProdutosRastreioProps, "shipment">) {
-  const products = (shipment.products || []) as any[];
-  const volumes = (shipment.volumes || []) as any[];
+  const products = jsonArray<ShipmentProduct>(shipment.products);
+  const volumes = jsonArray<ShipmentVolume>(shipment.volumes);
 
   return (
     <TabsContent value="produtos" className="space-y-4 m-0">
@@ -30,7 +31,7 @@ export function ShipmentTabProdutos({ shipment }: Pick<ShipmentTabProdutosRastre
               </TableRow>
             </TableHeader>
             <TableBody>
-              {products.map((product: any, idx: number) => (
+              {products.map((product, idx) => (
                 <TableRow key={idx}>
                   <TableCell className="font-medium">{product.name || product.description}</TableCell>
                   <TableCell className="text-center">{product.quantity || 1}</TableCell>
@@ -41,7 +42,7 @@ export function ShipmentTabProdutos({ shipment }: Pick<ShipmentTabProdutosRastre
             </TableBody>
           </Table>
           <div className="flex justify-end gap-4 text-sm">
-            <span className="text-muted-foreground">Total: {products.reduce((sum: number, p: any) => sum + (p.quantity || 1), 0)} itens</span>
+            <span className="text-muted-foreground">Total: {products.reduce((sum, p) => sum + (p.quantity || 1), 0)} itens</span>
           </div>
         </>
       ) : (
@@ -54,7 +55,7 @@ export function ShipmentTabProdutos({ shipment }: Pick<ShipmentTabProdutosRastre
           <Separator />
           <h4 className="font-medium">Volumes</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {volumes.map((volume: any, idx: number) => (
+            {volumes.map((volume, idx) => (
               <Card key={idx}>
                 <CardContent className="pt-4 text-sm">
                   <p className="font-medium">Volume {idx + 1}</p>
@@ -70,8 +71,8 @@ export function ShipmentTabProdutos({ shipment }: Pick<ShipmentTabProdutosRastre
 }
 
 export function ShipmentTabRastreio({ shipment, copiedField, onCopy }: ShipmentTabProdutosRastreioProps) {
-  const trackingEvents = (shipment.tracking_events || []) as any[];
-  const additionalInfo = shipment.additional_info as any;
+  const trackingEvents = jsonArray<ShipmentTrackingEvent>(shipment.tracking_events);
+  const additionalInfo = jsonAs<ShipmentAdditionalInfo>(shipment.additional_info);
 
   return (
     <TabsContent value="rastreio" className="space-y-4 m-0">
@@ -79,7 +80,7 @@ export function ShipmentTabRastreio({ shipment, copiedField, onCopy }: ShipmentT
         <div className="relative">
           <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border" />
           <div className="space-y-4">
-            {trackingEvents.map((event: any, idx: number) => (
+            {trackingEvents.map((event, idx) => (
               <div key={idx} className="relative flex gap-4 pl-10">
                 <div className="absolute left-2 w-5 h-5 rounded-full bg-background border-2 border-primary flex items-center justify-center">
                   <div className="w-2 h-2 rounded-full bg-primary" />

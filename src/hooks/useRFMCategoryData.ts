@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export interface RFMCategorySnapshot {
   id: string;
-  tenant_id: string;
+  tenant_id?: string;
   integration_id: string;
   source_type: string;
   customer_id: string;
@@ -27,7 +27,7 @@ export function useRFMCategoryData(integrationId: string) {
   const { data: snapshots, isLoading } = useQuery({
     queryKey: ['rfm-category-snapshots', integrationId],
     queryFn: async () => {
-      const { data: latestDate } = await (supabase as any)
+      const { data: latestDate } = await supabase
         .from('customer_rfm_category_snapshots')
         .select('reference_date')
         .eq('integration_id', integrationId)
@@ -44,7 +44,7 @@ export function useRFMCategoryData(integrationId: string) {
       let hasMore = true;
 
       while (hasMore) {
-        const { data, error } = await (supabase as any)
+        const { data, error } = await supabase
           .from('customer_rfm_category_snapshots')
           .select('id, integration_id, source_type, customer_id, customer_name, category_name, last_order_date, recency_days, orders_count, revenue_total, aov, r_score, f_score, m_score, rfm_score, segment_name, reference_date')
           .eq('integration_id', integrationId)

@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { subDays, format } from "date-fns";
+import { jsonAs } from "@/lib/json-access";
+import type { LiTotals } from "@/lib/store-json";
 
 export interface SalesAnalyticsData {
   revenueByChannel: { name: string; revenue: number; orders: number }[];
@@ -38,8 +40,7 @@ async function fetchSalesAnalytics(tenantId: string): Promise<SalesAnalyticsData
   const effectiveLI = (liOrders || []).filter(o => EFFECTIVE_STATUSES.includes(o.status_name || ""));
   const effectiveBling = blingOrders || [];
   const getLITotal = (o: typeof effectiveLI[number]): number => {
-    const totals = o.totals_json as any | null;
-    return Number(totals?.total || 0);
+    return Number(jsonAs<LiTotals>(o.totals_json)?.total || 0);
   };
 
   const liRevenue = effectiveLI.reduce((sum, o) => sum + getLITotal(o), 0);

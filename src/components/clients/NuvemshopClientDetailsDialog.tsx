@@ -9,7 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { ClientLoyaltyPanel } from "./ClientLoyaltyPanel";
 
-interface NsCustomer {
+export interface NsCustomer {
   id: string;
   integration_id: string;
   name: string | null;

@@ -39,7 +39,7 @@ export function HandoffControls({ conversation }: HandoffControlsProps) {
   const reopenConversation = useReopenConversation();
   const blockContact = useBlockContact();
 
-  const isBotActive = (conversation as any).ai_enabled !== false && conversation.status === 'bot';
+  const isBotActive = conversation.ai_enabled !== false && conversation.status === 'bot';
   const isClosed = conversation.status === 'closed';
   const isAssigned = !!conversation.assigned_to;
 

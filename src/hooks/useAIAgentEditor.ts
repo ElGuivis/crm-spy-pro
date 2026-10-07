@@ -59,17 +59,17 @@ export function useAIAgentEditor(
 
   const [name, setName] = useState(agent.name);
   const [isActive, setIsActive] = useState(agent.is_active);
-  const [aiProvider, setAiProvider] = useState<string>((agent as any).ai_provider || "");
+  const [aiProvider, setAiProvider] = useState<string>((agent as typeof agent & { ai_provider?: string | null }).ai_provider || "");
   const [model, setModel] = useState(agent.model || "");
   const [systemPrompt, setSystemPrompt] = useState(agent.system_prompt || "");
-  const [temperature, setTemperature] = useState<number>((agent as any).temperature ?? 0.7);
-  const [maxTokens, setMaxTokens] = useState<number>((agent as any).max_tokens ?? 1024);
+  const [temperature, setTemperature] = useState<number>(agent.temperature ?? 0.7);
+  const [maxTokens, setMaxTokens] = useState<number>(agent.max_tokens ?? 1024);
   const [welcomeMsg, setWelcomeMsg] = useState(agent.welcome_message || "");
-  const [inactivityEnabled, setInactivityEnabled] = useState((agent as any).inactivity_enabled ?? false);
-  const [inactivityTimeout, setInactivityTimeout] = useState<number>((agent as any).inactivity_timeout_minutes ?? 30);
-  const [inactivityMessage, setInactivityMessage] = useState((agent as any).inactivity_message || "");
-  const [bufferEnabled, setBufferEnabled] = useState((agent as any).message_buffer_enabled ?? false);
-  const [bufferDelay, setBufferDelay] = useState<number>((agent as any).message_buffer_delay_seconds ?? 5);
+  const [inactivityEnabled, setInactivityEnabled] = useState(agent.inactivity_enabled ?? false);
+  const [inactivityTimeout, setInactivityTimeout] = useState<number>(agent.inactivity_timeout_minutes ?? 30);
+  const [inactivityMessage, setInactivityMessage] = useState(agent.inactivity_message || "");
+  const [bufferEnabled, setBufferEnabled] = useState(agent.message_buffer_enabled ?? false);
+  const [bufferDelay, setBufferDelay] = useState<number>(agent.message_buffer_delay_seconds ?? 5);
   const [transferKw, setTransferKw] = useState((agent.transfer_keywords || []).join(", "));
   const [orderEnabled, setOrderEnabled] = useState(agent.order_verification_enabled || false);
   const [orderMode, setOrderMode] = useState(agent.order_verification_mode || "cpf");
@@ -98,7 +98,7 @@ export function useAIAgentEditor(
       inactivity_enabled: inactivityEnabled, inactivity_timeout_minutes: inactivityTimeout,
       inactivity_message: inactivityMessage, message_buffer_enabled: bufferEnabled,
       message_buffer_delay_seconds: bufferDelay, ai_provider: aiProvider || null,
-    } as any);
+    } as Parameters<typeof onUpdate>[0]);
   };
 
   const currentModels = aiProvider && PROVIDER_MODELS[aiProvider] ? PROVIDER_MODELS[aiProvider] : [];

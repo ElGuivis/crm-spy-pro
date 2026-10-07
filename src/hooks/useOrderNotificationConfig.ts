@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import type { Json } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -255,10 +256,10 @@ export function useOrderNotificationConfig({ open, onOpenChange, editingId, onSa
           email_body: r.email_body || null,
           delay_minutes: r.delay_minutes || 0,
         }));
-        const { error: rpcError } = await (supabase.rpc as any)("replace_order_notification_rules", {
+        const { error: rpcError } = await supabase.rpc("replace_order_notification_rules", {
           p_config_id: configId,
           p_tenant_id: tenant?.id,
-          p_rules: rulesPayload,
+          p_rules: rulesPayload as unknown as Json,
         });
         if (rpcError) throw rpcError;
       }

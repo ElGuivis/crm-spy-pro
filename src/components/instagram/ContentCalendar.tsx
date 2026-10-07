@@ -51,7 +51,7 @@ export function ContentCalendar({ channelId }: Props) {
     queryKey: ["ig-content", channelId],
     queryFn: async () => {
       const { data } = await supabase
-        .from("instagram_content" as any)
+        .from("instagram_content")
         .select(
           "id,content_type,caption,media_urls,status,scheduled_at,published_at,ig_media_id,ig_permalink,error_message",
         )

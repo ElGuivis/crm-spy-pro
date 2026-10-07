@@ -16,6 +16,9 @@ import { ptBR } from 'date-fns/locale';
 
 import { createLogger } from '@/lib/logger';
 const log = createLogger('NotificationDropdown');
+import { jsonAs } from "@/lib/json-access";
+import type { LiTotals } from "@/lib/store-json";
+import type { LiProductRaw } from "@/components/catalogo/catalogoHelpers";
 
 interface NotificationItem {
   id: string;
@@ -49,8 +52,8 @@ export function NotificationDropdown() {
 
       if (recentOrders) {
         for (const order of recentOrders) {
-          const raw = (order.raw_json || {}) as any;
-          const totals = (order.totals_json || {}) as any;
+          const raw = jsonAs<{ cliente_nome?: string }>(order.raw_json) ?? {};
+          const totals = jsonAs<LiTotals>(order.totals_json) ?? {};
           const total = totals.total ? `R$ ${Number(totals.total).toFixed(2)}` : '';
           items.push({
             id: `order-${order.id}`,
@@ -107,10 +110,10 @@ export function NotificationDropdown() {
           items.push({
             id: `rfm-${alert.id}`,
             type: 'rfm_alert',
-            title: (alert as any).title || 'Alerta RFM',
-            description: (alert as any).description || '',
+            title: alert.title || 'Alerta RFM',
+            description: alert.description || '',
             timestamp: alert.created_at || '',
-            read: (alert as any).is_read || false,
+            read: alert.is_read || false,
             link: '/rfm',
             icon: 'rfm',
           });
@@ -128,7 +131,7 @@ export function NotificationDropdown() {
 
       if (lowStock) {
         for (const product of lowStock) {
-          const raw = (product.raw_json || {}) as any;
+          const raw = jsonAs<LiProductRaw>(product.raw_json) ?? {};
           if (raw.tipo === 'atributo_opcao') continue;
           const qty = raw.estoque_quantidade ?? 0;
           if (qty > 2) continue;

@@ -9,9 +9,10 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { statusLabels } from "./campaignDetailsHelpers";
 
+import type { CampaignLog } from "@/hooks/useCampaignMetrics";
 interface Props {
   isLoading: boolean;
-  logs: any[] | undefined;
+  logs: CampaignLog[] | undefined;
 }
 
 export function CampaignLogsTab({ isLoading, logs }: Props) {

@@ -22,7 +22,7 @@ export function InboxSelector({ inboxes, selectedInboxId, onSelect }: InboxSelec
         {inboxes.map((inbox) => (
           <SelectItem key={inbox.id} value={inbox.id}>
             <div className="flex items-center gap-2">
-              {(inbox.channel as any)?.status === 'connected' ? (
+              {inbox.channel?.status === 'connected' ? (
                 <Wifi className="h-3 w-3 text-green-500" />
               ) : (
                 <WifiOff className="h-3 w-3 text-muted-foreground" />

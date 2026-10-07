@@ -26,12 +26,12 @@ export function useRFMCohort(integrationId: string, sourceType: string) {
         const paidStatuses = ['Pedido Pago', 'Pedido Enviado', 'Pedido Entregue'];
         
         // Fetch in pages to avoid 1000-row limit
-        const allOrders: any[] = [];
+        const allOrders: { customer_id: string | null; created_at_remote: string | null }[] = [];
         let from = 0;
         const pageSize = 1000;
         while (true) {
           const { data: batch, error } = await supabase
-            .from('li_orders' as any)
+            .from('li_orders')
             .select('customer_id, created_at_remote')
             .eq('integration_id', integrationId)
             .in('status_name', paidStatuses)
@@ -44,20 +44,20 @@ export function useRFMCohort(integrationId: string, sourceType: string) {
           from += pageSize;
         }
 
-        orders = allOrders.map((o: any) => ({
-          customer_id: o.customer_id,
-          order_date: o.created_at_remote,
-        })).filter(o => o.customer_id && o.order_date);
+        orders = allOrders.flatMap(o =>
+          o.customer_id && o.created_at_remote
+            ? [{ customer_id: o.customer_id, order_date: o.created_at_remote }]
+            : []);
 
       } else if (sourceType === 'bling') {
         const paidKeywords = ['pago', 'faturado', 'enviado', 'entregue', 'atendido', 'completo'];
         
-        const allOrders: any[] = [];
+        const allOrders: { cliente_id: number | null; data_criacao: string | null; situacao_nome: string | null }[] = [];
         let from = 0;
         const pageSize = 1000;
         while (true) {
           const { data: batch, error } = await supabase
-            .from('bling_orders' as any)
+            .from('bling_orders')
             .select('cliente_id, data_criacao, situacao_nome')
             .eq('integration_id', integrationId)
             .not('cliente_id', 'is', null)
@@ -70,13 +70,13 @@ export function useRFMCohort(integrationId: string, sourceType: string) {
         }
 
         orders = allOrders
-          .filter((o: any) => {
+          .filter((o) => {
             const status = (o.situacao_nome || '').toLowerCase();
             return paidKeywords.some(k => status.includes(k));
           })
-          .map((o: any) => ({
+          .map((o) => ({
             customer_id: String(o.cliente_id),
-            order_date: o.data_criacao,
+            order_date: o.data_criacao ?? '',
           }))
           .filter(o => o.customer_id && o.customer_id !== 'null' && o.order_date);
       }

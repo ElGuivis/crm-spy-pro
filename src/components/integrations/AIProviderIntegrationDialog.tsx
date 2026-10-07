@@ -15,6 +15,7 @@ import { Bot, Loader2, Eye, EyeOff, ExternalLink, CheckCircle, AlertCircle } fro
 import { useAuth } from "@/contexts/AuthContext";
 
 import { createLogger } from '@/lib/logger';
+import { getErrorMessage } from "@/lib/error-message";
 const log = createLogger('AIProviderIntegrationDialog');
 
 type AIProvider = 'openai' | 'google' | 'groq' | 'mistral';
@@ -23,7 +24,7 @@ interface AIProviderIntegrationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   provider: AIProvider;
-  existingIntegration?: any | null;
+  existingIntegration?: { id: string; name: string | null } | null;
   onSuccess: () => void;
 }
 
@@ -195,9 +196,9 @@ export function AIProviderIntegrationDialog({
       toast.success(existingIntegration ? "Integração atualizada com sucesso!" : "Integração criada com sucesso!");
       onSuccess();
       onOpenChange(false);
-    } catch (error: any) {
+    } catch (error) {
       log.error("Error saving AI integration:", error);
-      toast.error(error.message || "Erro ao salvar integração");
+      toast.error(getErrorMessage(error) || "Erro ao salvar integração");
     } finally {
       setIsLoading(false);
     }

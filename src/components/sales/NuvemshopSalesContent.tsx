@@ -208,7 +208,7 @@ export function NuvemshopSalesContent({ integrationId }: Props) {
                   <TableCell><span className={`text-sm ${payInfo?.color ?? "text-muted-foreground"}`}>{payInfo?.label ?? order.payment_status ?? "—"}</span></TableCell>
                   <TableCell><span className={`text-sm ${shipInfo?.color ?? "text-muted-foreground"}`}>{shipInfo?.label ?? order.shipping_status ?? "—"}</span></TableCell>
                   <TableCell className="max-w-[160px] truncate text-sm">{customerName}</TableCell>
-                  <TableCell className="text-right font-medium">{fmtCurrency((totals as any)?.total)}</TableCell>
+                  <TableCell className="text-right font-medium">{fmtCurrency(totals?.total)}</TableCell>
                   <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{fmtDate(order.created_at_remote)}</TableCell>
                 </TableRow>
               );

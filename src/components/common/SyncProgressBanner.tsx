@@ -71,9 +71,9 @@ export function SyncProgressBanner({ integrationId, entityType, melhorEnvio, nuv
             .eq("entity_type", entityType)
             .maybeSingle();
 
-          const page = (data as any)?.last_page ?? 0;
-          const totalCount = (data as any)?.total_count ?? null;
-          const records = (data as any)?.records_synced ?? 0;
+          const page = data?.last_page ?? 0;
+          const totalCount = data?.total_count ?? null;
+          const records = data?.records_synced ?? 0;
           const updatedAt = data?.updated_at ? new Date(data.updated_at).getTime() : 0;
           const recentlyActive = Date.now() - updatedAt < 5 * 60_000;
           const isRunning = page > 0 && recentlyActive;

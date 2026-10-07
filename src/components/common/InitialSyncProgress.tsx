@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,11 +13,7 @@ export function InitialSyncProgress({ integrationId, onSyncComplete }: InitialSy
   const [initialSyncCompleted, setInitialSyncCompleted] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    checkInitialSync();
-  }, [integrationId]);
-
-  const checkInitialSync = async () => {
+  const checkInitialSync = useCallback(async () => {
     setIsLoading(true);
     const { data } = await supabase
       .from('integrations')
@@ -27,7 +23,11 @@ export function InitialSyncProgress({ integrationId, onSyncComplete }: InitialSy
     
     setInitialSyncCompleted(data?.initial_sync_completed ?? false);
     setIsLoading(false);
-  };
+  }, [integrationId]);
+
+  useEffect(() => {
+    checkInitialSync();
+  }, [checkInitialSync]);
 
   const handleRetrySync = async () => {
     await supabase.functions.invoke('li-sync', {

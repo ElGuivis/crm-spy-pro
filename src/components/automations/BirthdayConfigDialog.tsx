@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Cake, Percent, Clock, Store, Save, Loader2, MessageSquare, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -100,33 +100,7 @@ export function BirthdayConfigDialog({ open, onOpenChange, editingId, onSave }: 
   const { toast } = useToast();
   const { tenant } = useAuth();
 
-  useEffect(() => {
-    if (open) {
-      loadIntegrations();
-      if (editingId) {
-        loadConfig(editingId);
-      } else {
-        setConfig(defaultConfig);
-      }
-    }
-  }, [open, editingId]);
-
-  const loadIntegrations = async () => {
-    setIsLoadingIntegrations(true);
-    try {
-      const { data } = await supabase
-        .from('integrations')
-        .select('id, name, type, status')
-        .eq('status', 'connected');
-      if (data) setIntegrations(data);
-    } catch (e) {
-      log.error('Error loading integrations:', e);
-    } finally {
-      setIsLoadingIntegrations(false);
-    }
-  };
-
-  const loadConfig = async (id: string) => {
+  const loadConfig = useCallback(async (id: string) => {
     try {
       const { data, error } = await supabase
         .from('birthday_configs')
@@ -150,6 +124,32 @@ export function BirthdayConfigDialog({ open, onOpenChange, editingId, onSave }: 
     } catch (e) {
       log.error('Error loading config:', e);
       toast({ title: "Erro ao carregar", description: "Não foi possível carregar a configuração.", variant: "destructive" });
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    if (open) {
+      loadIntegrations();
+      if (editingId) {
+        loadConfig(editingId);
+      } else {
+        setConfig(defaultConfig);
+      }
+    }
+  }, [open, editingId, loadConfig]);
+
+  const loadIntegrations = async () => {
+    setIsLoadingIntegrations(true);
+    try {
+      const { data } = await supabase
+        .from('integrations')
+        .select('id, name, type, status')
+        .eq('status', 'connected');
+      if (data) setIntegrations(data);
+    } catch (e) {
+      log.error('Error loading integrations:', e);
+    } finally {
+      setIsLoadingIntegrations(false);
     }
   };
 

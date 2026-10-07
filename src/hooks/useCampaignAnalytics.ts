@@ -23,11 +23,13 @@ export interface CampaignAnalyticsData {
 async function fetchCampaignAnalytics(tenantId: string): Promise<CampaignAnalyticsData> {
   const [
     { data: campaigns },
-    { data: coupons },
+    { count: couponsTotal },
+    { count: couponsUsed },
     { data: executions },
   ] = await Promise.all([
     supabase.from("bulk_campaigns").select("id, name, status, total_contacts, sent_count, delivered_count, read_count, failed_count, created_at").eq("tenant_id", tenantId).order("created_at", { ascending: false }).limit(20),
-    supabase.from("generated_coupons").select("id, status, discount_value").eq("tenant_id", tenantId).limit(1000),
+    supabase.from("generated_coupons").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
+    supabase.from("generated_coupons").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).not("used_at", "is", null),
     supabase.from("cashback_executions").select("id, status, tokens_used").eq("tenant_id", tenantId).limit(1000),
   ]);
 
@@ -51,8 +53,8 @@ async function fetchCampaignAnalytics(tenantId: string): Promise<CampaignAnalyti
     { sent: 0, delivered: 0, read: 0, failed: 0 }
   );
 
-  const totalCoupons = (coupons || []).length;
-  const usedCoupons = (coupons || []).filter((c: any) => c.status === "used").length;
+  const totalCoupons = couponsTotal ?? 0;
+  const usedCoupons = couponsUsed ?? 0;
   const totalExecutions = (executions || []).filter(e => e.status === "success").length;
 
   return {

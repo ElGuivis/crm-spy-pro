@@ -1,4 +1,41 @@
 import { bestLiImageUrl, hdImageUrl } from "@/lib/product-images";
+import { jsonAs } from "@/lib/json-access";
+
+/** Campos do `raw_json` da Loja Integrada que o catálogo lê. */
+export interface LiProductRaw {
+  tipo?: string;
+  pai?: string | null;
+  estoque_quantidade?: number;
+  imagem_principal?: { caminho?: string | null; grande?: string | null } | null;
+  imagens?: { caminho?: string | null; grande?: string | null; posicao?: number }[];
+}
+
+/** Linha de `li_products` como o catálogo a consulta. */
+export interface LiProductRow {
+  id: string;
+  name: string | null;
+  price: number | null;
+  promotional_price: number | null;
+  stock: number | null;
+  image_url: string | null;
+  sku: string | null;
+  raw_json: unknown;
+  loja_integrada_product_id: number | null;
+}
+
+/** Linha de `bling_products` como o catálogo a consulta. */
+export interface BlingProductRow {
+  id: string;
+  nome: string;
+  preco: number | null;
+  estoque_atual: number | null;
+  imagem_url: string | null;
+  imagens: unknown;
+  codigo: string | null;
+  variacoes: unknown;
+}
+
+const liRawOf = (p: LiProductRow) => jsonAs<LiProductRaw>(p.raw_json);
 
 /** Quantas fotos de um mesmo produto podem ir numa só remessa (igual a supabase/functions/_shared/catalog-images.ts). */
 export const MAX_CATALOG_PHOTOS = 3;
@@ -43,7 +80,7 @@ export const formatCatalogCurrency = (value: number | null) => {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 };
 
-export function normalizeBlingProducts(blingProducts: any[]): CatalogProduct[] {
+export function normalizeBlingProducts(blingProducts: BlingProductRow[]): CatalogProduct[] {
   return blingProducts.map(p => {
     const imagens = p.imagens as Array<{ link: string }> | null;
     const variacoes = p.variacoes as Array<{ nome?: string; estoque?: { saldoVirtualTotal?: number } }> | null;
@@ -73,26 +110,26 @@ export function thumbUrl(url: string): string {
 }
 
 /** LI: principal primeiro e depois as demais fotos do produto na ordem da loja (sem repetir). */
-export function liImageList(raw: any, fallback: string | null | undefined): string[] {
+export function liImageList(raw: LiProductRaw | null | undefined, fallback: string | null | undefined): string[] {
   const out: string[] = [];
   const add = (u: string | null | undefined) => { if (u && !out.includes(u)) out.push(u); };
   add(liImageUrl(raw, fallback));
-  const list: any[] = Array.isArray(raw?.imagens) ? [...raw.imagens] : [];
+  const list = Array.isArray(raw?.imagens) ? [...raw.imagens] : [];
   list.sort((a, b) => Number(a?.posicao ?? 0) - Number(b?.posicao ?? 0));
   for (const im of list) add(im?.caminho ? `https://cdn.awsli.com.br/${im.caminho}` : hdImageUrl(im?.grande));
   return out.slice(0, 10);
 }
 
-export function normalizeLiProducts(liProducts: any[]): CatalogProduct[] {
+export function normalizeLiProducts(liProducts: LiProductRow[]): CatalogProduct[] {
   const parents = liProducts.filter(p => {
-    const tipo = (p.raw_json as any)?.tipo;
+    const tipo = liRawOf(p)?.tipo;
     return tipo === "atributo" || tipo === "simples" || !tipo;
   });
-  const children = liProducts.filter(p => (p.raw_json as any)?.tipo === "atributo_opcao");
+  const children = liProducts.filter(p => liRawOf(p)?.tipo === "atributo_opcao");
 
   const childrenByParentLiId = new Map<number, typeof children>();
   for (const child of children) {
-    const paiUrl = (child.raw_json as any)?.pai as string | null;
+    const paiUrl = liRawOf(child)?.pai;
     const match = paiUrl?.match(/\/produto\/(\d+)$/);
     if (match) {
       const parentLiId = parseInt(match[1], 10);
@@ -104,13 +141,13 @@ export function normalizeLiProducts(liProducts: any[]): CatalogProduct[] {
   const aggregatedChildIds = new Set<string>();
 
   const parentProducts: CatalogProduct[] = parents.map(p => {
-    const raw = p.raw_json as any | null;
+    const raw = liRawOf(p);
     const liId = p.loja_integrada_product_id;
     const myChildren = liId ? (childrenByParentLiId.get(liId) || []) : [];
     myChildren.forEach(c => aggregatedChildIds.add(c.id));
 
     const childrenStock = myChildren.reduce((sum, c) => {
-      const cStock = (c.raw_json as any)?.estoque_quantidade;
+      const cStock = liRawOf(c)?.estoque_quantidade;
       return sum + (typeof cStock === "number" ? Math.max(cStock, 0) : Math.max(c.stock || 0, 0));
     }, 0);
     const ownStock = typeof raw?.estoque_quantidade === "number" ? Math.max(raw.estoque_quantidade, 0) : Math.max(p.stock || 0, 0);
@@ -118,7 +155,7 @@ export function normalizeLiProducts(liProducts: any[]): CatalogProduct[] {
 
     const variationNames: string[] = [];
     for (const child of myChildren) {
-      const cStock = (child.raw_json as any)?.estoque_quantidade;
+      const cStock = liRawOf(child)?.estoque_quantidade;
       if (typeof cStock === "number" && cStock > 0) {
         const suffix = (child.name || "").replace(p.name || "", "").trim();
         if (suffix) variationNames.push(suffix);
@@ -142,7 +179,7 @@ export function normalizeLiProducts(liProducts: any[]): CatalogProduct[] {
   const standaloneChildren: CatalogProduct[] = children
     .filter(c => !aggregatedChildIds.has(c.id))
     .map(p => {
-      const raw = p.raw_json as any | null;
+      const raw = liRawOf(p);
       const rawStock = raw?.estoque_quantidade;
       const stock = typeof rawStock === "number" ? Math.max(rawStock, 0) : Math.max(p.stock || 0, 0);
       return {

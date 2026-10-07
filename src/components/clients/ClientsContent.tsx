@@ -12,6 +12,7 @@ import { LiClientsTable } from "./li/LiClientsTable";
 import { ClientsStatsCards } from "./shared/ClientsStatsCards";
 import { ClientsFilters } from "./shared/ClientsFilters";
 import { ClientsPaginationFooter } from "./shared/ClientsPaginationFooter";
+import { getErrorMessage } from "@/lib/error-message";
 
 const log = createLogger("ClientsContent");
 
@@ -31,11 +32,11 @@ export function ClientsContent({ integrationId }: Props) {
     try {
       toast({ title: "Sincronização iniciada", description: "Sincronizando clientes em segundo plano..." });
       await data.sync.startSync();
-    } catch (error: any) {
+    } catch (error) {
       log.error("Sync error:", error);
       toast({
         title: "Erro na sincronização",
-        description: error.message || "Não foi possível iniciar a sincronização.",
+        description: getErrorMessage(error) || "Não foi possível iniciar a sincronização.",
         variant: "destructive",
       });
     }
@@ -53,11 +54,11 @@ export function ClientsContent({ integrationId }: Props) {
       queryClient.invalidateQueries({ queryKey: ["li-clients", integrationId] });
       queryClient.invalidateQueries({ queryKey: ["li-clients-count", integrationId] });
       queryClient.invalidateQueries({ queryKey: ["integration-info", integrationId] });
-    } catch (error: any) {
+    } catch (error) {
       log.error("Check new error:", error);
       toast({
         title: "Erro ao verificar",
-        description: error.message || "Não foi possível verificar novos clientes.",
+        description: getErrorMessage(error) || "Não foi possível verificar novos clientes.",
         variant: "destructive",
       });
     } finally {

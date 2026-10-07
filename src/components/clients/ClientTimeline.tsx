@@ -4,6 +4,8 @@ import { ShoppingBag, Star, Gift } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Tables } from "@/integrations/supabase/types";
+import { jsonAs } from "@/lib/json-access";
+import type { LiTotals } from "@/lib/store-json";
 
 type TEvent = {
   id: string;
@@ -40,13 +42,13 @@ export function ClientTimeline({ client, integrationId }: ClientTimelineProps) {
     queryFn: async () => {
       if (!customerKey) return [];
       const { data } = await supabase
-        .from("loyalty_points" as any)
+        .from("loyalty_points")
         .select("id, points, type, description, created_at")
         .eq("integration_id", integrationId)
         .eq("customer_external_id", customerKey)
         .order("created_at", { ascending: false })
         .limit(30);
-      return (data as any[]) || [];
+      return data || [];
     },
     enabled: !!customerKey && !!integrationId,
   });
@@ -60,9 +62,9 @@ export function ClientTimeline({ client, integrationId }: ClientTimelineProps) {
       type: "order" as const,
       title: `Pedido #${o.order_number}`,
       subtitle: o.status_name || undefined,
-      amount: (o.totals_json as any)?.total ? fmt.format((o.totals_json as any).total) : undefined,
+      amount: jsonAs<LiTotals>(o.totals_json)?.total ? fmt.format(jsonAs<LiTotals>(o.totals_json)!.total!) : undefined,
     })),
-    ...loyaltyRows.map((l: any) => ({
+    ...loyaltyRows.map((l) => ({
       id: `loyalty-${l.id}`,
       date: new Date(l.created_at),
       type: l.type === "redeem" ? ("loyalty_redeem" as const) : ("loyalty_earn" as const),

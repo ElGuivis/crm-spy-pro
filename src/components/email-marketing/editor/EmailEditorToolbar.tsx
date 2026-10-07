@@ -26,7 +26,7 @@ export function EmailEditorToolbar({ viewMode, previewMode, onViewModeChange, on
   return (
     <div className="border-b p-4 flex flex-wrap items-center justify-between gap-2 bg-background">
       <div className="flex items-center gap-2">
-        <Tabs value={viewMode} onValueChange={(v: any) => onViewModeChange(v)}>
+        <Tabs value={viewMode} onValueChange={(v) => onViewModeChange(v as typeof viewMode)}>
           <TabsList>
             <TabsTrigger value="editor">
               <Eye className="h-4 w-4 mr-2" />

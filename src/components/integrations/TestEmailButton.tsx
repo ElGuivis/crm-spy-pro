@@ -13,6 +13,15 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Mail, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { getErrorMessage } from "@/lib/error-message";
+
+interface SmtpDiagnostico {
+  smtp_host: string;
+  smtp_port: number | string;
+  security_mode: string;
+  sender_email: string;
+  destinatario: string;
+}
 
 interface TestEmailButtonProps {
   emailIntegrationId: string;
@@ -23,7 +32,7 @@ export function TestEmailButton({ emailIntegrationId, disabled }: TestEmailButto
   const [open, setOpen] = useState(false);
   const [to, setTo] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [diagnostico, setDiagnostico] = useState<any>(null);
+  const [diagnostico, setDiagnostico] = useState<SmtpDiagnostico | null>(null);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,10 +55,10 @@ export function TestEmailButton({ emailIntegrationId, disabled }: TestEmailButto
 
       if (error) {
         // Extract real error message from edge function response body
-        let realMessage = error.message;
+        let realMessage = getErrorMessage(error);
         let dica: string | undefined;
         try {
-          const body = await (error as any).context?.json?.();
+          const body = await error.context?.json?.();
           if (body?.mensagem) realMessage = body.mensagem;
           if (body?.dica) dica = body.dica;
         } catch { /* ignore parse errors */ }
@@ -57,21 +66,21 @@ export function TestEmailButton({ emailIntegrationId, disabled }: TestEmailButto
         err.dica = dica;
         throw err;
       }
-      if ((data as any)?.status === "erro") {
-        throw new Error((data as any)?.mensagem || "Falha ao enviar e-mail");
+      if (data?.status === "erro") {
+        throw new Error(data?.mensagem || "Falha ao enviar e-mail");
       }
 
-      const diag = (data as any)?.diagnostico;
-      setDiagnostico(diag);
+      const diag = data?.diagnostico as SmtpDiagnostico | undefined;
+      setDiagnostico(diag ?? null);
 
       toast.success("E-mail aceito pelo servidor SMTP!", {
         description: `Verifique a caixa de entrada (e spam) de ${to}. Se usa Amazon SES em modo Sandbox, o destinatário precisa estar verificado.`,
         duration: 8000,
       });
-    } catch (err: any) {
-      const dica = (err as any)?.dica;
+    } catch (err) {
+      const dica = err?.dica;
       toast.error("Falha no teste SMTP", {
-        description: dica || err?.message || "Não foi possível enviar o e-mail de teste.",
+        description: dica || getErrorMessage(err) || "Não foi possível enviar o e-mail de teste.",
         duration: 8000,
       });
     } finally {

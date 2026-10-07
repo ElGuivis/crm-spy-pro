@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import type { Json } from "@/integrations/supabase/types";
 import {
   ReactFlow, Background, Controls, MiniMap,
   useNodesState, useEdgesState, addEdge,
@@ -53,8 +54,8 @@ export function ChatbotFlowCanvas({ flowId, flowName, onBack }: Props) {
     queryKey: ["flow-canvas", flowId],
     queryFn: async () => {
       const [{ data: ns }, { data: es }] = await Promise.all([
-        supabase.from("chatbot_flow_nodes" as any).select("*").eq("flow_id", flowId),
-        supabase.from("chatbot_flow_edges" as any).select("*").eq("flow_id", flowId),
+        supabase.from("chatbot_flow_nodes").select("*").eq("flow_id", flowId),
+        supabase.from("chatbot_flow_edges").select("*").eq("flow_id", flowId),
       ]);
       const rfNodes: Node[] = ((ns as any[]) ?? []).map((n) => ({
         id: n.id,
@@ -66,7 +67,7 @@ export function ChatbotFlowCanvas({ flowId, flowName, onBack }: Props) {
         id: e.id,
         source: e.source_node_id,
         target: e.target_node_id,
-        sourceHandle: (e.condition as any)?.source_handle ?? null,
+        sourceHandle: e.condition?.source_handle ?? null,
         data: { condition: e.condition },
       }));
       setNodes(rfNodes);
@@ -120,23 +121,23 @@ export function ChatbotFlowCanvas({ flowId, flowName, onBack }: Props) {
     const nodesPayload = nodes.map((n) => ({
       id: n.id,
       node_type: n.type!,
-      label: String((n.data as any).label || "") || null,
-      config: (n.data as any).config ?? {},
+      label: String(n.data.label || "") || null,
+      config: n.data.config ?? {},
       position_x: n.position.x,
       position_y: n.position.y,
-      is_entry: !!(n.data as any).is_entry,
+      is_entry: !!n.data.is_entry,
     }));
     const edgesPayload = edges.map((e) => ({
       id: e.id,
       source_node_id: e.source,
       target_node_id: e.target,
-      condition: e.sourceHandle ? { source_handle: e.sourceHandle } : (e.data as any)?.condition ?? null,
+      condition: e.sourceHandle ? { source_handle: e.sourceHandle } : e.data?.condition ?? null,
     }));
-    const { error } = await (supabase.rpc as any)("replace_chatbot_flow", {
+    const { error } = await supabase.rpc("replace_chatbot_flow", {
       p_flow_id: flowId,
       p_tenant_id: tenantId!,
-      p_nodes: nodesPayload,
-      p_edges: edgesPayload,
+      p_nodes: nodesPayload as unknown as Json,
+      p_edges: edgesPayload as unknown as Json,
     });
     if (error) throw error;
   };
@@ -160,7 +161,7 @@ export function ChatbotFlowCanvas({ flowId, flowName, onBack }: Props) {
     try {
       await persistFlow();
       const { error } = await supabase
-        .from("chatbot_flows" as any)
+        .from("chatbot_flows")
         .update({ is_published: true, updated_at: new Date().toISOString() })
         .eq("id", flowId);
       if (error) throw error;

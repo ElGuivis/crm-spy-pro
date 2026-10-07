@@ -42,8 +42,8 @@ export function RFMPredictions({ snapshots }: RFMPredictionsProps) {
   // Only show customers with predictions
   const withPredictions = useMemo(() => {
     return snapshots.filter(s =>
-      (s as any).predicted_next_purchase_date != null &&
-      (s as any).purchase_probability_30d != null
+      s.predicted_next_purchase_date != null &&
+      s.purchase_probability_30d != null
     );
   }, [snapshots]);
 
@@ -59,8 +59,8 @@ export function RFMPredictions({ snapshots }: RFMPredictionsProps) {
     }
     // Sort
     result = [...result].sort((a, b) => {
-      const aSnap = a as any;
-      const bSnap = b as any;
+      const aSnap = a;
+      const bSnap = b;
       if (sortBy === 'probability') return (bSnap.purchase_probability_30d || 0) - (aSnap.purchase_probability_30d || 0);
       if (sortBy === 'date') return (aSnap.predicted_next_purchase_date || '').localeCompare(bSnap.predicted_next_purchase_date || '');
       return (b.revenue_total || 0) - (a.revenue_total || 0);
@@ -72,15 +72,15 @@ export function RFMPredictions({ snapshots }: RFMPredictionsProps) {
   const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   // Summary stats
-  const highProb = withPredictions.filter(s => ((s as any).purchase_probability_30d || 0) >= 60).length;
+  const highProb = withPredictions.filter(s => (s.purchase_probability_30d || 0) >= 60).length;
   const upcoming7d = withPredictions.filter(s => {
-    const pred = (s as any).predicted_next_purchase_date;
+    const pred = s.predicted_next_purchase_date;
     if (!pred) return false;
     const days = differenceInDays(new Date(pred), new Date());
     return days >= 0 && days <= 7;
   }).length;
   const avgProb30 = withPredictions.length > 0
-    ? withPredictions.reduce((sum, s) => sum + ((s as any).purchase_probability_30d || 0), 0) / withPredictions.length
+    ? withPredictions.reduce((sum, s) => sum + (s.purchase_probability_30d || 0), 0) / withPredictions.length
     : 0;
 
   if (withPredictions.length === 0) {
@@ -148,7 +148,7 @@ export function RFMPredictions({ snapshots }: RFMPredictionsProps) {
                   className="pl-9 h-9"
                 />
               </div>
-              <Select value={sortBy} onValueChange={(v: any) => { setSortBy(v); setPage(0); }}>
+              <Select value={sortBy} onValueChange={(v: string) => { setSortBy(v as typeof sortBy); setPage(0); }}>
                 <SelectTrigger className="w-44 h-9">
                   <SelectValue />
                 </SelectTrigger>
@@ -178,7 +178,7 @@ export function RFMPredictions({ snapshots }: RFMPredictionsProps) {
               </TableHeader>
               <TableBody>
                 {paged.map(s => {
-                  const snap = s as any;
+                  const snap = s;
                   const predDate = snap.predicted_next_purchase_date;
                   const daysUntil = predDate ? differenceInDays(new Date(predDate), new Date()) : null;
                   const windowBadge = getWindowBadge(snap.ideal_offer_window_start, snap.ideal_offer_window_end);

@@ -1,3 +1,4 @@
+import type { NsCustomer } from "./NuvemshopClientDetailsDialog";
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -34,7 +35,7 @@ export function NuvemshopClientsContent({ integrationId }: Props) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(30);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [selectedClient, setSelectedClient] = useState<any>(null);
+  const [selectedClient, setSelectedClient] = useState<NsCustomer | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: integration } = useQuery({
@@ -65,7 +66,7 @@ export function NuvemshopClientsContent({ integrationId }: Props) {
       const to = from + pageSize - 1;
       let q = supabase
         .from("nuvemshop_customers")
-        .select("id, name, email, phone, doc, total_spent, total_orders, updated_at_remote")
+        .select("id, integration_id, name, email, phone, doc, total_spent, total_orders, updated_at_remote")
         .eq("integration_id", integrationId)
         .order("name", { ascending: true })
         .range(from, to);

@@ -20,6 +20,8 @@ import { ClientTimeline } from "./ClientTimeline";
 import { ClientLoyaltyPanel } from "./ClientLoyaltyPanel";
 import { ClientCommunicationPanel } from "./ClientCommunicationPanel";
 import type { Tables } from "@/integrations/supabase/types";
+import { jsonAs } from "@/lib/json-access";
+import type { LiAddress, LiCustomerRaw, LiTotals } from "@/lib/store-json";
 
 interface ClientDetailsDialogProps {
   client: Tables<"li_customers"> | null;
@@ -93,17 +95,17 @@ const ClientDetailsDialog = ({ client, open, onOpenChange }: ClientDetailsDialog
   const initials = (name: string | null) =>
     name ? name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase() : "??";
 
-  const rawData = client.raw_json as any;
+  const rawData = jsonAs<LiCustomerRaw>(client.raw_json);
   const dataNascimento = rawData?.data_nascimento;
   const sexo = rawData?.sexo;
   const tipo = rawData?.tipo;
   const aceitaNewsletter = rawData?.aceita_newsletter;
   const dataCriacao = rawData?.data_criacao;
 
-  let address = client.address_json as any;
+  let address = jsonAs<LiAddress>(client.address_json);
   if (!address || (!address.endereco && !address.cidade)) {
     const end = (rawData?.enderecos || []);
-    address = end.find((e: any) => e.principal) || end[0] || null;
+    address = end.find((e) => e.principal) || end[0] || null;
   }
 
   const copyToClipboard = (text: string, label: string) => {
@@ -116,7 +118,7 @@ const ClientDetailsDialog = ({ client, open, onOpenChange }: ClientDetailsDialog
     window.open(`https://wa.me/55${phone}`, "_blank");
   };
 
-  const getStatusVariant = (status: string | null) => {
+  const getStatusVariant = (status: string | null): "default" | "destructive" | "secondary" => {
     if (!status) return "secondary";
     const s = status.toLowerCase();
     if (s.includes("pago") || s.includes("aprovado") || s.includes("entregue")) return "default";
@@ -259,7 +261,7 @@ const ClientDetailsDialog = ({ client, open, onOpenChange }: ClientDetailsDialog
                 ) : orders && orders.length > 0 ? (
                   <div className="space-y-2">
                     {orders.map((order) => {
-                      const totals = order.totals_json as any;
+                      const totals = jsonAs<LiTotals>(order.totals_json);
                       return (
                         <div key={order.id} className="border border-border/50 rounded-lg overflow-hidden">
                           <div className="flex items-center justify-between p-3 bg-muted/30 cursor-pointer hover:bg-muted/50"
@@ -270,7 +272,7 @@ const ClientDetailsDialog = ({ client, open, onOpenChange }: ClientDetailsDialog
                             </div>
                             <div className="flex items-center gap-2">
                               <div className="text-right">
-                                <Badge variant={getStatusVariant(order.status_name) as any} className="text-xs">{order.status_name || "Sem status"}</Badge>
+                                <Badge variant={getStatusVariant(order.status_name)} className="text-xs">{order.status_name || "Sem status"}</Badge>
                                 <p className="text-sm font-semibold mt-1">{fmt(totals?.total)}</p>
                               </div>
                               {expandedOrderId === order.id ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}

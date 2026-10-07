@@ -55,9 +55,9 @@ export function FollowToDmConfig({ channelId, followToDmCapable }: FollowToDmCon
         setConfig({
           id: configRes.data.id,
           is_active: configRes.data.is_active ?? false,
-          welcome_text: (configRes.data as any).welcome_text ?? '',
+          welcome_text: configRes.data.welcome_text ?? '',
           delay_seconds: configRes.data.delay_seconds ?? 5,
-          once_per_user: (configRes.data as any).once_per_user ?? true,
+          once_per_user: configRes.data.once_per_user ?? true,
         });
       }
       setFeatureEnabled(flagRes.data?.is_enabled ?? false);

@@ -84,12 +84,12 @@ export function ContentPostDialog({ open, onOpenChange, channelId, post, default
       scheduled_at: scheduledAt ?? null,
     };
     if (isEditing) {
-      const { data, error } = await supabase.from("instagram_content" as any)
+      const { data, error } = await supabase.from("instagram_content")
         .update(row).eq("id", post.id).select().single();
       if (error) throw error;
       return data as unknown as ContentPost;
     } else {
-      const { data, error } = await supabase.from("instagram_content" as any)
+      const { data, error } = await supabase.from("instagram_content")
         .insert(row).select().single();
       if (error) throw error;
       return data as unknown as ContentPost;
@@ -145,7 +145,7 @@ export function ContentPostDialog({ open, onOpenChange, channelId, post, default
 
   const loadAnalytics = async () => {
     if (!post?.ig_media_id) return;
-    const { data } = await supabase.from("instagram_media_insights" as any)
+    const { data } = await supabase.from("instagram_media_insights")
       .select("reach,impressions,likes,comments,saves,shares,plays")
       .eq("ig_media_id", post.ig_media_id)
       .maybeSingle();

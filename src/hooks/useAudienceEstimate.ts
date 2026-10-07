@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import type { Json } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo } from "react";
 
@@ -46,14 +47,14 @@ export function useAudienceEstimate(
         return { total_with_email: 0, suppressed: 0, eligible: 0 };
       }
 
-      const { data, error } = await (supabase.rpc as any)("estimate_email_audience", {
+      const { data, error } = await supabase.rpc("estimate_email_audience", {
         _audience_type: audienceType,
-        _audience_reference: audienceReference || {},
+        _audience_reference: (audienceReference || {}) as unknown as Json,
       });
 
       if (error) throw error;
 
-      return data as AudienceEstimate;
+      return data as unknown as AudienceEstimate;
     },
     enabled: enabled && !!audienceType,
     staleTime: 30_000, // Cache for 30s

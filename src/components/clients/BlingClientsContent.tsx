@@ -12,6 +12,7 @@ import { ClientsStatsCards } from "./shared/ClientsStatsCards";
 import { ClientsFilters } from "./shared/ClientsFilters";
 import { ClientsPaginationFooter } from "./shared/ClientsPaginationFooter";
 import { parseBlingEnderecoGeral } from "./shared/clientsHelpers";
+import { getErrorMessage } from "@/lib/error-message";
 
 const log = createLogger("BlingClientsContent");
 
@@ -54,11 +55,11 @@ export function BlingClientsContent({ integrationId }: Props) {
     try {
       toast({ title: "Sincronização iniciada", description: "Sincronizando clientes a partir das vendas..." });
       await data.sync.startSync();
-    } catch (error: any) {
+    } catch (error) {
       log.error("Sync error:", error);
       toast({
         title: "Erro na sincronização",
-        description: error.message || "Não foi possível iniciar a sincronização.",
+        description: getErrorMessage(error) || "Não foi possível iniciar a sincronização.",
         variant: "destructive",
       });
     }

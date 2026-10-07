@@ -15,13 +15,13 @@ export function ClientLoyaltyPanel({ integrationId, customerExternalId }: Client
     queryFn: async () => {
       if (!customerExternalId) return [];
       const { data } = await supabase
-        .from("loyalty_points" as any)
+        .from("loyalty_points")
         .select("id, points, type, description, coupon_code, created_at")
         .eq("integration_id", integrationId)
         .eq("customer_external_id", customerExternalId)
         .order("created_at", { ascending: false })
         .limit(50);
-      return (data as any[]) || [];
+      return data || [];
     },
     enabled: !!customerExternalId && !!integrationId,
   });
@@ -40,10 +40,10 @@ export function ClientLoyaltyPanel({ integrationId, customerExternalId }: Client
 
   const balance = rows.reduce((s: number, r: any) => s + r.points, 0);
   const earned = rows
-    .filter((r: any) => r.type === "earn" || r.type === "bonus")
+    .filter((r) => r.type === "earn" || r.type === "bonus")
     .reduce((s: number, r: any) => s + r.points, 0);
   const redeemed = rows
-    .filter((r: any) => r.type === "redeem")
+    .filter((r) => r.type === "redeem")
     .reduce((s: number, r: any) => s + Math.abs(r.points), 0);
 
   return (
@@ -72,7 +72,7 @@ export function ClientLoyaltyPanel({ integrationId, customerExternalId }: Client
         </p>
       ) : (
         <div className="space-y-1">
-          {rows.map((row: any) => (
+          {rows.map((row) => (
             <div
               key={row.id}
               className="flex items-center justify-between py-2 px-3 rounded-md bg-muted/30 text-sm"

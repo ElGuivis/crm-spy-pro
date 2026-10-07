@@ -124,11 +124,11 @@ export function useInstagramFlowBuilder(flowId: string | null) {
         label: e.label,
         condition: e.condition,
       }));
-      const { error } = await (supabase.rpc as any)("replace_instagram_flow_version", {
+      const { error } = await supabase.rpc("replace_instagram_flow_version", {
         p_version_id: currentVersionId,
         p_tenant_id: tenantId,
-        p_nodes: nodesPayload,
-        p_edges: edgesPayload,
+        p_nodes: nodesPayload as unknown as Json,
+        p_edges: edgesPayload as unknown as Json,
       });
       if (error) throw error;
 

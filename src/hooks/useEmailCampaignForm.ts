@@ -92,7 +92,7 @@ export function useEmailCampaignForm({ open, onOpenChange, campaignId, defaultVa
 
   useEffect(() => {
     if (existingCampaign) {
-      const integId = (existingCampaign as any).email_integration_id || "";
+      const integId = existingCampaign.email_integration_id || "";
       resetSilently({ internal_name: existingCampaign.internal_name || "", subject: existingCampaign.subject || "", preheader: existingCampaign.preheader || "", sender_name: existingCampaign.sender_name || "", sender_email: existingCampaign.sender_email || "", reply_to: existingCampaign.reply_to || "", campaign_type: (existingCampaign.campaign_type as EmailCampaignType) || "newsletter", template_id: existingCampaign.template_id || "", scheduled_at: existingCampaign.scheduled_at || "", email_integration_id: integId, coupon_codes: existingCampaign.coupon_codes ?? [], attribution_window_days: existingCampaign.attribution_window_days ?? 7, skip_recent_days: existingCampaign.skip_recent_days ?? 0, unique_coupon: toFormCoupon(existingCampaign.unique_coupon) });
       setWatchedIntegrationId(integId || undefined);
       setAudienceType((existingCampaign.audience_type || "all") as AudienceType);

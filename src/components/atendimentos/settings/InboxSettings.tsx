@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useInboxesFull } from "@/hooks/useAtendimentoSettings";
+import type { InboxFull } from "@/hooks/useInboxSettings";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,9 +34,9 @@ export function InboxSettings() {
   const { data: storeIntegrations = [] } = useStoreIntegrations();
   const { agents } = useChatbotAgents();
   const [editOpen, setEditOpen] = useState(false);
-  const [editingInbox, setEditingInbox] = useState<any>(null);
+  const [editingInbox, setEditingInbox] = useState<InboxFull | null>(null);
 
-  const handleEdit = (inbox: any) => {
+  const handleEdit = (inbox: InboxFull) => {
     setEditingInbox(inbox);
     setEditOpen(true);
   };

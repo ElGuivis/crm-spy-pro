@@ -13,7 +13,7 @@ async function logEvent(
   payload?: Record<string, unknown>
 ) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await (supabase.from('conversation_events' as any) as any).insert({
+  await (supabase.from('conversation_events') as any).insert({
     tenant_id: tenantId,
     conversation_id: conversationId,
     type,
@@ -190,7 +190,7 @@ export function useBlockContact() {
       if (!tenantId || !user) throw new Error('Not authenticated');
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase.from('contact_blocks' as any) as any).upsert({
+      await (supabase.from('contact_blocks') as any).upsert({
         tenant_id: tenantId,
         phone_e164: phone,
         reason: 'Bloqueado pelo atendente',

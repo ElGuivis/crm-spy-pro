@@ -134,7 +134,7 @@ export function EmailCampaignDetailsTab({
                 setWatchedIntegrationId(value);
                 const integ = emailIntegrations?.find((i) => i.id === value);
                 if (integ) {
-                  form.setValue("sender_name", (integ as any).sender_name || integ.name || "");
+                  form.setValue("sender_name", integ.sender_name || integ.name || "");
                   form.setValue("sender_email", integ.sender_email || "");
                 }
               }}

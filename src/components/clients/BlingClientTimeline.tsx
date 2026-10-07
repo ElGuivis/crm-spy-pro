@@ -43,13 +43,13 @@ export function BlingClientTimeline({ client }: BlingClientTimelineProps) {
     queryFn: async () => {
       if (!customerKey) return [];
       const { data } = await supabase
-        .from("loyalty_points" as any)
+        .from("loyalty_points")
         .select("id, points, type, description, created_at")
         .eq("integration_id", client.integration_id)
         .eq("customer_external_id", customerKey)
         .order("created_at", { ascending: false })
         .limit(30);
-      return (data as any[]) || [];
+      return data || [];
     },
     enabled: !!customerKey && !!client.integration_id,
   });
@@ -63,7 +63,7 @@ export function BlingClientTimeline({ client }: BlingClientTimelineProps) {
       subtitle: o.situacao_nome || undefined,
       amount: o.valor_total ? fmt.format(o.valor_total) : undefined,
     })),
-    ...loyaltyRows.map((l: any) => ({
+    ...loyaltyRows.map((l) => ({
       id: `loyalty-${l.id}`,
       date: new Date(l.created_at),
       type: l.type === "redeem" ? ("loyalty_redeem" as const) : ("loyalty_earn" as const),

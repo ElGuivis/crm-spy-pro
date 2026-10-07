@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 import { createLogger } from '@/lib/logger';
+import { getErrorMessage } from "@/lib/error-message";
 const log = createLogger('DeleteIntegrationDataButton');
 
 interface TableToDelete {
@@ -112,11 +113,11 @@ export function DeleteIntegrationDataButton({
 
       setOpen(false);
       onDeleted?.();
-    } catch (error: any) {
+    } catch (error) {
       log.error('Error deleting data:', error);
       toast({
         title: "Erro ao excluir",
-        description: error.message || "Não foi possível excluir os dados.",
+        description: getErrorMessage(error) || "Não foi possível excluir os dados.",
         variant: "destructive",
       });
     } finally {

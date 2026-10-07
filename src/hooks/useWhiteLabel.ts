@@ -49,14 +49,14 @@ export function useWhiteLabel() {
       if (config) {
         const { error } = await supabase
           .from("tenant_whitelabel")
-          .update({ ...values, updated_at: new Date().toISOString() } as any)
+          .update({ ...values, updated_at: new Date().toISOString() })
           .eq("id", config.id);
         if (error) throw error;
       } else {
         const { error } = await supabase.from("tenant_whitelabel").insert({
           tenant_id: tenantId,
           ...values,
-        } as any);
+        });
         if (error) throw error;
       }
     },

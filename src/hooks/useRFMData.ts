@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 
 export interface RFMSnapshot {
   id: string;
-  tenant_id: string;
+  tenant_id?: string;
   integration_id: string;
   source_type: string;
   customer_id: string;
@@ -29,9 +29,15 @@ export interface RFMSnapshot {
   first_purchase_date: string | null;
   ltv_predicted_12m: number | null;
   churn_probability: number | null;
+  predicted_next_purchase_date: string | null;
+  purchase_probability_7d: number | null;
+  purchase_probability_15d: number | null;
+  purchase_probability_30d: number | null;
+  ideal_offer_window_start: number | null;
+  ideal_offer_window_end: number | null;
   reference_date: string;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 export function useRFMData(integrationId: string) {
@@ -42,7 +48,7 @@ export function useRFMData(integrationId: string) {
   const { data: snapshots, isLoading } = useQuery({
     queryKey: ['rfm-snapshots', integrationId],
     queryFn: async () => {
-      const { data: latestDate } = await (supabase as any)
+      const { data: latestDate } = await supabase
         .from('customer_rfm_snapshots')
         .select('reference_date')
         .eq('integration_id', integrationId)
@@ -59,9 +65,9 @@ export function useRFMData(integrationId: string) {
       let hasMore = true;
 
       while (hasMore) {
-        const { data, error } = await (supabase as any)
+        const { data, error } = await supabase
           .from('customer_rfm_snapshots')
-          .select('id, integration_id, source_type, customer_id, customer_name, customer_email, customer_phone, customer_doc, last_order_date, recency_days, orders_count, revenue_total, aov, avg_order_interval_days, r_score, f_score, m_score, rfm_score, segment_name, segment_action, churn_risk, first_purchase_date, ltv_predicted_12m, churn_probability, reference_date, created_at')
+          .select('id, integration_id, source_type, customer_id, customer_name, customer_email, customer_phone, customer_doc, last_order_date, recency_days, orders_count, revenue_total, aov, avg_order_interval_days, r_score, f_score, m_score, rfm_score, segment_name, segment_action, churn_risk, first_purchase_date, ltv_predicted_12m, churn_probability, predicted_next_purchase_date, purchase_probability_7d, purchase_probability_15d, purchase_probability_30d, ideal_offer_window_start, ideal_offer_window_end, reference_date, created_at')
           .eq('integration_id', integrationId)
           .eq('reference_date', latestDate.reference_date)
           .order('revenue_total', { ascending: false })
@@ -87,7 +93,7 @@ export function useRFMData(integrationId: string) {
     queryKey: ['rfm-history', integrationId],
     queryFn: async () => {
       // Get all distinct reference dates
-      const { data: dates, error: datesErr } = await (supabase as any)
+      const { data: dates, error: datesErr } = await supabase
         .from('customer_rfm_snapshots')
         .select('reference_date, segment_name')
         .eq('integration_id', integrationId)
@@ -124,7 +130,7 @@ export function useRFMData(integrationId: string) {
     queryKey: ['rfm-migration', integrationId],
     queryFn: async () => {
       // Get 2 most recent distinct dates
-      const { data: dates } = await (supabase as any)
+      const { data: dates } = await supabase
         .from('customer_rfm_snapshots')
         .select('reference_date')
         .eq('integration_id', integrationId)
@@ -132,19 +138,19 @@ export function useRFMData(integrationId: string) {
 
       if (!dates) return [];
 
-      const uniqueDates = [...new Set(dates.map((d: any) => d.reference_date))].slice(0, 2) as string[];
+      const uniqueDates = [...new Set(dates.map((d) => d.reference_date))].slice(0, 2) as string[];
       if (uniqueDates.length < 2) return [];
 
       const [latestDate, previousDate] = uniqueDates;
 
       // Fetch both snapshots
       const [{ data: latest }, { data: previous }] = await Promise.all([
-        (supabase as any)
+        supabase
           .from('customer_rfm_snapshots')
           .select('customer_id, segment_name, revenue_total')
           .eq('integration_id', integrationId)
           .eq('reference_date', latestDate),
-        (supabase as any)
+        supabase
           .from('customer_rfm_snapshots')
           .select('customer_id, segment_name, revenue_total')
           .eq('integration_id', integrationId)

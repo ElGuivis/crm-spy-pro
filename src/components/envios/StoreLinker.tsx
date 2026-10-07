@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 import { createLogger } from '@/lib/logger';
+import { getErrorMessage } from "@/lib/error-message";
 const log = createLogger('StoreLinker');
 
 interface StoreLinkerProps {
@@ -62,7 +63,7 @@ export function StoreLinker({ integrationId, onLinked }: StoreLinkerProps) {
           .eq('id', integrationId)
           .single();
 
-        const storeId = (meIntegration as any)?.store_integration_id || null;
+        const storeId = meIntegration?.store_integration_id || null;
         setCurrentStore(storeId);
         setSelectedStore(storeId);
       } catch (err) {
@@ -106,10 +107,10 @@ export function StoreLinker({ integrationId, onLinked }: StoreLinkerProps) {
         title: 'Loja vinculada',
         description: 'A loja foi associada a esta conta de envio.',
       });
-    } catch (err: any) {
+    } catch (err) {
       toast({
         title: 'Erro',
-        description: err.message || 'Falha ao vincular loja',
+        description: getErrorMessage(err) || 'Falha ao vincular loja',
         variant: 'destructive',
       });
     } finally {
@@ -152,10 +153,10 @@ export function StoreLinker({ integrationId, onLinked }: StoreLinkerProps) {
       });
 
       onLinked?.();
-    } catch (err: any) {
+    } catch (err) {
       toast({
         title: 'Erro',
-        description: err.message || 'Falha ao vincular pedidos',
+        description: getErrorMessage(err) || 'Falha ao vincular pedidos',
         variant: 'destructive',
       });
     } finally {

@@ -123,20 +123,28 @@ export function useCreateCampaignForm({ onCreated, onOpenChange }: Options) {
     try {
       const { data: members, error } = await supabase
         .from("rfm_audience_members")
-        .select("snapshot_id, customer_rfm_snapshots!inner ( customer_name, customer_phone, customer_email, customer_data, revenue_total )")
+        .select("snapshot_id")
         .eq("audience_id", audienceId)
         .eq("tenant_id", tenantId)
         .limit(5000);
       if (error) throw error;
+      // não há chave estrangeira entre membros e snapshots (o embed do PostgREST não funciona): busca em lotes
+      const snapshotIds = (members || []).map((m) => m.snapshot_id);
+      const snapshots: { customer_name: string | null; customer_phone: string | null; customer_email: string | null; revenue_total: number | null }[] = [];
+      for (let i = 0; i < snapshotIds.length; i += 200) {
+        const { data: chunk, error: chunkError } = await supabase
+          .from("customer_rfm_snapshots")
+          .select("customer_name, customer_phone, customer_email, revenue_total")
+          .in("id", snapshotIds.slice(i, i + 200));
+        if (chunkError) throw chunkError;
+        snapshots.push(...(chunk || []));
+      }
       const parsed: ContactRow[] = [];
       const seenPhones = new Set<string>();
-      for (const m of members || []) {
-        const snapshot = (m as any).customer_rfm_snapshots as any | null;
-        if (!snapshot) continue;
-        const customerData = (snapshot.customer_data || {}) as Record<string, string>;
-        const name = (snapshot.customer_name as string) || customerData.name || "";
-        const phone = ((snapshot.customer_phone as string) || customerData.phone || "").replace(/\D/g, "");
-        const email = (snapshot.customer_email as string) || customerData.email || "";
+      for (const snapshot of snapshots) {
+        const name = snapshot.customer_name || "";
+        const phone = (snapshot.customer_phone || "").replace(/\D/g, "");
+        const email = snapshot.customer_email || "";
         if (!phone || phone.length < 10 || seenPhones.has(phone)) continue;
         seenPhones.add(phone);
         parsed.push({ name, phone, variables: { nome: name, primeiro_nome: name.split(/\s+/)[0] || "", email, total_compras: String(snapshot.revenue_total || 0) } });
@@ -245,7 +253,7 @@ export function useCreateCampaignForm({ onCreated, onOpenChange }: Options) {
         tokens_per_message: 2, status: initialStatus, media_url: mediaUrl, media_type: mediaType,
         scheduled_at: scheduledAt, timezone, sending_schedule: schedulePayload,
       };
-      const { data: campaign, error: campError } = await supabase.from("bulk_campaigns").insert(insertPayload as any).select().single();
+      const { data: campaign, error: campError } = await supabase.from("bulk_campaigns").insert(insertPayload).select().single();
       if (campError) throw campError;
       const contactRows = contacts.map(c => ({ campaign_id: campaign.id, tenant_id: tenantId, name: c.name, phone: c.phone, variables: c.variables }));
       for (let i = 0; i < contactRows.length; i += 500) {

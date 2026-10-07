@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,7 +39,7 @@ export function useCashbackConfigForm({ open, editingId, initialConfig, onSave, 
   const { toast } = useToast();
   const { tenant } = useAuth();
 
-  const loadExistingConfig = async (id: string) => {
+  const loadExistingConfig = useCallback(async (id: string) => {
     try {
       const { data, error } = await supabase
         .from('cashback_configs')
@@ -86,7 +86,7 @@ export function useCashbackConfigForm({ open, editingId, initialConfig, onSave, 
         variant: "destructive",
       });
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     if (open) {
@@ -102,7 +102,7 @@ export function useCashbackConfigForm({ open, editingId, initialConfig, onSave, 
       loadIntegrations();
       loadEmailIntegrations();
     }
-  }, [open, editingId, initialConfig]);
+  }, [open, editingId, initialConfig, loadExistingConfig]);
 
   useEffect(() => {
     if (open && config.integrationId) {

@@ -64,7 +64,7 @@ export function useTenantApiKeys() {
       qc.invalidateQueries({ queryKey: key });
       return fullKey;
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e) => toast.error(e.message),
   });
 
   const revokeKey = useMutation({
@@ -73,7 +73,7 @@ export function useTenantApiKeys() {
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: key }); toast.success("Chave revogada!"); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e) => toast.error(e.message),
   });
 
   return { apiKeys, isLoading, createKey, revokeKey };

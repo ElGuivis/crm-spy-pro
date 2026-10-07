@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { User, Building2, KeyRound, Mail, Loader2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 import { createLogger } from '@/lib/logger';
+import { getErrorMessage } from "@/lib/error-message";
 const log = createLogger('AccountSettings');
 
 export function AccountSettings() {
@@ -21,25 +22,25 @@ export function AccountSettings() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  useEffect(() => {
-    if (profile) {
-      setCompanyName(profile.company_name || "");
-      // owner_name isn't in the typed profile yet, fetch it
-      fetchOwnerName();
-    }
-  }, [profile]);
-
-  const fetchOwnerName = async () => {
+  const fetchOwnerName = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase
       .from("profiles")
       .select("owner_name")
       .eq("user_id", user.id)
       .single();
-    if (data && (data as any).owner_name) {
-      setOwnerName((data as any).owner_name);
+    if (data && data.owner_name) {
+      setOwnerName(data.owner_name);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (profile) {
+      setCompanyName(profile.company_name || "");
+      // owner_name isn't in the typed profile yet, fetch it
+      fetchOwnerName();
+    }
+  }, [profile, fetchOwnerName]);
 
   const handleSaveProfile = async () => {
     if (!user) return;
@@ -95,9 +96,9 @@ export function AccountSettings() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-    } catch (error: any) {
+    } catch (error) {
       log.error(error);
-      toast.error(error.message || "Erro ao alterar senha");
+      toast.error(getErrorMessage(error) || "Erro ao alterar senha");
     } finally {
       setIsChangingPassword(false);
     }
