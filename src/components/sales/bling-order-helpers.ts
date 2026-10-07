@@ -89,7 +89,7 @@ export function getFreteResponsavel(fretePorConta: number | null): string {
   return "-";
 }
 
-export function displayValue(value: any): any {
+export function displayValue(value: string | number | null | undefined): string | number {
   if (value === null || value === undefined || value === '') return "-";
   return value;
 }

@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 import { createLogger } from '@/lib/logger';
 const log = createLogger('useIntegrationStatusChecker');
+import { jsonAs } from "@/lib/json-access";
 
 export interface IntegrationStatus {
   isConnected: boolean;
@@ -234,7 +235,7 @@ export function useIntegrationStatusChecker() {
     tenantId: string
   ) => {
     const promises = integrations.map(async (integration) => {
-      const meta = integration.metadata as any | null;
+      const meta = jsonAs<Record<string, unknown>>(integration.metadata);
       const tid = integration.tenant_id || tenantId;
 
       switch (integration.type) {

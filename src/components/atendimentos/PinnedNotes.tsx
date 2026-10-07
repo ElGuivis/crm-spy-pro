@@ -62,7 +62,7 @@ export function PinnedNotes({ conversationId }: PinnedNotesProps) {
         direction: 'internal_note',
         type: 'text',
         status: 'sent',
-      } as any);
+      });
       if (error) throw error;
     },
     onSuccess: () => {

@@ -21,6 +21,9 @@ import { getErrorMessage } from "@/lib/error-message";
 
 const log = createLogger('SalesContent');
 
+const ordersQuery = () => supabase.from('li_orders').select(LI_ORDER_SELECT, { count: 'exact' });
+type OrdersQuery = ReturnType<typeof ordersQuery>;
+
 export function SalesContent({ integrationId }: SalesContentProps) {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -60,7 +63,7 @@ export function SalesContent({ integrationId }: SalesContentProps) {
     }
   }, [dateFilter, dateFrom, dateTo]);
 
-  const buildFilteredQuery = useCallback((base: any) => {
+  const buildFilteredQuery = useCallback((base: OrdersQuery) => {
     let q = base.eq('integration_id', integrationId);
     if (statusFilter && statusFilter !== 'all') q = q.eq('status_name', statusFilter);
     const range = getDateRange();
@@ -81,7 +84,7 @@ export function SalesContent({ integrationId }: SalesContentProps) {
       setLoading(true);
       const from = currentPage * pageSize;
       const to = from + pageSize - 1;
-      const q = buildFilteredQuery(supabase.from('li_orders').select(LI_ORDER_SELECT, { count: 'exact' }))
+      const q = buildFilteredQuery(ordersQuery())
         .order('created_at_remote', { ascending: false }).range(from, to);
       const { data, error, count } = await q;
       if (error) throw error;
@@ -96,7 +99,7 @@ export function SalesContent({ integrationId }: SalesContentProps) {
   const silentRefresh = useCallback(async () => {
     try {
       const from = currentPage * pageSize;
-      const q = buildFilteredQuery(supabase.from('li_orders').select(LI_ORDER_SELECT, { count: 'exact' }))
+      const q = buildFilteredQuery(ordersQuery())
         .order('created_at_remote', { ascending: false }).range(from, from + pageSize - 1);
       const { data, error, count } = await q;
       if (!error && data) { setOrders(data.map((d: Parameters<typeof mapOrder>[0]) => mapOrder(d))); setTotalOrders(count || 0); }

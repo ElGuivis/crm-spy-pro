@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import type { EmailContent } from "@/components/email-marketing/editor/types";
 
 export type EmailCampaignStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'paused' | 'canceled' | 'error';
 export type EmailCampaignType = 'newsletter' | 'promotion' | 'relationship' | 'automation' | 'update';
@@ -17,7 +18,7 @@ export interface EmailCampaign {
   campaign_type: EmailCampaignType;
   template_id: string | null;
   content_html: string | null;
-  content_json: any;
+  content_json: EmailContent | null;
   audience_type: string | null;
   audience_reference: string | null;
   status: EmailCampaignStatus;
@@ -56,7 +57,7 @@ export interface CreateEmailCampaignInput {
   campaign_type: EmailCampaignType;
   template_id?: string;
   content_html?: string;
-  content_json?: any;
+  content_json?: EmailContent | null;
   audience_type?: string;
   audience_reference?: string;
   scheduled_at?: string;
@@ -75,7 +76,7 @@ export function useEmailCampaigns(filters?: { status?: EmailCampaignStatus; sear
       if (filters?.search) query = query.or(`internal_name.ilike.%${filters.search}%,subject.ilike.%${filters.search}%`);
       const { data, error } = await query;
       if (error) throw error;
-      return data as EmailCampaign[];
+      return data as unknown as EmailCampaign[];
     },
     enabled: !!tenantId,
     // enquanto alguma campanha está enviando, a lista se atualiza sozinha (status e totais)

@@ -120,7 +120,7 @@ export function ProductDetailsVariationsTab({ product, childProducts, fallbackIm
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {inlineVariations.map((variation: any, index: number) => (
+                  {inlineVariations.map((variation, index: number) => (
                     <TableRow key={index}>
                       <TableCell className="font-medium">
                         {variation.nome || variation.sku || `Variação ${index + 1}`}

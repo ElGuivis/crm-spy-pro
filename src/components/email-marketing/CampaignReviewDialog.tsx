@@ -37,7 +37,7 @@ export function CampaignReviewDialog({
     hasSender: { valid: !!campaign.sender_email, label: 'Remetente configurado', critical: true },
     hasContent: { valid: !!campaign.content_json?.blocks?.length, label: 'Conteúdo criado', critical: true },
     hasUnsubscribe: {
-      valid: campaign.content_json?.blocks?.some((b: any) => b.type === 'unsubscribe') ?? false,
+      valid: campaign.content_json?.blocks?.some((b) => b.type === 'unsubscribe') ?? false,
       label: 'Bloco de descadastro presente (obrigatório por conformidade)',
       critical: true,
     },
@@ -47,7 +47,7 @@ export function CampaignReviewDialog({
   const isValid = criticalIssues.length === 0;
 
   const previewHtml = campaign.content_json
-    ? replaceVariablesWithSample(generateEmailHTML(campaign.content_json as any, campaign.preheader || undefined))
+    ? replaceVariablesWithSample(generateEmailHTML(campaign.content_json, campaign.preheader || undefined))
     : '';
 
   const previewSubject = replaceVariablesWithSample(campaign.subject || '');

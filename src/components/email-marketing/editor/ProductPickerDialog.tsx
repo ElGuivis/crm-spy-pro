@@ -18,6 +18,7 @@ import { hdImageUrl } from '@/lib/product-images';
 
 import { createLogger } from '@/lib/logger';
 const log = createLogger('ProductPickerDialog');
+import { jsonArray } from "@/lib/json-access";
 
 const PLACEHOLDER_IMG = 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" fill="none"><rect width="300" height="300" fill="%23f1f5f9"/><text x="150" y="158" text-anchor="middle" fill="%2394a3b8" font-size="14" font-family="sans-serif">Sem imagem</text></svg>');
 
@@ -81,9 +82,10 @@ export function ProductPickerDialog({ open, onOpenChange, onSelect }: ProductPic
       };
 
       // Helper: get best Bling image (imagens[0].link > imagem_url)
-      const getBestBlingImage = (p: any): string | null => {
-        if (Array.isArray(p.imagens) && p.imagens.length > 0 && p.imagens[0]?.link) {
-          return p.imagens[0].link;
+      const getBestBlingImage = (p: { imagens?: unknown; imagem_url?: string | null }): string | null => {
+        const imagens = jsonArray<{ link?: string }>(p.imagens);
+        if (imagens.length > 0 && imagens[0]?.link) {
+          return imagens[0].link;
         }
         return p.imagem_url || null;
       };

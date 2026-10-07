@@ -6,7 +6,11 @@ import { MelhorEnvioShipment, ShipmentFilters, GlobalShipmentStats, calculateAve
 const logger = createLogger("MelhorEnvio");
 function getErrMsg(e: unknown): string { return e instanceof Error ? e.message : String(e); }
 
+
 const ME_SHIPMENT_SELECT = "id, integration_id, me_id, order_id, order_number, external_order_number, tracking_code, protocol, status, carrier, service_name, price, discount, weight, height, width, length, format, dimensions, insurance_value, receipt, own_hand, collect, from_address, to_address, tracking_events, receiver_name, receiver_phone, receiver_city, receiver_state, receiver_address, invoice, volumes, products, authorization_code, print_url, preview_url, delivery_min, delivery_max, estimated_delivery_at, paid_at, generated_at, posted_at, delivered_at, created_at, last_sync_at, sender_document, sender_email, sender_phone, receiver_email, receiver_document, receiver_note, agency_name, agency_address, cte_key, contract, billed_weight, non_commercial, conciliation, additional_info, service_details, financial_details, li_order_id, bling_order_id";
+
+const shipmentsQuery = () => supabase.from("me_shipments").select(ME_SHIPMENT_SELECT, { count: "exact" });
+type ShipmentsQuery = ReturnType<typeof shipmentsQuery>;
 
 export type { MelhorEnvioShipment, ShipmentFilters, GlobalShipmentStats };
 
@@ -25,24 +29,24 @@ export function useMelhorEnvioShipments(filters: ShipmentFilters = {}) {
   const fetchGlobalStats = useCallback(async () => {
     try {
       const now = new Date().toISOString();
-      const iq = filters.integrationId ? (q: any) => q.eq("integration_id", filters.integrationId) : (q: any) => q;
+      const scope = filters.integrationId ? { integration_id: filters.integrationId } : {};
       const base = () => supabase.from("me_shipments");
       const [total, pending, posted, inTransit, delivered, canceled, returning, delayed, values] = await Promise.all([
-        iq(base().select("id", { count: "exact", head: true })),
-        iq(base().select("id", { count: "exact", head: true }).eq("status", "pending")),
-        iq(base().select("id", { count: "exact", head: true }).eq("status", "posted")),
-        iq(base().select("id", { count: "exact", head: true }).eq("status", "in_transit")),
-        iq(base().select("id", { count: "exact", head: true }).eq("status", "delivered")),
-        iq(base().select("id", { count: "exact", head: true }).eq("status", "canceled")),
-        iq(base().select("id", { count: "exact", head: true }).or("status.eq.returning,status.eq.returned")),
-        iq(base().select("id", { count: "exact", head: true }).not("status", "in", '("delivered","canceled")').not("estimated_delivery_at", "is", null).lt("estimated_delivery_at", now)),
-        iq(base().select("price")),
+        base().select("id", { count: "exact", head: true }).match(scope),
+        base().select("id", { count: "exact", head: true }).eq("status", "pending").match(scope),
+        base().select("id", { count: "exact", head: true }).eq("status", "posted").match(scope),
+        base().select("id", { count: "exact", head: true }).eq("status", "in_transit").match(scope),
+        base().select("id", { count: "exact", head: true }).eq("status", "delivered").match(scope),
+        base().select("id", { count: "exact", head: true }).eq("status", "canceled").match(scope),
+        base().select("id", { count: "exact", head: true }).or("status.eq.returning,status.eq.returned").match(scope),
+        base().select("id", { count: "exact", head: true }).not("status", "in", '("delivered","canceled")').not("estimated_delivery_at", "is", null).lt("estimated_delivery_at", now).match(scope),
+        base().select("price").match(scope),
       ]);
       setGlobalStats({
         total: total.count || 0, pending: pending.count || 0, posted: posted.count || 0,
         inTransit: inTransit.count || 0, delivered: delivered.count || 0, canceled: canceled.count || 0,
         returning: returning.count || 0, delayed: delayed.count || 0,
-        totalValue: (values.data || []).reduce((sum: number, s: any) => sum + (s.price || 0), 0),
+        totalValue: (values.data || []).reduce((sum, s) => sum + (s.price || 0), 0),
       });
     } catch (err) { logger.error("Error fetching global stats", err); }
   }, [filters.integrationId]);
@@ -51,7 +55,7 @@ export function useMelhorEnvioShipments(filters: ShipmentFilters = {}) {
     try {
       setIsLoading(true);
       setError(null);
-      const applyFilters = (query: any) => {
+      const applyFilters = (query: ShipmentsQuery): ShipmentsQuery => {
         if (filters.integrationId) query = query.eq("integration_id", filters.integrationId);
         if (filters.delayedOnly) {
           query = query.not("status", "in", '("delivered","canceled")').not("estimated_delivery_at", "is", null).lt("estimated_delivery_at", new Date().toISOString());
@@ -67,14 +71,10 @@ export function useMelhorEnvioShipments(filters: ShipmentFilters = {}) {
         return query;
       };
 
-      const { count } = await applyFilters(supabase.from("me_shipments").select("id", { count: "exact", head: true }));
-      setTotalCount(count || 0);
-
       const from = (page - 1) * pageSize;
-      const { data, error: queryError } = await applyFilters(
-        supabase.from("me_shipments").select(ME_SHIPMENT_SELECT).order("generated_at", { ascending: false, nullsFirst: false }).range(from, from + pageSize - 1)
-      );
+      const { data, count, error: queryError } = await applyFilters(shipmentsQuery()).order("generated_at", { ascending: false, nullsFirst: false }).range(from, from + pageSize - 1);
       if (queryError) throw queryError;
+      setTotalCount(count || 0);
       setShipments(data || []);
     } catch (err: unknown) {
       logger.error("Error fetching shipments", err);

@@ -33,13 +33,13 @@ export function EmailIntegrationDialog({ open, onOpenChange, integration, onSucc
         <form onSubmit={f.handleSubmit} className="space-y-4">
           <EmailIntegrationBasicFields
             formData={f.formData}
-            onChange={(field, value) => f.updateField(field as any, value)}
+            onChange={(field, value) => f.updateField(field, value)}
           />
 
           <EmailIntegrationSmtpFields
             formData={f.formData}
             isEditing={!!integration}
-            onChange={(field, value) => f.updateField(field as any, value)}
+            onChange={(field, value) => f.updateField(field, value)}
             onPortChange={f.handlePortChange}
             onSecureChange={f.handleSecureChange}
             onTlsChange={f.handleTlsChange}

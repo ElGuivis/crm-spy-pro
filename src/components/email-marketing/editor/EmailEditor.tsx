@@ -108,7 +108,7 @@ export function EmailEditor({ initialContent, onChange, draftKey, onTemplateAppl
               onSelectColumnChild={(parentIndex, columnKey, childIdx) => {
                 editor.setSelectedColumnPath({ blockIndex: parentIndex, columnKey, childIndex: childIdx });
                 editor.setSelectedBlockIndex(null);
-                editor.setColumnTarget({ blockIndex: parentIndex, columnKey: columnKey as any });
+                editor.setColumnTarget({ blockIndex: parentIndex, columnKey });
               }}
               onMoveColumnChild={editor.handleMoveColumnChild}
               onDeleteColumnChild={editor.handleDeleteColumnChild}

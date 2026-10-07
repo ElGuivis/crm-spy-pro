@@ -143,7 +143,7 @@ export function ProductsContent({ integrationId }: ProductsContentProps) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card><CardContent className="pt-6"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Produtos (pai + simples)</p><p className="text-2xl font-bold">{data.parentCount}</p></div><Package className="h-8 w-8 text-primary opacity-50" /></div></CardContent></Card>
         <Card><CardContent className="pt-6"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Variações</p><p className="text-2xl font-bold">{data.totalVariationCount}</p></div><Layers className="h-8 w-8 text-muted-foreground opacity-50" /></div></CardContent></Card>
-        <Card><CardContent className="pt-6"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Última Sincronização</p><p className="text-sm font-medium">{data.formatLastSync(data.getMostRecentSync(data.integration as any | null) ?? null)}</p></div><Clock className="h-8 w-8 text-muted-foreground opacity-50" /></div></CardContent></Card>
+        <Card><CardContent className="pt-6"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Última Sincronização</p><p className="text-sm font-medium">{data.formatLastSync(data.getMostRecentSync(data.integration) ?? null)}</p></div><Clock className="h-8 w-8 text-muted-foreground opacity-50" /></div></CardContent></Card>
       </div>
 
       {/* Filters */}

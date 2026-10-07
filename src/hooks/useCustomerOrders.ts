@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { jsonAs } from "@/lib/json-access";
 
 export function useCustomerOrders(phone: string | null | undefined, email?: string | null, integrationId?: string | null) {
   const { tenantId } = useAuth();
@@ -23,8 +24,8 @@ export function useCustomerOrders(phone: string | null | undefined, email?: stri
       const { data, error } = await query;
       if (error) return [];
       // Filter client-side by phone match in raw_json
-      return (data || []).filter((o: any) => {
-        const cliente = o.raw_json?.cliente;
+      return (data || []).filter((o) => {
+        const cliente = jsonAs<{ cliente?: Record<string, unknown> }>(o.raw_json)?.cliente;
         if (!cliente) return false;
         const cel = String(cliente.telefone_celular || '').replace(/\D/g, '');
         const tel = String(cliente.telefone_principal || '').replace(/\D/g, '');

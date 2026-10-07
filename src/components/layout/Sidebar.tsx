@@ -61,7 +61,7 @@ export function Sidebar({ mobileOpen, onMobileClose }: SidebarProps) {
   const hasPermission = (item: NavItem): boolean => {
     if (isOwner || isAdmin) return true;
     if (!item.permissionKey) return true;
-    return permissions.includes(item.permissionKey as any);
+    return permissions.includes(item.permissionKey as (typeof permissions)[number]);
   };
 
   const filteredGroups = navGroups.map(group => ({

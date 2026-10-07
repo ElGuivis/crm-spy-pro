@@ -20,9 +20,9 @@ interface Props {
   onDuplicateBlock: (index: number) => void;
   onDeleteBlock: (index: number) => void;
   onSelectColumnSlot: (parentIndex: number, columnKey: "column1" | "column2" | "column3") => void;
-  onSelectColumnChild: (parentIndex: number, columnKey: string, childIdx: number) => void;
+  onSelectColumnChild: (parentIndex: number, columnKey: ColumnTarget["columnKey"], childIdx: number) => void;
   onMoveColumnChild: (parentIndex: number, columnKey: string, childIdx: number, direction: "up" | "down") => void;
-  onDeleteColumnChild: (parentIndex: number, columnKey: string, childIdx: number) => void;
+  onDeleteColumnChild: (parentIndex: number, columnKey: ColumnTarget["columnKey"], childIdx: number) => void;
 }
 
 const isColumnBlock = (block: EmailBlock) => block.type === "columns-2" || block.type === "columns-3";

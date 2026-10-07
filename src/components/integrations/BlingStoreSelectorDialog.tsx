@@ -101,7 +101,7 @@ export function BlingStoreSelectorDialog({
     try {
       await supabase
         .from('integrations')
-        .update({ bling_store_ids: storeIds } as any)
+        .update({ bling_store_ids: storeIds })
         .eq('id', integrationId);
     } catch (err) {
       log.error('Error saving bling_store_ids:', err);

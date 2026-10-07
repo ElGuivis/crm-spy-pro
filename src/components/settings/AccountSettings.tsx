@@ -51,7 +51,7 @@ export function AccountSettings() {
         .update({
           company_name: companyName,
           owner_name: ownerName,
-        } as any)
+        })
         .eq("user_id", user.id);
 
       if (error) throw error;

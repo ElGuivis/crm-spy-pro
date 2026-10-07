@@ -92,7 +92,7 @@ export function BlingOrderEntregaTab({ order, copyToClipboard }: Props) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {order.volumes.map((vol: any, idx: number) => (
+              {order.volumes.map((vol, idx: number) => (
                 <TableRow key={idx}>
                   <TableCell>{vol.id || idx + 1}</TableCell>
                   <TableCell>

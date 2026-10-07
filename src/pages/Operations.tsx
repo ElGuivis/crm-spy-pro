@@ -28,6 +28,7 @@ interface FunctionMetric {
 
 interface DeadLetterItem {
   id: string;
+  source_item_id?: string;
   source_queue: string;
   channel_type: string;
   destination: string;
@@ -71,7 +72,7 @@ export default function Operations() {
     try {
       const [metricsRes, deadRes, circuitRes, wqRes, iqRes] = await Promise.all([
         supabase.from("function_metrics").select("id, function_name, status, duration_ms, items_processed, items_failed, items_dead, error_message, correlation_id, created_at").order("created_at", { ascending: false }).limit(50),
-        supabase.from("dead_letter_queue").select("id, source_queue, channel_type, destination, error_message, attempts, status, correlation_id, created_at").order("created_at", { ascending: false }).limit(50),
+        supabase.from("dead_letter_queue").select("id, source_item_id, source_queue, channel_type, destination, error_message, attempts, status, correlation_id, created_at").order("created_at", { ascending: false }).limit(50),
         supabase.from("circuit_breaker_state").select("id, provider, state, failure_count, last_failure_at, last_success_at, last_error, opened_at, updated_at").order("updated_at", { ascending: false }),
         supabase.from("outbound_queue").select("status").in("status", ["pending", "failed", "processing"]),
         supabase.from("instagram_outbox").select("status").in("status", ["pending", "retry", "sending"]),
@@ -108,11 +109,11 @@ export default function Operations() {
       if (item.source_queue === "outbound_queue") {
         await supabase.from("outbound_queue").update({
           status: "pending", attempts: 0, next_retry_at: new Date().toISOString(), last_error: null,
-        }).eq("id", (item as any).source_item_id || itemId);
+        }).eq("id", item.source_item_id || itemId);
       } else if (item.source_queue === "instagram_outbox") {
         await supabase.from("instagram_outbox").update({
           status: "pending", attempt_count: 0, send_after: new Date().toISOString(), error_code: null, error_message: null,
-        }).eq("id", (item as any).source_item_id || itemId);
+        }).eq("id", item.source_item_id || itemId);
       }
 
       await supabase.from("dead_letter_queue").update({

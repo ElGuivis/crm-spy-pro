@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 import { createLogger } from '@/lib/logger';
 const log = createLogger('useBlingCodeMappings');
+import type { BlingParcela } from "@/lib/store-json";
 
 export interface BlingCodeMapping {
   id: string;
@@ -82,7 +83,7 @@ export function useBlingCodeMappings(integrationId: string) {
       const paymentCounts: Record<string, number> = {};
       parcelasData?.forEach(order => {
         if (order.parcelas && Array.isArray(order.parcelas)) {
-          order.parcelas.forEach((parcela: any) => {
+          (order.parcelas as BlingParcela[]).forEach((parcela) => {
             const paymentId = parcela?.formaPagamento?.id;
             if (paymentId) {
               const code = String(paymentId);

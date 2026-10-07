@@ -1,4 +1,5 @@
 import { Tables } from "@/integrations/supabase/types";
+import { jsonAs } from "@/lib/json-access";
 
 export type Product = Tables<'li_products'>;
 
@@ -19,7 +20,7 @@ export const SORT_OPTIONS: { value: SortOption; label: string }[] = [
 
 /** Extract data from raw_json */
 export const getRaw = (product: Product, key: string): unknown => {
-  const raw = product.raw_json as any | null;
+  const raw = jsonAs<Record<string, unknown>>(product.raw_json);
   return raw?.[key] ?? null;
 };
 

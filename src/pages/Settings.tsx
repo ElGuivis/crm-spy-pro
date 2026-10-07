@@ -84,13 +84,13 @@ function DataSettings() {
     setDeleteDialogOpen(true);
   };
 
-  const deleteBatched = async (table: string) => {
+  const deleteBatched = async (table: "li_order_items" | "li_orders" | "li_customers" | "li_products") => {
     while (true) {
-      const { data, error: selErr } = await supabase.from(table as any).select('id').limit(500);
+      const { data, error: selErr } = await supabase.from(table).select('id').limit(500);
       if (selErr) throw selErr;
       if (!data || data.length === 0) break;
-      const ids = data.map((r: any) => r.id);
-      const { error } = await supabase.from(table as any).delete().in('id', ids);
+      const ids = data.map((r) => r.id);
+      const { error } = await supabase.from(table).delete().in('id', ids);
       if (error) throw error;
     }
   };

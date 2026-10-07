@@ -97,7 +97,7 @@ export function StoreLinker({ integrationId, onLinked }: StoreLinkerProps) {
     try {
       const { error } = await supabase
         .from('integrations')
-        .update({ store_integration_id: selectedStore } as any)
+        .update({ store_integration_id: selectedStore })
         .eq('id', integrationId);
 
       if (error) throw error;
@@ -141,7 +141,7 @@ export function StoreLinker({ integrationId, onLinked }: StoreLinkerProps) {
 
       if (error) throw error;
 
-      const result = data as any;
+      const result = data as unknown as { linked_now: number; already_linked: number; total: number };
       toast({
         title: 'Vinculação concluída',
         description: `${result.linked_now} envio(s) vinculado(s). Total: ${result.already_linked + result.linked_now}/${result.total}`,

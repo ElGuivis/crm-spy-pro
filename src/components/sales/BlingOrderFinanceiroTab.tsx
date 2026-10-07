@@ -82,7 +82,7 @@ export function BlingOrderFinanceiroTab({ order, getPaymentDisplayName }: Props)
               </TableRow>
             </TableHeader>
             <TableBody>
-              {order.parcelas.map((parcela: any, idx: number) => {
+              {order.parcelas.map((parcela, idx: number) => {
                 const paymentId = parcela.formaPagamento?.id ? String(parcela.formaPagamento.id) : null;
                 const customPaymentName = paymentId ? getPaymentDisplayName?.(paymentId) : null;
                 const displayPayment = customPaymentName ||

@@ -30,6 +30,7 @@ export interface Conversation {
   created_at: string;
   contact?: Contact;
   last_message_preview?: string;
+  ai_sentiment?: string | null;
 }
 
 export interface Message {
@@ -106,7 +107,7 @@ export function useConversations(inboxId: string | null, filters?: ConversationF
 
       let query = supabase
         .from('conversations')
-        .select('id, tenant_id, contact_id, channel_id, inbox_id, status, priority, assigned_to, handoff_mode, ai_enabled, bot_state_json, kanban_column_id, current_ai_agent_id, last_message_at, last_inbound_at, last_outbound_at, last_incoming_message_id, integration_id, verification_data, verification_state, lead_capture_state, lead_capture_data, source, created_at, updated_at, contact:contacts(id, tenant_id, phone, name, email, metadata, li_customer_id, created_at, updated_at)')
+        .select('id, tenant_id, contact_id, channel_id, inbox_id, status, priority, assigned_to, handoff_mode, ai_enabled, bot_state_json, kanban_column_id, current_ai_agent_id, last_message_at, last_inbound_at, last_outbound_at, last_incoming_message_id, ai_sentiment, integration_id, verification_data, verification_state, lead_capture_state, lead_capture_data, source, created_at, updated_at, contact:contacts(id, tenant_id, phone, name, email, metadata, li_customer_id, created_at, updated_at)')
         .eq('tenant_id', tenantId)
         .order('last_message_at', { ascending: false, nullsFirst: false })
         .limit(100);
@@ -138,10 +139,10 @@ export function useConversations(inboxId: string | null, filters?: ConversationF
       const { data, error } = await query;
       if (error) throw error;
       
-      let result = (data || []).map((c: any) => ({
+      let result = (data || []).map((c) => ({
         ...c,
-        contact: c.contact || { id: c.contact_id, name: null, phone: 'Desconhecido', avatar_url: null },
-      })) as Conversation[];
+        contact: c.contact || { id: c.contact_id, name: null as string | null, phone: 'Desconhecido', avatar_url: null as string | null },
+      })) as unknown as Conversation[];
 
       // Client-side search (name, phone, preview)
       if (filters?.search) {

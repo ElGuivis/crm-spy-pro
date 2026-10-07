@@ -1,4 +1,5 @@
 import { Tables } from "@/integrations/supabase/types";
+import { jsonAs } from "@/lib/json-access";
 
 export type Product = Tables<'li_products'>;
 
@@ -9,9 +10,10 @@ export interface LIImage {
   pequeno?: string;
 }
 
-export const getRaw = (product: Product, key: string): any => {
-  const raw = product.raw_json as any | null;
-  return raw?.[key] ?? null;
+/** Campo do `raw_json` da loja; o tipo esperado é declarado por quem chama (padrão: texto exibível). */
+export const getRaw = <T = string>(product: Product, key: string): T | null => {
+  const raw = jsonAs<Record<string, unknown>>(product.raw_json);
+  return (raw?.[key] ?? null) as T | null;
 };
 
 export const formatCurrency = (value: number | null) => {
@@ -103,7 +105,7 @@ export const getChildImage = (
     const url = img.grande || img.media || img.pequena || img.pequeno;
     if (url) return url;
   }
-  const imgPrincipal = getRaw(child, 'imagem_principal');
+  const imgPrincipal = getRaw<{ grande?: string; media?: string; pequena?: string }>(child, 'imagem_principal');
   if (imgPrincipal) {
     const url = imgPrincipal?.grande || imgPrincipal?.media || imgPrincipal?.pequena;
     if (url) return url;

@@ -9,6 +9,7 @@ import { ptBR } from "date-fns/locale";
 
 import { createLogger } from '@/lib/logger';
 const log = createLogger('useBlingSalesData');
+import type { BlingDeliveryAddress, BlingVolume, BlingParcela } from "@/lib/store-json";
 
 export interface BlingOrder {
   id: string;
@@ -36,7 +37,7 @@ export interface BlingOrder {
   loja_id: number | null;
   observacoes: string | null;
   observacoes_internas: string | null;
-  endereco_entrega: any;
+  endereco_entrega: BlingDeliveryAddress | null;
   integration_id: string;
   categoria_id: number | null;
   nota_fiscal_id: number | null;
@@ -54,9 +55,9 @@ export interface BlingOrder {
   prazo_entrega: number | null;
   transportador_id: number | null;
   transportador_nome: string | null;
-  etiqueta: any;
-  volumes: any[] | any;
-  parcelas: any[] | any;
+  etiqueta: unknown;
+  volumes: BlingVolume[] | null;
+  parcelas: BlingParcela[] | null;
   numero_pedido_compra: string | null;
 }
 
@@ -107,7 +108,7 @@ export function useBlingSalesData(integrationId: string) {
     const { data } = await supabase.from('integrations').select('name, last_sync_at, last_sync_orders_at, last_orders_sync_at, last_sync_products_at, last_sync_customers_at').eq('id', integrationId).single();
     if (data) {
       setIntegrationName(data.name);
-      setStats(prev => ({ ...prev, lastOrdersSync: getMostRecentSync(data as unknown as any) }));
+      setStats(prev => ({ ...prev, lastOrdersSync: getMostRecentSync(data) }));
     }
   }, [integrationId]);
 
@@ -146,7 +147,7 @@ export function useBlingSalesData(integrationId: string) {
         supabase.from('bling_orders').select('id', { count: 'exact', head: true }).eq('integration_id', integrationId),
         supabase.from('integrations').select('last_sync_at, last_sync_orders_at, last_orders_sync_at, last_sync_products_at, last_sync_customers_at').eq('id', integrationId).single()
       ]);
-      setStats({ orders: ordersResult.count || 0, lastOrdersSync: integrationResult.data ? getMostRecentSync(integrationResult.data as unknown as any) : null });
+      setStats({ orders: ordersResult.count || 0, lastOrdersSync: integrationResult.data ? getMostRecentSync(integrationResult.data) : null });
     } catch (error) {
       log.error('Error fetching stats:', error);
     }

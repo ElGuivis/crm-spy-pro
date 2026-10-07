@@ -3,8 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Check, Copy, Clock, Package, Truck, CheckCircle2, XCircle, AlertCircle, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import type { LucideIcon } from 'lucide-react';
 
-export const statusConfig: Record<string, { label: string; color: string; icon: React.ComponentType<any> }> = {
+export const statusConfig: Record<string, { label: string; color: string; icon: LucideIcon }> = {
   pending: { label: "Pendente", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400", icon: Clock },
   posted: { label: "Postado", color: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400", icon: Package },
   in_transit: { label: "Em Trânsito", color: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400", icon: Truck },

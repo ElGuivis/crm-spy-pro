@@ -19,10 +19,15 @@ import { createLogger } from '@/lib/logger';
 import { getErrorMessage } from "@/lib/error-message";
 const log = createLogger('DeleteIntegrationDataButton');
 
+/** Tabelas que o botão sabe limpar (cada uma tem `integration_id`); a lista fechada mantém as consultas tipadas. */
+type DeletableTable =
+  | "bling_customers" | "li_customers" | "generated_coupons" | "me_shipments"
+  | "bling_products" | "li_products" | "bling_orders" | "li_orders";
+
 interface TableToDelete {
-  table: string;
-  itemsTable?: string;
-  itemsForeignKey?: string;
+  table: DeletableTable;
+  itemsTable?: "bling_order_items" | "li_order_items";
+  itemsForeignKey?: "order_id";
 }
 
 interface DeleteIntegrationDataButtonProps {
@@ -53,7 +58,7 @@ export function DeleteIntegrationDataButton({
         if (tableInfo.itemsTable && tableInfo.itemsForeignKey) {
           // Get all parent IDs first using raw query approach
           const { data: parentRecords, error: selectError } = await supabase
-            .from(tableInfo.table as any)
+            .from(tableInfo.table)
             .select('id')
             .eq('integration_id', integrationId);
           
@@ -62,13 +67,13 @@ export function DeleteIntegrationDataButton({
           }
           
           if (parentRecords && parentRecords.length > 0) {
-            const parentIds = parentRecords.map((r: any) => r.id);
+            const parentIds = parentRecords.map((r) => r.id);
             
             // Delete items in batches
             for (let i = 0; i < parentIds.length; i += 100) {
               const batch = parentIds.slice(i, i + 100);
               const { error: itemsError } = await supabase
-                .from(tableInfo.itemsTable as any)
+                .from(tableInfo.itemsTable)
                 .delete()
                 .in(tableInfo.itemsForeignKey, batch);
               
@@ -82,7 +87,7 @@ export function DeleteIntegrationDataButton({
         // Delete main table records in batches — loop until all gone (Supabase caps SELECT at 1000)
         while (true) {
           const { data: mainRecords, error: mainSelectError } = await supabase
-            .from(tableInfo.table as any)
+            .from(tableInfo.table)
             .select('id')
             .eq('integration_id', integrationId)
             .limit(500);
@@ -94,9 +99,9 @@ export function DeleteIntegrationDataButton({
 
           if (!mainRecords || mainRecords.length === 0) break;
 
-          const mainIds = mainRecords.map((r: any) => r.id);
+          const mainIds = mainRecords.map((r) => r.id);
           const { error } = await supabase
-            .from(tableInfo.table as any)
+            .from(tableInfo.table)
             .delete()
             .in('id', mainIds);
           if (error) {

@@ -1,4 +1,5 @@
 import { Tables, Json } from "@/integrations/supabase/types";
+import type { LiShippingAddress } from "@/lib/store-json";
 
 export type DBOrder = Tables<'li_orders'>;
 export type DBOrderItem = Tables<'li_order_items'>;
@@ -34,12 +35,12 @@ export interface OrderView {
   data_envio: string | null;
   nome_destinatario: string | null;
   telefone_destinatario: string | null;
-  endereco: any;
+  endereco: LiShippingAddress | null;
   peso_real: number | null;
   cupom_desconto: string | null;
   observacoes: string | null;
-  envios: any;
-  parcelas: any;
+  envios: unknown;
+  parcelas: unknown;
   items: OrderItemView[];
   raw: DBOrder;
 }

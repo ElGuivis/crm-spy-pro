@@ -134,7 +134,7 @@ export function IntegrationCard({ integration, defaultAIProvider, statusInfo, ac
               )}
               {integration.type.startsWith("ai_") && (
                 <>
-                  <DropdownMenuItem onClick={() => actions.onAIReconnect(integration.type.replace("ai_", "") as any)}>
+                  <DropdownMenuItem onClick={() => actions.onAIReconnect(integration.type.replace("ai_", "") as Parameters<Actions["onAIReconnect"]>[0])}>
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Reconectar
                   </DropdownMenuItem>

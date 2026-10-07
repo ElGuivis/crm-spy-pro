@@ -24,7 +24,7 @@ export interface BlingOrderFull {
   loja_id: number | null;
   observacoes: string | null;
   observacoes_internas: string | null;
-  endereco_entrega: any;
+  endereco_entrega: BlingDeliveryAddress | null;
   categoria_id: number | null;
   nota_fiscal_id: number | null;
   total_icms: number | null;
@@ -41,12 +41,13 @@ export interface BlingOrderFull {
   prazo_entrega: number | null;
   transportador_id: number | null;
   transportador_nome: string | null;
-  etiqueta: any;
-  volumes: any[];
-  parcelas: any[];
+  etiqueta: unknown;
+  volumes: BlingVolume[] | null;
+  parcelas: BlingParcela[] | null;
   numero_pedido_compra: string | null;
   integration_id: string;
 }
+import type { BlingDeliveryAddress, BlingVolume, BlingParcela } from "@/lib/store-json";
 
 export interface BlingOrderItem {
   id: string;

@@ -129,9 +129,9 @@ export function useEmailIntegrationForm({ integration, open, onSuccess, onOpenCh
     setSenders(senders.filter((_, i) => i !== index));
   };
 
-  const updateSender = (index: number, field: keyof SenderRow, value: any) => {
+  const updateSender = (index: number, field: keyof SenderRow, value: string | boolean) => {
     const updated = [...senders];
-    (updated[index] as any)[field] = value;
+    updated[index] = { ...updated[index], [field]: value };
     setSenders(updated);
   };
 

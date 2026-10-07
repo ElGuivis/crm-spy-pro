@@ -12,6 +12,9 @@ import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import type { LucideIcon } from "lucide-react";
+import { jsonAs } from "@/lib/json-access";
+import type { LiTotals } from "@/lib/store-json";
 
 interface CustomerPanelProps {
   conversation: Conversation;
@@ -19,7 +22,7 @@ interface CustomerPanelProps {
   integrationId?: string | null;
 }
 
-function TimelineEvent({ icon: Icon, label, time, color }: { icon: any; label: string; time: string; color: string }) {
+function TimelineEvent({ icon: Icon, label, time, color }: { icon: LucideIcon; label: string; time: string; color: string }) {
   return (
     <div className="flex items-start gap-2.5 text-xs">
       <div className={cn("flex h-6 w-6 shrink-0 items-center justify-center rounded-full mt-0.5", color)}>
@@ -36,7 +39,7 @@ function TimelineEvent({ icon: Icon, label, time, color }: { icon: any; label: s
 export function CustomerPanel({ conversation, onClose, integrationId }: CustomerPanelProps) {
   const contact = conversation.contact;
   const rawPhone = contact?.phone || '';
-  const contactMeta = (contact as any)?.metadata as Record<string, string> | null;
+  const contactMeta = jsonAs<Record<string, string>>((contact as Contact & { metadata?: unknown } | undefined)?.metadata);
 
   const isLid = rawPhone.includes('@lid');
   const realPhone = isLid
@@ -51,12 +54,12 @@ export function CustomerPanel({ conversation, onClose, integrationId }: Customer
   const { liOrders, blingOrders, shipments, isLoading } = useCustomerOrders(phone || undefined, undefined, integrationId);
 
   const allOrders = [
-    ...liOrders.map((o: any) => ({
+    ...liOrders.map((o) => ({
       id: o.id, number: o.order_number, status: o.status_name,
-      total: o.totals_json?.total,
-      date: o.created_at_remote, customer: o.raw_json?.cliente?.nome, source: 'LI',
+      total: jsonAs<LiTotals>(o.totals_json)?.total,
+      date: o.created_at_remote, customer: jsonAs<{ cliente?: { nome?: string } }>(o.raw_json)?.cliente?.nome, source: 'LI',
     })),
-    ...blingOrders.map((o: any) => ({
+    ...blingOrders.map((o) => ({
       id: o.id, number: o.numero, status: o.situacao_nome, total: o.valor_total,
       date: o.data_criacao, customer: o.cliente_nome, source: 'Bling',
     })),
@@ -90,7 +93,7 @@ export function CustomerPanel({ conversation, onClose, integrationId }: Customer
       time: o.date ? formatDistanceToNow(new Date(o.date), { addSuffix: true, locale: ptBR }) : '',
       color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
     })),
-    ...shipments.slice(0, 2).map((s: any) => ({
+    ...shipments.slice(0, 2).map((s) => ({
       icon: Truck,
       label: `Envio ${s.tracking_code || ''} — ${s.status}`,
       time: s.created_at ? formatDistanceToNow(new Date(s.created_at), { addSuffix: true, locale: ptBR }) : '',
@@ -302,7 +305,7 @@ export function CustomerPanel({ conversation, onClose, integrationId }: Customer
                   <p className="text-xs text-muted-foreground">Nenhum envio encontrado</p>
                 </div>
               ) : (
-                shipments.map((s: any, i: number) => (
+                shipments.map((s, i: number) => (
                   <motion.div
                     key={s.id}
                     initial={{ opacity: 0, y: 4 }}

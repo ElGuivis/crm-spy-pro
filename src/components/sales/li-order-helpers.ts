@@ -2,6 +2,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { Json } from "@/integrations/supabase/types";
+import type { LiShippingAddress } from "@/lib/store-json";
 
 export interface OrderItemView {
   id: string;
@@ -41,12 +42,12 @@ export interface OrderView {
   data_envio: string | null;
   nome_destinatario: string | null;
   telefone_destinatario: string | null;
-  endereco: any;
+  endereco: LiShippingAddress | null;
   peso_real: number | null;
   cupom_desconto: string | null;
   observacoes: string | null;
-  envios: any;
-  parcelas: any;
+  envios: unknown;
+  parcelas: unknown;
   items: OrderItemView[];
 }
 
@@ -72,7 +73,7 @@ export const formatCPFCNPJ = (value: string | null | undefined) => {
   return value;
 };
 
-export const safeString = (value: any): string => {
+export const safeString = (value: unknown): string => {
   if (value === null || value === undefined) return "";
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
@@ -93,7 +94,7 @@ export const copyToClipboard = (text: string, label: string) => {
   toast.success(`${label} copiado!`);
 };
 
-export const getItemRaw = (item: OrderItemView, key: string): any => {
+export const getItemRaw = <T = string>(item: OrderItemView, key: string): T | null => {
   if (!item.raw_json || typeof item.raw_json !== 'object' || Array.isArray(item.raw_json)) return null;
-  return (item.raw_json as any)[key] ?? null;
+  return ((item.raw_json as Record<string, unknown>)[key] ?? null) as T | null;
 };

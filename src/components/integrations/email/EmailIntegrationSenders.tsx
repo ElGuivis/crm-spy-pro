@@ -12,7 +12,7 @@ interface Props {
   loadingSenders: boolean;
   activeSendersCount: number;
   onAdd: () => void;
-  onUpdate: (index: number, field: keyof SenderRow, value: any) => void;
+  onUpdate: (index: number, field: keyof SenderRow, value: string | boolean) => void;
   onRemove: (index: number) => void;
 }
 

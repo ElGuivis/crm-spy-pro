@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import type { Json } from "@/integrations/supabase/types";
 
 export interface WhatsAppChannel {
   id: string;
@@ -11,6 +12,8 @@ export interface WhatsAppChannel {
   status: 'connected' | 'disconnected';
   integration_id: string | null;
   created_at: string;
+  waba_id?: string | null;
+  metadata_json?: Json | null;
 }
 
 export interface Inbox {
@@ -34,7 +37,7 @@ export function useInboxes() {
       if (!tenantId) return [];
       const { data, error } = await supabase
         .from('inboxes')
-        .select('id, tenant_id, name, channel_id, bot_enabled, is_active, integration_id, created_at, channel:whatsapp_channels(id, tenant_id, provider, display_name, phone_e164, status, integration_id, created_at)')
+        .select('id, tenant_id, name, channel_id, bot_enabled, is_active, integration_id, created_at, channel:whatsapp_channels(id, tenant_id, provider, display_name, phone_e164, status, integration_id, created_at, waba_id, metadata_json)')
         .eq('tenant_id', tenantId)
         .eq('is_active', true)
         .order('created_at');

@@ -19,6 +19,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { AtendimentosMobileHeader, type AtendimentosSection } from "@/components/atendimentos/AtendimentosMobileHeader";
+import { jsonAs } from "@/lib/json-access";
 
 const SECTIONS: AtendimentosSection[] = [
   { value: "conversas", label: "Conversas", icon: <MessageSquare className="h-5 w-5" /> },
@@ -52,12 +53,13 @@ export default function Atendimentos() {
   const channelInfo = useMemo(() => {
     if (!selectedConversation?.channel_id) return { status: null, provider: null, wabaId: null, phoneNumberId: null, integrationId: null };
     const inbox = inboxes.find(i => i.channel_id === selectedConversation.channel_id);
-    const channel = inbox?.channel as any;
+    const channel = inbox?.channel;
+    const meta = jsonAs<{ waba_id?: string; phone_number_id?: string }>(channel?.metadata_json);
     return {
       status: channel?.status || null,
       provider: channel?.provider || null,
-      wabaId: channel?.waba_id || channel?.metadata_json?.waba_id || null,
-      phoneNumberId: channel?.metadata_json?.phone_number_id || null,
+      wabaId: channel?.waba_id || meta?.waba_id || null,
+      phoneNumberId: meta?.phone_number_id || null,
       integrationId: inbox?.integration_id || null,
     };
   }, [selectedConversation, inboxes]);

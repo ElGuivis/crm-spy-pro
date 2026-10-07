@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import type { CreateEmailCampaignInput } from "./useEmailCampaigns";
+import type { Json } from "@/integrations/supabase/types";
 
 export function useCreateEmailCampaign() {
   const queryClient = useQueryClient();
@@ -10,7 +11,7 @@ export function useCreateEmailCampaign() {
   return useMutation({
     mutationFn: async (input: CreateEmailCampaignInput) => {
       if (!tenantId) throw new Error('Tenant not found');
-      const { data, error } = await supabase.from('email_campaigns').insert({ ...input, tenant_id: tenantId }).select().single();
+      const { data, error } = await supabase.from('email_campaigns').insert({ ...input, content_json: input.content_json as unknown as Json, tenant_id: tenantId }).select().single();
       if (error) throw error;
       return data;
     },
@@ -23,7 +24,7 @@ export function useUpdateEmailCampaign() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<CreateEmailCampaignInput> & { status?: "canceled" | "draft" | "error" | "paused" | "scheduled" | "sending" | "sent" } }) => {
-      const { data, error } = await supabase.from('email_campaigns').update(updates).eq('id', id).select().single();
+      const { data, error } = await supabase.from('email_campaigns').update({ ...updates, content_json: updates.content_json as unknown as Json | undefined }).eq('id', id).select().single();
       if (error) throw error;
       return data;
     },

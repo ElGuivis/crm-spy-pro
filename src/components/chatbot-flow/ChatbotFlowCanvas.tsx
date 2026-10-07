@@ -14,6 +14,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { jsonAs } from "@/lib/json-access";
 
 type Cfg = Record<string, unknown>;
 
@@ -57,17 +58,17 @@ export function ChatbotFlowCanvas({ flowId, flowName, onBack }: Props) {
         supabase.from("chatbot_flow_nodes").select("*").eq("flow_id", flowId),
         supabase.from("chatbot_flow_edges").select("*").eq("flow_id", flowId),
       ]);
-      const rfNodes: Node[] = ((ns as any[]) ?? []).map((n) => ({
+      const rfNodes: Node[] = (ns ?? []).map((n) => ({
         id: n.id,
         type: n.node_type,
         position: { x: n.position_x, y: n.position_y },
         data: { config: n.config ?? {}, label: n.label ?? "", is_entry: n.is_entry },
       }));
-      const rfEdges: Edge[] = ((es as any[]) ?? []).map((e) => ({
+      const rfEdges: Edge[] = (es ?? []).map((e) => ({
         id: e.id,
         source: e.source_node_id,
         target: e.target_node_id,
-        sourceHandle: e.condition?.source_handle ?? null,
+        sourceHandle: jsonAs<{ source_handle?: string }>(e.condition)?.source_handle ?? null,
         data: { condition: e.condition },
       }));
       setNodes(rfNodes);

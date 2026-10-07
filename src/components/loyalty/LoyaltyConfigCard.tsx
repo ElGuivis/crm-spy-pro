@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { jsonAs } from "@/lib/json-access";
 
 interface LoyaltyConfigCardProps {
   integrationId: string;
@@ -207,7 +208,7 @@ export function LoyaltyConfigCard({ integrationId }: LoyaltyConfigCardProps) {
                   <SelectContent>
                     {(waIntegrations || []).map((i) => (
                       <SelectItem key={i.id} value={i.id}>
-                        {i.name || (i.metadata as any)?.instanceName || i.id}
+                        {i.name || jsonAs<{ instanceName?: string }>(i.metadata)?.instanceName || i.id}
                       </SelectItem>
                     ))}
                   </SelectContent>

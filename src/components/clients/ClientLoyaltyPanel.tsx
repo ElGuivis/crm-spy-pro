@@ -38,13 +38,13 @@ export function ClientLoyaltyPanel({ integrationId, customerExternalId }: Client
     return <div className="py-8 text-center text-sm text-muted-foreground">Carregando...</div>;
   }
 
-  const balance = rows.reduce((s: number, r: any) => s + r.points, 0);
+  const balance = rows.reduce((s: number, r) => s + r.points, 0);
   const earned = rows
     .filter((r) => r.type === "earn" || r.type === "bonus")
-    .reduce((s: number, r: any) => s + r.points, 0);
+    .reduce((s: number, r) => s + r.points, 0);
   const redeemed = rows
     .filter((r) => r.type === "redeem")
-    .reduce((s: number, r: any) => s + Math.abs(r.points), 0);
+    .reduce((s: number, r) => s + Math.abs(r.points), 0);
 
   return (
     <div className="space-y-4">

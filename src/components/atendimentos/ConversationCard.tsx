@@ -31,7 +31,7 @@ export function ConversationCard({ conversation, isSelected, onClick }: Conversa
   const isPending = conversation.status === 'pending';
   const isHighPriority = conversation.priority === 'high';
   const preview = conversation.last_message_preview;
-  const sentiment = (conversation as any).sentiment as string | undefined;
+  const sentiment = conversation.ai_sentiment;
 
   const SentimentIcon = sentiment === 'positive' ? Smile : sentiment === 'negative' ? Frown : null;
   const sentimentColor = sentiment === 'positive' 
