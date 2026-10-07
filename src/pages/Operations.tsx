@@ -103,23 +103,13 @@ export default function Operations() {
 
   const handleRetryDeadLetter = async (itemId: string) => {
     try {
-      const item = deadLetters.find(d => d.id === itemId);
-      if (!item) return;
-
-      if (item.source_queue === "outbound_queue") {
-        await supabase.from("outbound_queue").update({
-          status: "pending", attempts: 0, next_retry_at: new Date().toISOString(), last_error: null,
-        }).eq("id", item.source_item_id || itemId);
-      } else if (item.source_queue === "instagram_outbox") {
-        await supabase.from("instagram_outbox").update({
-          status: "pending", attempt_count: 0, send_after: new Date().toISOString(), error_code: null, error_message: null,
-        }).eq("id", item.source_item_id || itemId);
+      // a função confere permissão e só marca "reprocessado" se o item voltou para a fila
+      const { data, error } = await supabase.rpc("retry_dead_letter", { p_id: itemId });
+      if (error) throw error;
+      if (!data) {
+        toast.error("Não foi possível reenfileirar: item de origem não encontrado");
+        return;
       }
-
-      await supabase.from("dead_letter_queue").update({
-        status: "retried", retried_at: new Date().toISOString(),
-      }).eq("id", itemId);
-
       toast.success("Item reenfileirado com sucesso");
       fetchAll();
     } catch {

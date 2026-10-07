@@ -11659,6 +11659,7 @@ export type Database = {
         Args: { p_older_than?: string }
         Returns: number
       }
+      retry_dead_letter: { Args: { p_id: string }; Returns: boolean }
       rollup_instagram_metrics: { Args: { p_date?: string }; Returns: Json }
       schedule_bulk_campaigns: { Args: never; Returns: Json }
       schedule_email_campaigns: { Args: never; Returns: Json }

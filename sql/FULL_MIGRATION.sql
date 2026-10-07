@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict sTjlqIhWnSR7GVMzdnp4GocEUDk8IRbRZJbVwlzsD9uVOi9UrgabvpMW1LPf0MU
+\restrict uXT8VSMOP06tarKbsuaaVZC7JU52jl0Pqwru95f4WV8PZwqC2BgN8RoZLrtmnd1
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -3705,6 +3705,50 @@ BEGIN
    WHERE status = 'sending' AND claimed_at < now() - p_older_than;
   GET DIAGNOSTICS v_requeued = ROW_COUNT;
   RETURN v_requeued;
+END;
+$$;
+
+
+--
+-- Name: retry_dead_letter(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.retry_dead_letter(p_id uuid) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  d public.dead_letter_queue%ROWTYPE;
+  v_rows integer;
+BEGIN
+  SELECT * INTO d FROM public.dead_letter_queue WHERE id = p_id;
+  IF NOT FOUND THEN
+    RETURN false;
+  END IF;
+
+  IF NOT public.is_tenant_admin(auth.uid(), d.tenant_id) THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
+  END IF;
+
+  IF d.source_queue = 'outbound_queue' THEN
+    UPDATE public.outbound_queue
+       SET status = 'pending', attempts = 0, next_retry_at = now(), last_error = NULL
+     WHERE id = d.source_item_id AND tenant_id = d.tenant_id;
+  ELSIF d.source_queue = 'instagram_outbox' THEN
+    UPDATE public.instagram_outbox
+       SET status = 'pending', attempt_count = 0, send_after = now(), error_code = NULL, error_message = NULL
+     WHERE id = d.source_item_id AND tenant_id = d.tenant_id;
+  ELSE
+    RETURN false;
+  END IF;
+
+  GET DIAGNOSTICS v_rows = ROW_COUNT;
+  IF v_rows = 0 THEN
+    RETURN false;
+  END IF;
+
+  UPDATE public.dead_letter_queue SET status = 'retried', retried_at = now() WHERE id = p_id;
+  RETURN true;
 END;
 $$;
 
@@ -19085,5 +19129,5 @@ ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict sTjlqIhWnSR7GVMzdnp4GocEUDk8IRbRZJbVwlzsD9uVOi9UrgabvpMW1LPf0MU
+\unrestrict uXT8VSMOP06tarKbsuaaVZC7JU52jl0Pqwru95f4WV8PZwqC2BgN8RoZLrtmnd1
 
