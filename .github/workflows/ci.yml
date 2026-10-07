@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Mesmo Node e mesmo gerenciador do Dockerfile (node:20 + npm ci)
       - uses: actions/setup-node@v4
@@ -47,7 +47,7 @@ jobs:
     needs: quality
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: denoland/setup-deno@v2
         with:
@@ -62,7 +62,7 @@ jobs:
     needs: quality
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: denoland/setup-deno@v2
         with:
@@ -84,7 +84,7 @@ jobs:
     needs: quality
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: denoland/setup-deno@v2
         with:
@@ -99,7 +99,7 @@ jobs:
     needs: quality
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: denoland/setup-deno@v2
         with:
@@ -119,7 +119,7 @@ jobs:
     # não há secrets do GitHub aqui. O happy-path tenta criar um usuário de teste e, com o cadastro
     # bloqueado (trigger block_new_signups), pula sozinho sem criar nada.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: denoland/setup-deno@v2
         with:
