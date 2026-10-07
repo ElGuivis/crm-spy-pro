@@ -1,5 +1,5 @@
 import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildAvailableProductsInfo, extractSearchTerms, formatCatalogBlock } from "../_shared/ai-chat-catalog.ts";
+import { buildAvailableProductsInfo, extractSearchTerms, formatCatalogBlock, lastContactQuestion } from "../_shared/ai-chat-catalog.ts";
 
 Deno.test("termos: tira acento, stopwords e palavras curtas", () => {
   assertEquals(extractSearchTerms("Oi, quanto custa a camiseta plus size?"), ["camiseta", "plus", "size"]);
@@ -10,6 +10,16 @@ Deno.test("termos: tira acento, stopwords e palavras curtas", () => {
 
 Deno.test("termos: limita a 4 e remove repetidos", () => {
   assertEquals(extractSearchTerms("camiseta camiseta verde preta azul rosa amarela").length, 4);
+});
+
+Deno.test("ultima pergunta do contato pela data, ignorando o bot", () => {
+  const h = [
+    { sender_type: "contact", content: "primeira", created_at: "2026-01-01T10:00:00Z" },
+    { sender_type: "contact", content: "ultima", created_at: "2026-01-01T10:05:00Z" },
+    { sender_type: "bot", content: "resposta", created_at: "2026-01-01T10:06:00Z" },
+  ];
+  assertEquals(lastContactQuestion(h), "ultima");
+  assertEquals(lastContactQuestion([]), "");
 });
 
 Deno.test("bloco: sem resultado em busca manda nao citar produto", () => {
@@ -23,53 +33,47 @@ Deno.test("bloco: com resultado manda citar so os listados", () => {
   assertStringIncludes(b, "SOMENTE estes");
 });
 
-function fakeSupabase(rows: unknown[] | unknown[][], log: Array<[string, unknown?]>) {
-  const chain: Record<string, unknown> = {};
-  let call = 0;
-  for (const m of ["select", "eq", "gt", "ilike", "or", "order", "limit"]) {
-    chain[m] = (...a: unknown[]) => {
-      log.push([m, a[0]]);
-      if (m === "limit") {
-        const set = Array.isArray(rows[0]) ? (rows as unknown[][])[Math.min(call++, rows.length - 1)] : rows;
-        return Promise.resolve({ data: set, error: null });
-      }
-      return chain;
-    };
-  }
-  return { from: (t: string) => { log.push(["from", t]); return chain; } };
+type RpcCall = { fn: string; args: Record<string, unknown> };
+
+/** Cliente falso: rpc devolve conjuntos em fila e registra as chamadas. */
+function fakeRpc(sets: unknown[][], calls: RpcCall[]) {
+  let i = 0;
+  return {
+    rpc: (fn: string, args: Record<string, unknown>) => {
+      calls.push({ fn, args });
+      return Promise.resolve({ data: sets[Math.min(i++, sets.length - 1)], error: null });
+    },
+  };
 }
 
 const liStore = { type: "loja_integrada", tables: { products: "li_products" } } as never;
 
-Deno.test("LI: filtra tenant, ativo e estoque, e formata promocao", async () => {
-  const log: Array<[string, unknown?]> = [];
-  const db = fakeSupabase([
+Deno.test("LI: chama a funcao do tenant com os termos e formata promocao", async () => {
+  const calls: RpcCall[] = [];
+  const db = fakeRpc([[
     { name: "Camiseta X", price: 100, promotional_price: 80, stock: 3 },
     { name: "Bone Y", price: 50, promotional_price: null, stock: 1 },
-  ], log);
+  ]], calls);
   const out = await buildAvailableProductsInfo(db, liStore, "t1", "camiseta");
   assertStringIncludes(out, "- Camiseta X: R$ 80,00 (de R$ 100,00) | 3 em estoque");
   assertStringIncludes(out, "- Bone Y: R$ 50,00 | 1 em estoque");
-  const calls = log.map((l) => l.join(":"));
-  assertEquals(calls.includes("from:li_products"), true);
-  assertEquals(calls.includes("eq:tenant_id"), true);
-  assertEquals(calls.includes("eq:active"), true);
-  assertEquals(calls.includes("gt:stock"), true);
-  assertEquals(calls.includes("ilike:name"), true);
+  assertEquals(calls.length, 1);
+  assertEquals(calls[0].fn, "search_available_products");
+  assertEquals(calls[0].args, { p_tenant: "t1", p_terms: ["camiseta"], p_mode: "all", p_limit: 20 });
 });
 
 Deno.test("LI: sem resultado com todos os termos, tenta qualquer um", async () => {
-  const log: Array<[string, unknown?]> = [];
-  const db = fakeSupabase([[], [{ name: "Calca Moletom Preto", price: 139.9, promotional_price: null, stock: 1 }]], log);
+  const calls: RpcCall[] = [];
+  const db = fakeRpc([[], [{ name: "Calca Moletom Preto", price: 139.9, promotional_price: null, stock: 1 }]], calls);
   const out = await buildAvailableProductsInfo(db, liStore, "t1", "moletom preto");
   assertStringIncludes(out, "- Calca Moletom Preto: R$ 139,90 | 1 em estoque");
-  const calls = log.map((l) => l[0]);
-  assertEquals(calls.filter((c) => c === "ilike").length, 2);
-  assertEquals(calls.includes("or"), true);
+  assertEquals(calls.map((c) => c.args.p_mode), ["all", "any"]);
 });
 
-Deno.test("LI: sem termos nao filtra por nome", async () => {
-  const log: Array<[string, unknown?]> = [];
-  await buildAvailableProductsInfo(fakeSupabase([], log), liStore, "t1", "oi");
-  assertEquals(log.some((l) => l[0] === "or"), false);
+Deno.test("LI: sem termos lista os com mais estoque (limite 10) sem segunda tentativa", async () => {
+  const calls: RpcCall[] = [];
+  await buildAvailableProductsInfo(fakeRpc([[]], calls), liStore, "t1", "oi");
+  assertEquals(calls.length, 1);
+  assertEquals(calls[0].args.p_terms, []);
+  assertEquals(calls[0].args.p_limit, 10);
 });

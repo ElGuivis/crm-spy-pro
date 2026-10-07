@@ -30,7 +30,8 @@ const POLICY_LABELS: Record<string, string> = {
 export const GROUNDING_RULES = `REGRAS SOBRE A LOJA:
 - Só afirme sobre a loja, produtos, preços, prazos e políticas o que estiver neste prompt ou nos dados acima.
 - Se a informação não estiver aqui, diga que não tem certeza e ofereça chamar um atendente. Nunca invente.
-- Não ofereça produtos, marcas ou serviços que a loja não vende.`;
+- Não ofereça produtos, marcas ou serviços que a loja não vende.
+- Pedido, rastreio ou dados pessoais: nunca informe; oriente digitar *menu* e escolher "Rastrear pedido" (confirma a identidade).`;
 
 function line(label: string, value: unknown): string {
   const text = typeof value === 'string' ? value.trim() : '';

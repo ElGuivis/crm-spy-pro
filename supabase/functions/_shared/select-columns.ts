@@ -120,11 +120,7 @@ export const BLING_CUSTOMER_COLUMNS = [
 
 /** Customers — li_customers */
 export const LI_CUSTOMER_COLUMNS = [
-  'id', 'tenant_id', 'integration_id', 'nome', 'name', 'cpf', 'doc',
-  'telefone_celular', 'phone', 'email',
-  'endereco_logradouro', 'endereco_numero', 'endereco_bairro',
-  'endereco_cidade', 'endereco_estado', 'endereco_cep',
-  'data_nascimento',
+  'id', 'tenant_id', 'integration_id', 'name', 'email', 'phone', 'doc', 'address_json',
 ].join(', ');
 
 /**

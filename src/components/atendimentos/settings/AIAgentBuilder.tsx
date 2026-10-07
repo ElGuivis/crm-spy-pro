@@ -8,6 +8,7 @@ import { Brain, Plus, Trash2, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { AIAgentEditor } from "./AIAgentEditor";
 import { StoreProfileCard } from "./StoreProfileCard";
+import { KnowledgeDocsCard } from "./KnowledgeDocsCard";
 
 export function AIAgentBuilder() {
   const { aiAgents: agents, isLoading } = useAIAgents();
@@ -37,6 +38,7 @@ export function AIAgentBuilder() {
   return (
     <div className="space-y-6 max-w-5xl">
       <StoreProfileCard />
+      <KnowledgeDocsCard />
 
       <Card className="border-dashed bg-muted/30">
         <CardContent className="pt-5 pb-4">

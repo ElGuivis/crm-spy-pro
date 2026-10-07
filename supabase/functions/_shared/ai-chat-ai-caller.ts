@@ -3,6 +3,9 @@ import { getAIConfig, callAIWithFallback } from "./ai-chat-providers.ts";
 import { buildEnrichedContext, type DataAccess } from "./ai-chat-context.ts";
 import type { StoreIntegrationInfo } from "./ai-chat-store.ts";
 import { buildStoreProfileBlock, fetchStoreProfile, GROUNDING_RULES } from "./ai-chat-store-profile.ts";
+import { buildKnowledgeInfo } from "./ai-chat-knowledge.ts";
+import { AI_BUSY_MESSAGE } from "./ai-chat-retry.ts";
+import { lastContactQuestion } from "./ai-chat-catalog.ts";
 
 interface AICallerOpts {
   supabase: any;
@@ -65,10 +68,13 @@ export async function callAI(opts: AICallerOpts): Promise<Response> {
 
   const storeProfileBlock = buildStoreProfileBlock(await fetchStoreProfile(supabase, tenantId));
   log.info(`🏬 Store profile: ${storeProfileBlock ? 'loaded' : 'none'}`);
+  const knowledgeBlock = await buildKnowledgeInfo(supabase, tenantId, lastContactQuestion(messageHistory));
+  if (knowledgeBlock) log.info('📚 Knowledge docs matched');
 
   const fullSystemPrompt = `${baseSystemPrompt}
 
 ${storeProfileBlock}
+${knowledgeBlock}
 ${GROUNDING_RULES}
 
 ${extractedDataContext}
@@ -109,7 +115,10 @@ INSTRUÇÕES IMPORTANTES:
       return new Response(JSON.stringify({ success: false, error: 'NO_AI_PROVIDER', message: 'Nenhum provedor de IA configurado.' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
     log.error('❌ All AI providers failed:', aiResult.error);
-    throw new Error(`Todos os provedores de IA falharam: ${aiResult.error}`);
+    // O cliente nao fica sem resposta (ex.: limite de taxa da Groq): avisa sem gastar token.
+    await sendWhatsAppMessage(evolutionApiUrl, evolutionApiKey, integrationId, contactPhone, AI_BUSY_MESSAGE, supabase, conversationId);
+    await supabase.from('messages').insert({ conversation_id: conversationId, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: AI_BUSY_MESSAGE, status: 'sent' });
+    return new Response(JSON.stringify({ success: false, error: 'AI_PROVIDERS_FAILED', detail: String(aiResult.error).slice(0, 300) }), { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
   const botReply = aiResult.data?.choices?.[0]?.message?.content;

@@ -5,6 +5,7 @@
 
 import type { ServiceClient, ChatMessage, AICallResult, AICompletionResponse, AICredentialRecord } from "./supabase-types.ts";
 import { createLogger } from "./correlation.ts";
+import { isRateLimited, retryDelayMs } from "./ai-chat-retry.ts";
 const log = createLogger("ai-chat-providers", "shared");
 
 
@@ -249,7 +250,7 @@ export async function callAIWithFallback(
     const startTime = Date.now();
 
     try {
-      const response = await fetch(config.url, {
+      const post = () => fetch(config.url, {
         method: 'POST',
         headers: config.headers,
         body: JSON.stringify({
@@ -259,6 +260,21 @@ export async function callAIWithFallback(
           temperature,
         }),
       });
+
+      let response = await post();
+
+      // Limite de taxa (ex.: Groq gratis, 8.000 tokens/min): espera o tempo informado e tenta uma vez de novo.
+      if (!response.ok && (response.status === 429 || response.status === 400)) {
+        const body = await response.clone().text();
+        if (isRateLimited(response.status, body)) {
+          const wait = retryDelayMs(response.headers.get('retry-after'), body);
+          if (wait !== null) {
+            log.info(`⏳ ${config.provider} rate limited; waiting ${wait}ms before retry`);
+            await new Promise((resolve) => setTimeout(resolve, wait));
+            response = await post();
+          }
+        }
+      }
 
       const responseTimeMs = Date.now() - startTime;
 

@@ -31,6 +31,13 @@ export function extractSearchTerms(text: string, max = 4): string[] {
   return [...seen];
 }
 
+/** Ultima mensagem enviada pelo cliente (contato), pela data. */
+export function lastContactQuestion(history: Array<{ sender_type: string; content: string; created_at: string }>): string {
+  return history
+    .filter((m) => m.sender_type === 'contact')
+    .reduce((latest, m) => (m.created_at > latest.created_at ? m : latest), { content: '', created_at: '' }).content;
+}
+
 const money = (v: unknown) => `R$ ${Number(v ?? 0).toFixed(2).replace('.', ',')}`;
 
 interface LiRow { name: string; price: number | null; promotional_price: number | null; stock: number | null }
@@ -59,6 +66,8 @@ export async function buildAvailableProductsInfo(
   const columns = isLI ? 'name, price, promotional_price, stock' : 'nome, preco, estoque_atual';
 
   const run = async (mode: 'all' | 'any') => {
+    // LI: funcao SQL que compara sem acento ("bone" acha "Boné"); ilike nao casa acento.
+    if (isLI) return await supabase.rpc('search_available_products', { p_tenant: tenantId, p_terms: terms, p_mode: mode, p_limit: terms.length ? 20 : 10 });
     let query = supabase.from(table).select(columns).eq('tenant_id', tenantId);
     query = isLI ? query.eq('active', true).gt('stock', 0) : query.eq('situacao', 'Ativo').gt('estoque_atual', 0);
     if (terms.length && mode === 'all') for (const t of terms) query = query.ilike(nameCol, `%${t}%`);

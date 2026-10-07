@@ -10767,6 +10767,53 @@ export type Database = {
           },
         ]
       }
+      tenant_knowledge_docs: {
+        Row: {
+          category: string | null
+          content: string
+          created_at: string
+          fts: unknown
+          id: string
+          is_active: boolean
+          tenant_id: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          category?: string | null
+          content: string
+          created_at?: string
+          fts?: unknown
+          id?: string
+          is_active?: boolean
+          tenant_id: string
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          category?: string | null
+          content?: string
+          created_at?: string
+          fts?: unknown
+          id?: string
+          is_active?: boolean
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_knowledge_docs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_tokens: {
         Row: {
           balance: number
@@ -11627,6 +11674,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      immutable_unaccent: { Args: { "": string }; Returns: string }
       increment_campaign_unsubscribed: {
         Args: { _campaign_id: string; _tenant_id: string }
         Returns: undefined
@@ -11723,6 +11771,28 @@ export type Database = {
       rollup_instagram_metrics: { Args: { p_date?: string }; Returns: Json }
       schedule_bulk_campaigns: { Args: never; Returns: Json }
       schedule_email_campaigns: { Args: never; Returns: Json }
+      search_available_products: {
+        Args: {
+          p_limit?: number
+          p_mode?: string
+          p_tenant: string
+          p_terms: string[]
+        }
+        Returns: {
+          name: string
+          price: number
+          promotional_price: number
+          stock: number
+        }[]
+      }
+      search_knowledge_docs: {
+        Args: { p_limit?: number; p_tenant: string; p_terms: string[] }
+        Returns: {
+          category: string
+          content: string
+          title: string
+        }[]
+      }
       set_active_tenant: {
         Args: { _tenant_id: string; _user_id: string }
         Returns: boolean

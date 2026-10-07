@@ -9,7 +9,8 @@ import { extractFromMessages } from "./ai-chat-smart-search.ts";
 import { createLogger } from "./correlation.ts";
 import { getStoreColumns } from "./select-columns.ts";
 import { buildCashbackInfo, buildCouponsInfo } from "./ai-chat-context-extras.ts";
-import { buildAvailableProductsInfo } from "./ai-chat-catalog.ts";
+import { customerOwnsPhone, formatCustomerMinimal } from "./ai-chat-privacy.ts";
+import { buildAvailableProductsInfo, lastContactQuestion } from "./ai-chat-catalog.ts";
 
 const log = createLogger("ai-chat-context", "shared");
 
@@ -107,6 +108,12 @@ export interface EnrichedContext {
   mentionedOrderNumber: string | null;
 }
 
+const ORDER_VIA_MENU_NOTE = `
+=== CONSULTA DE PEDIDO ===
+O cliente falou de pedido. NÃO informe dados de pedido nem diga se ele existe.
+Oriente: digite *menu* e escolha "Rastrear pedido"; lá confirmamos a identidade e mostramos o status e o rastreio.
+`;
+
 /**
  * Build all enriched context sections for the AI system prompt.
  */
@@ -124,9 +131,9 @@ export async function buildEnrichedContext(params: ContextBuildParams): Promise<
   let matchedCustomer: CustomerRow | null = null;
 
   if (dataAccess.customer_details && storeInfo) {
-    matchedCustomer = await findCustomer(supabase, storeInfo, tenantId, contactLiCustomerId, mentionedCpf, mentionedName);
+    matchedCustomer = await findCustomer(supabase, storeInfo, tenantId, contactLiCustomerId, mentionedCpf, mentionedName, contactPhone);
     if (matchedCustomer) {
-      customerInfo = formatCustomerInfo(matchedCustomer, storeInfo);
+      customerInfo = formatCustomerMinimal(matchedCustomer);
     }
   }
 
@@ -134,9 +141,12 @@ export async function buildEnrichedContext(params: ContextBuildParams): Promise<
   let ordersInfo = '';
   let specificOrderInfo = '';
 
-  if (dataAccess.orders && storeInfo) {
+  if (dataAccess.orders && storeInfo && storeInfo.type === 'loja_integrada') {
+    // Pedidos da Loja Integrada: o menu "Rastrear pedido" (bot-engine) consulta e confirma a identidade por CPF.
+    if (mentionedOrderNumber) specificOrderInfo = ORDER_VIA_MENU_NOTE;
+  } else if (dataAccess.orders && storeInfo) {
     if (mentionedOrderNumber) {
-      specificOrderInfo = await buildSpecificOrderInfo(supabase, storeInfo, tenantId, mentionedOrderNumber, dataAccess);
+      specificOrderInfo = await buildSpecificOrderInfo(supabase, storeInfo, tenantId, mentionedOrderNumber, dataAccess, contactPhone);
     }
     if (matchedCustomer && !specificOrderInfo) {
       ordersInfo = await buildCustomerOrdersInfo(supabase, storeInfo, tenantId, matchedCustomer, dataAccess);
@@ -149,10 +159,7 @@ export async function buildEnrichedContext(params: ContextBuildParams): Promise<
   // ========== PRODUCTS ==========
   let productsInfo = '';
   if ((dataAccess.products_featured || dataAccess.products || dataAccess.products_catalog) && storeInfo) {
-    const lastQuestion = messageHistory
-      .filter((m) => m.sender_type === 'contact')
-      .reduce((latest, m) => (m.created_at > latest.created_at ? m : latest), { content: '', created_at: '' }).content;
-    productsInfo = await buildAvailableProductsInfo(supabase, storeInfo, tenantId, lastQuestion);
+    productsInfo = await buildAvailableProductsInfo(supabase, storeInfo, tenantId, lastContactQuestion(messageHistory));
   }
 
   // ========== COUPONS ==========
@@ -169,7 +176,7 @@ export async function buildEnrichedContext(params: ContextBuildParams): Promise<
   const extractedDataContext = (mentionedOrderNumber || mentionedCpf || mentionedName) ? `
 === DADOS IDENTIFICADOS NAS MENSAGENS DO CLIENTE ===
 ${mentionedOrderNumber ? `- Número do pedido mencionado: #${mentionedOrderNumber}` : ''}
-${mentionedCpf ? `- CPF mencionado: ${mentionedCpf}` : ''}
+${mentionedCpf ? '- O cliente informou um CPF (por privacidade não é exibido; não o repita)' : ''}
 ${mentionedName ? `- Nome mencionado: ${mentionedName}` : ''}
 
 ⚠️ IMPORTANTE: O cliente pode enviar informações em mensagens separadas (ex: nome em uma mensagem, CPF em outra).
@@ -197,19 +204,21 @@ async function findCustomer(
   tenantId: string,
   contactLiCustomerId: string | null | undefined,
   mentionedCpf: string | null,
-  mentionedName: string | null
+  mentionedName: string | null,
+  contactPhone: string
 ): Promise<CustomerRow | null> {
-  // Try linked customer first
+  // Cliente ligado a este contato (o proprio dono do WhatsApp): sempre valido
   if (contactLiCustomerId && storeInfo.type === 'loja_integrada') {
     const { data: customer } = await supabase
       .from(storeInfo.tables.customers)
       .select(getStoreColumns(storeInfo.tables.customers))
       .eq('id', contactLiCustomerId)
+      .eq('tenant_id', tenantId)
       .single();
     if (customer) return customer;
   }
 
-  // Try CPF match
+  // Cadastro achado por CPF/nome digitado: so vale se o telefone do cadastro for o deste contato
   if (mentionedCpf) {
     const cpfField = storeInfo.type === 'bling' ? 'cpf_cnpj' : 'cpf';
     const { data } = await supabase
@@ -218,10 +227,9 @@ async function findCustomer(
       .eq('tenant_id', tenantId)
       .or(`${cpfField}.eq.${mentionedCpf}`)
       .maybeSingle();
-    if (data) return data;
+    if (data && customerOwnsPhone(data, contactPhone)) return data;
   }
 
-  // Try name match
   if (mentionedName) {
     const { data } = await supabase
       .from(storeInfo.tables.customers)
@@ -230,37 +238,10 @@ async function findCustomer(
       .ilike('nome', `%${mentionedName}%`)
       .limit(1)
       .maybeSingle();
-    if (data) return data;
+    if (data && customerOwnsPhone(data, contactPhone)) return data;
   }
 
   return null;
-}
-
-function formatCustomerInfo(customer: CustomerRow, storeInfo: StoreIntegrationInfo): string {
-  let address = 'Não informado';
-  if (storeInfo.type === 'bling' && customer.endereco) {
-    const end = customer.endereco;
-    address = `${end.endereco || ''}, ${end.numero || 'S/N'} - ${end.bairro || ''}, ${end.municipio || ''}/${end.uf || ''} - CEP ${end.cep || ''}`;
-  } else if (customer.endereco_logradouro) {
-    address = `${customer.endereco_logradouro}, ${customer.endereco_numero || 'S/N'}${customer.endereco_complemento ? ` - ${customer.endereco_complemento}` : ''} - ${customer.endereco_bairro}, ${customer.endereco_cidade}/${customer.endereco_estado} - CEP ${customer.endereco_cep}`;
-  }
-
-  const phone = storeInfo.type === 'bling'
-    ? (customer.celular || customer.telefone || 'Não informado')
-    : (customer.telefone_celular || customer.telefone_principal || 'Não informado');
-
-  const cpfCnpj = storeInfo.type === 'bling'
-    ? (customer.cpf_cnpj || 'Não informado')
-    : (customer.cpf || customer.cnpj || 'Não informado');
-
-  return `
-=== DADOS DO CLIENTE IDENTIFICADO ===
-- Nome: ${customer.nome || 'Não informado'}
-- Email: ${customer.email || 'Não informado'}
-- Telefone: ${phone}
-- CPF/CNPJ: ${cpfCnpj}
-- Endereço: ${address}
-`;
 }
 
 async function buildSpecificOrderInfo(
@@ -268,7 +249,8 @@ async function buildSpecificOrderInfo(
   storeInfo: StoreIntegrationInfo,
   tenantId: string,
   orderNumber: string,
-  dataAccess: DataAccess
+  dataAccess: DataAccess,
+  contactPhone: string
 ): Promise<string> {
   const { data: specificOrder, error } = await supabase
     .from(storeInfo.tables.orders)
@@ -279,6 +261,15 @@ async function buildSpecificOrderInfo(
     .maybeSingle();
 
   if (error) log.error('❌ Specific order search error:', error);
+
+  // Pedido so e detalhado ao dono do telefone; senao o cliente confirma identidade pelo menu (CPF)
+  if (specificOrder && !customerOwnsPhone({ telefone: specificOrder.cliente_telefone }, contactPhone)) {
+    return `
+=== PEDIDO NÃO VINCULADO A ESTE NÚMERO ===
+O cliente citou o pedido #${orderNumber}. NÃO revele nenhum dado desse pedido (nem se existe).
+Diga que, para consultar pedido com segurança, ele deve voltar ao menu (digitar *menu*) e escolher "Rastrear pedido", onde confirmamos a identidade.
+`;
+  }
 
   if (specificOrder) {
     let itemsList = '  (Detalhes de itens não habilitados)';
@@ -304,9 +295,9 @@ async function buildSpecificOrderInfo(
     let deliveryAddress = 'Não informado';
     if (storeInfo.type === 'bling' && specificOrder.endereco_entrega) {
       const end = specificOrder.endereco_entrega;
-      deliveryAddress = `${end.endereco || ''}, ${end.numero || ''} - ${end.municipio || ''}/${end.uf || ''}`;
+      deliveryAddress = `${end.municipio || ''}/${end.uf || ''}`;
     } else {
-      deliveryAddress = `${specificOrder.endereco_entrega_logradouro || ''}, ${specificOrder.endereco_entrega_numero || ''} - ${specificOrder.endereco_entrega_cidade || 'Não informado'}/${specificOrder.endereco_entrega_estado || ''}`;
+      deliveryAddress = `${specificOrder.endereco_entrega_cidade || 'Não informado'}/${specificOrder.endereco_entrega_estado || ''}`;
     }
 
     return `
@@ -320,7 +311,7 @@ Use estas informações para responder:
   Valor Total: R$ ${specificOrder.valor_total?.toFixed(2) || '0,00'}
   Pagamento: ${specificOrder.forma_pagamento || 'Não informado'}
   Frete: R$ ${specificOrder.valor_frete?.toFixed(2) || '0,00'} (${specificOrder.forma_envio || 'Não informado'})
-  Endereço de Entrega: ${deliveryAddress}
+  Entrega para (cidade/UF): ${deliveryAddress}
   ${trackingInfo}
 ${dataAccess.order_items ? `  Itens:\n${itemsList}` : ''}
 `;

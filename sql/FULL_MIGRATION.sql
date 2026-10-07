@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict qhXRwwYsM79Derzoa7oYQfrhwQ2KaZah5hPtAr6OIMzCh50fkZ10fBrszDPBCzi
+\restrict THb9hqt9ooB8fyK3q2bWJMQWZWXG4ipwMofP5saoTgqfUcMTnGn5HeNYw6SSK91
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -2517,6 +2517,16 @@ $$;
 
 
 --
+-- Name: immutable_unaccent(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.immutable_unaccent(text) RETURNS text
+    LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+    SET search_path TO 'extensions', 'public'
+    AS $_$ SELECT extensions.unaccent('extensions.unaccent'::regdictionary, $1) $_$;
+
+
+--
 -- Name: increment_campaign_unsubscribed(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -4013,6 +4023,50 @@ BEGIN
   RETURN jsonb_build_object('triggered', v_triggered);
 END;
 $$;
+
+
+--
+-- Name: search_available_products(uuid, text[], text, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.search_available_products(p_tenant uuid, p_terms text[], p_mode text DEFAULT 'all'::text, p_limit integer DEFAULT 20) RETURNS TABLE(name text, price numeric, promotional_price numeric, stock integer)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  SELECT p.name, p.price, p.promotional_price, p.stock
+  FROM public.li_products p
+  WHERE p.tenant_id = p_tenant AND p.active AND p.stock > 0
+    AND (
+      coalesce(array_length(p_terms, 1), 0) = 0
+      OR (p_mode = 'any' AND public.immutable_unaccent(lower(p.name)) LIKE ANY (
+            ARRAY(SELECT '%' || public.immutable_unaccent(lower(t)) || '%' FROM unnest(p_terms) t)))
+      OR (p_mode <> 'any' AND public.immutable_unaccent(lower(p.name)) LIKE ALL (
+            ARRAY(SELECT '%' || public.immutable_unaccent(lower(t)) || '%' FROM unnest(p_terms) t)))
+    )
+  ORDER BY p.stock DESC, p.name
+  LIMIT greatest(1, least(coalesce(p_limit, 20), 50));
+$$;
+
+
+--
+-- Name: search_knowledge_docs(uuid, text[], integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.search_knowledge_docs(p_tenant uuid, p_terms text[], p_limit integer DEFAULT 3) RETURNS TABLE(title text, category text, content text)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $_$
+  WITH q AS (
+    SELECT to_tsquery('portuguese', string_agg(public.immutable_unaccent(lower(t)), ' | ')) AS tsq
+    FROM unnest(p_terms) t
+    WHERE t ~ '^[[:alnum:]]+$'
+  )
+  SELECT d.title, d.category, d.content
+  FROM public.tenant_knowledge_docs d, q
+  WHERE q.tsq IS NOT NULL AND d.tenant_id = p_tenant AND d.is_active AND d.fts @@ q.tsq
+  ORDER BY ts_rank(d.fts, q.tsq) DESC
+  LIMIT greatest(1, least(coalesce(p_limit, 3), 10));
+$_$;
 
 
 --
@@ -8011,6 +8065,25 @@ CREATE TABLE public.tenant_business_profiles (
 
 
 --
+-- Name: tenant_knowledge_docs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tenant_knowledge_docs (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    title text NOT NULL,
+    category text,
+    content text NOT NULL,
+    is_active boolean DEFAULT true NOT NULL,
+    updated_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    fts tsvector GENERATED ALWAYS AS (((setweight(to_tsvector('portuguese'::regconfig, public.immutable_unaccent(COALESCE(title, ''::text))), 'A'::"char") || setweight(to_tsvector('portuguese'::regconfig, public.immutable_unaccent(COALESCE(category, ''::text))), 'B'::"char")) || setweight(to_tsvector('portuguese'::regconfig, public.immutable_unaccent(COALESCE(content, ''::text))), 'C'::"char"))) STORED,
+    CONSTRAINT tenant_knowledge_docs_size_check CHECK ((((length(btrim(title)) >= 1) AND (length(btrim(title)) <= 200)) AND ((length(btrim(content)) >= 1) AND (length(btrim(content)) <= 6000)) AND (COALESCE(length(category), 0) <= 100)))
+);
+
+
+--
 -- Name: tenant_tokens; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -9953,6 +10026,14 @@ ALTER TABLE ONLY public.tenant_api_keys
 
 ALTER TABLE ONLY public.tenant_business_profiles
     ADD CONSTRAINT tenant_business_profiles_pkey PRIMARY KEY (tenant_id);
+
+
+--
+-- Name: tenant_knowledge_docs tenant_knowledge_docs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tenant_knowledge_docs
+    ADD CONSTRAINT tenant_knowledge_docs_pkey PRIMARY KEY (id);
 
 
 --
@@ -12214,6 +12295,20 @@ CREATE INDEX idx_whatsapp_channels_tenant ON public.whatsapp_channels USING btre
 
 
 --
+-- Name: tenant_knowledge_docs_fts_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX tenant_knowledge_docs_fts_idx ON public.tenant_knowledge_docs USING gin (fts);
+
+
+--
+-- Name: tenant_knowledge_docs_tenant_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX tenant_knowledge_docs_tenant_idx ON public.tenant_knowledge_docs USING btree (tenant_id) WHERE is_active;
+
+
+--
 -- Name: uniq_chatbot_flow_sessions_active; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -12652,6 +12747,13 @@ CREATE TRIGGER update_tenant_ai_credentials_updated_at BEFORE UPDATE ON public.t
 --
 
 CREATE TRIGGER update_tenant_business_profiles_updated_at BEFORE UPDATE ON public.tenant_business_profiles FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
+-- Name: tenant_knowledge_docs update_tenant_knowledge_docs_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER update_tenant_knowledge_docs_updated_at BEFORE UPDATE ON public.tenant_knowledge_docs FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
@@ -15220,6 +15322,14 @@ ALTER TABLE ONLY public.tenant_business_profiles
 
 
 --
+-- Name: tenant_knowledge_docs tenant_knowledge_docs_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tenant_knowledge_docs
+    ADD CONSTRAINT tenant_knowledge_docs_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
 -- Name: tenant_tokens tenant_tokens_plan_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -15530,6 +15640,13 @@ CREATE POLICY "Tenant admins can manage integrations" ON public.integrations TO 
 --
 
 CREATE POLICY "Tenant admins can manage kanban_columns" ON public.kanban_columns TO authenticated USING (((tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id)));
+
+
+--
+-- Name: tenant_knowledge_docs Tenant admins can manage knowledge docs; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant admins can manage knowledge docs" ON public.tenant_knowledge_docs TO authenticated USING (((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id))) WITH CHECK (((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id)));
 
 
 --
@@ -17212,6 +17329,13 @@ CREATE POLICY "Users can view their tenant's business hours" ON public.business_
 --
 
 CREATE POLICY "Users can view their tenant's business profile" ON public.tenant_business_profiles FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: tenant_knowledge_docs Users can view their tenant's knowledge docs; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can view their tenant's knowledge docs" ON public.tenant_knowledge_docs FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
 
 
 --
@@ -18910,6 +19034,12 @@ CREATE POLICY tenant_isolation_update ON public.chatbot_flow_sessions FOR UPDATE
 
 
 --
+-- Name: tenant_knowledge_docs; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.tenant_knowledge_docs ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: customer_rfm_snapshots tenant_rfm_snapshots_select; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -19219,5 +19349,5 @@ ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict qhXRwwYsM79Derzoa7oYQfrhwQ2KaZah5hPtAr6OIMzCh50fkZ10fBrszDPBCzi
+\unrestrict THb9hqt9ooB8fyK3q2bWJMQWZWXG4ipwMofP5saoTgqfUcMTnGn5HeNYw6SSK91
 
