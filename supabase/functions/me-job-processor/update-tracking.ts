@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { meTrackingFetch, trackingEventsFrom } from "../_shared/me-tracking-api.ts";
 import { syncStatusToLojaIntegrada } from "../_shared/li-status-sync.ts";
 import { createLogger } from "../_shared/correlation.ts";
 import { ME_API_URL, ME_USER_AGENT, mapStatus, reconcileLojaIntegradaStatus } from "./me-helpers.ts";
@@ -41,13 +42,10 @@ export async function updateTracking(
       };
 
       if (orderData.tracking) {
-        const trackingResponse = await fetch(
-          `${ME_API_URL}/me/shipment/tracking?orders=${shipment.me_id}`,
-          { headers: { "Authorization": `Bearer ${accessToken}`, "Accept": "application/json", "User-Agent": ME_USER_AGENT } }
-        );
+        const trackingResponse = await meTrackingFetch(ME_API_URL, accessToken, [shipment.me_id]);
         if (trackingResponse.ok) {
           const trackingData = await trackingResponse.json();
-          const events = trackingData[shipment.me_id]?.events || [];
+          const events = trackingEventsFrom(trackingData[shipment.me_id]);
           if (events.length > 0) { updateData.tracking_events = events; updateData.last_tracking_at = new Date().toISOString(); }
         }
       }

@@ -71,7 +71,16 @@ export function ShipmentTabProdutos({ shipment }: Pick<ShipmentTabProdutosRastre
 }
 
 export function ShipmentTabRastreio({ shipment, copiedField, onCopy }: ShipmentTabProdutosRastreioProps) {
-  const trackingEvents = jsonArray<ShipmentTrackingEvent>(shipment.tracking_events);
+  // a API do Melhor Envio não devolve eventos de transporte: sem eventos salvos, monta a linha do tempo pelas datas das etapas
+  const storedEvents = jsonArray<ShipmentTrackingEvent>(shipment.tracking_events);
+  const trackingEvents: ShipmentTrackingEvent[] = storedEvents.length > 0 ? storedEvents : ([
+    ["Pedido criado", shipment.created_at],
+    ["Pagamento confirmado", shipment.paid_at],
+    ["Etiqueta gerada", shipment.generated_at],
+    ["Objeto postado", shipment.posted_at],
+    ["Entregue", shipment.delivered_at],
+  ] as const).flatMap(([title, date]) => (date ? [{ title, date: String(date) }] : []))
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const additionalInfo = jsonAs<ShipmentAdditionalInfo>(shipment.additional_info);
 
   return (

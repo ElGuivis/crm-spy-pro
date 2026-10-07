@@ -1,4 +1,5 @@
 import type { ServiceClient } from "./supabase-types.ts";
+import { meTrackingFetch, trackingEventsFrom } from "./me-tracking-api.ts";
 import { createLogger } from "./correlation.ts";
 import { readMelhorEnvioTokens, writeMelhorEnvioTokens } from "./credential-helpers.ts";
 import { mapStatus } from "./melhor-envio-helpers.ts";
@@ -203,16 +204,7 @@ export async function handleCronSync(opts: CronSyncOpts): Promise<Response> {
           const meIds = batch.map((s: Record<string, string>) => s.me_id).join(",");
 
           try {
-            const trackingResponse = await fetch(
-              `${ME_API_URL}/me/shipment/tracking?orders=${meIds}`,
-              {
-                headers: {
-                  "Authorization": `Bearer ${currentAccessToken}`,
-                  "Accept": "application/json",
-                  "User-Agent": "CRM SpyPro (suporte@spypro.com.br)",
-                },
-              },
-            );
+            const trackingResponse = await meTrackingFetch(ME_API_URL, currentAccessToken, batch.map((s: Record<string, string>) => s.me_id));
 
             if (trackingResponse.ok) {
               const trackingData = await trackingResponse.json();
@@ -221,7 +213,7 @@ export async function handleCronSync(opts: CronSyncOpts): Promise<Response> {
                 if (orderTracking) {
                   await supabase.from("me_shipments").update({
                     status: mapStatus(orderTracking.status),
-                    tracking_events: orderTracking.events || [],
+                    tracking_events: trackingEventsFrom(orderTracking),
                     delivered_at: orderTracking.delivered_at || null,
                     posted_at: orderTracking.posted_at || null,
                     last_sync_at: new Date().toISOString(),

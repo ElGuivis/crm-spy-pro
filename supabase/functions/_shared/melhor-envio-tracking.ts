@@ -1,4 +1,5 @@
 import type { ServiceClient } from "./supabase-types.ts";
+import { meTrackingFetch, trackingEventsFrom } from "./me-tracking-api.ts";
 import { createLogger } from "./correlation.ts";
 import { readMelhorEnvioTokens } from "./credential-helpers.ts";
 import { mapStatus } from "./melhor-envio-helpers.ts";
@@ -64,16 +65,7 @@ export async function handleSyncTracking(opts: SyncTrackingOpts): Promise<Respon
     const meIds = batch.map((s: Record<string, string>) => s.me_id).join(",");
 
     try {
-      const trackingResponse = await fetch(
-        `${ME_API_URL}/me/shipment/tracking?orders=${meIds}`,
-        {
-          headers: {
-            "Authorization": `Bearer ${meToken}`,
-            "Accept": "application/json",
-            "User-Agent": "CRM SpyPro (suporte@spypro.com.br)",
-          },
-        },
-      );
+      const trackingResponse = await meTrackingFetch(ME_API_URL, meToken, batch.map((s: Record<string, string>) => s.me_id));
 
       const contentType = trackingResponse.headers.get("content-type") || "";
 
@@ -96,7 +88,7 @@ export async function handleSyncTracking(opts: SyncTrackingOpts): Promise<Respon
 
         const newStatus = mapStatus(orderTracking.status);
         const updateData: Record<string, unknown> = {
-          tracking_events: orderTracking.events || [],
+          tracking_events: trackingEventsFrom(orderTracking),
           last_sync_at: new Date().toISOString(),
         };
 
@@ -181,16 +173,7 @@ export async function handleSyncSingle(opts: SyncSingleOpts): Promise<Response> 
 
   log.info(`[melhor-envio] Sincronizando envio individual ${shipment.me_id}`);
 
-  const trackingResponse = await fetch(
-    `${ME_API_URL}/me/shipment/tracking?orders=${shipment.me_id}`,
-    {
-      headers: {
-        "Authorization": `Bearer ${meToken}`,
-        "Accept": "application/json",
-        "User-Agent": "CRM SpyPro (suporte@spypro.com.br)",
-      },
-    },
-  );
+  const trackingResponse = await meTrackingFetch(ME_API_URL, meToken, [shipment.me_id]);
 
   const contentType = trackingResponse.headers.get("content-type");
   if (!contentType || !contentType.includes("application/json")) {
@@ -217,7 +200,7 @@ export async function handleSyncSingle(opts: SyncSingleOpts): Promise<Response> 
   if (orderTracking) {
     await supabase.from("me_shipments").update({
       status: mapStatus(orderTracking.status),
-      tracking_events: orderTracking.events || [],
+      tracking_events: trackingEventsFrom(orderTracking),
       delivered_at: orderTracking.delivered_at || null,
       posted_at: orderTracking.posted_at || null,
       last_sync_at: new Date().toISOString(),
