@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Info, DollarSign, Ruler, Layers, Package, Star, Ban } from "lucide-react";
 import { useChildProducts } from "@/hooks/useChildProducts";
+import { useFullProduct } from "@/hooks/useFullProduct";
 import { type Product, getRaw } from "./productDetailsHelpers";
 import { ProductDetailsGeneralTab } from "./ProductDetailsGeneralTab";
 import { ProductDetailsPricesTab } from "./ProductDetailsPricesTab";
@@ -17,7 +18,10 @@ interface ProductDetailsDialogProps {
   fallbackImage?: string | null;
 }
 
-const ProductDetailsDialog = ({ product, open, onOpenChange, fallbackImage }: ProductDetailsDialogProps) => {
+const ProductDetailsDialog = ({ product: summary, open, onOpenChange, fallbackImage }: ProductDetailsDialogProps) => {
+  // a lista traz só o resumo; os campos pesados (descrição, imagens...) vêm ao abrir
+  const { data: fullProduct } = useFullProduct(summary?.id, open);
+  const product = fullProduct ?? summary;
   const { data: childProducts = [] } = useChildProducts(product, open);
 
   if (!product) return null;

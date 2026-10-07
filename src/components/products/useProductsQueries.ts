@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Product } from "./products-helpers";
-import { LI_PRODUCT_SELECT } from './product-select-columns';
+import { LI_PRODUCT_LIST_SELECT, withLightRawJson } from './product-select-columns';
 
 /** Consultas dos produtos da Loja Integrada + realtime + atualização ao concluir a sincronização. */
 export function useProductsQueries(integrationId: string, syncStatusValue: string, includeInactive = false) {
@@ -59,15 +59,15 @@ export function useProductsQueries(integrationId: string, syncStatusValue: strin
       while (true) {
         let pageQuery = supabase
           .from('li_products')
-          .select(LI_PRODUCT_SELECT)
+          .select(LI_PRODUCT_LIST_SELECT)
           .eq('integration_id', integrationId);
         if (!includeInactive) pageQuery = pageQuery.eq('active', true);
         const { data, error } = await pageQuery
           .order('name', { ascending: true })
           .range(from, from + pageSize - 1)
-          .returns<Product[]>();
+          .returns<Record<string, unknown>[]>();
         if (error) throw error;
-        allRows.push(...(data ?? []));
+        allRows.push(...(data ?? []).map((row) => withLightRawJson(row) as unknown as Product));
         if (!data || data.length < pageSize) break;
         from += pageSize;
       }

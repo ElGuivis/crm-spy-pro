@@ -28,3 +28,30 @@ export const LI_PRODUCT_SELECT = [
   'image_url', 'raw_json', 'variations_json',
   'updated_at_local', 'updated_at_remote',
 ].join(', ');
+
+/**
+ * Campos do `raw_json` que a LISTA de produtos usa. O resto (descrição completa = ~70% do
+ * peso, imagens, categorias...) só é buscado quando o produto é aberto.
+ */
+export const LI_PRODUCT_LIST_RAW_KEYS = ['tipo', 'pai', 'imagem_principal', 'destaque', 'bloqueado', 'estoque_quantidade'] as const;
+
+/** li_products para a lista: colunas leves + só as chaves acima extraídas do `raw_json` (PostgREST `alias:coluna->chave`). */
+export const LI_PRODUCT_LIST_SELECT = [
+  'id', 'tenant_id', 'integration_id', 'loja_integrada_product_id',
+  'name', 'sku', 'price', 'promotional_price', 'cost_price',
+  'stock', 'stock_managed', 'active',
+  'image_url', 'variations_json',
+  'updated_at_local', 'updated_at_remote',
+  ...LI_PRODUCT_LIST_RAW_KEYS.map((k) => `raw_${k}:raw_json->${k}`),
+].join(', ');
+
+/** Remonta o `raw_json` reduzido a partir das colunas `raw_<chave>` devolvidas por LI_PRODUCT_LIST_SELECT. */
+export function withLightRawJson<T extends Record<string, unknown>>(row: T): Omit<T, `raw_${typeof LI_PRODUCT_LIST_RAW_KEYS[number]}`> & { raw_json: Record<string, unknown> } {
+  const rest: Record<string, unknown> = {};
+  const raw: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    const rawKey = LI_PRODUCT_LIST_RAW_KEYS.find((k) => key === `raw_${k}`);
+    if (rawKey) { if (value !== null && value !== undefined) raw[rawKey] = value; } else rest[key] = value;
+  }
+  return { ...rest, raw_json: raw } as never;
+}
