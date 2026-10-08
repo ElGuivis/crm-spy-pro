@@ -7,6 +7,7 @@ import { isCircuitClosed, recordSuccess, recordFailure } from "../_shared/circui
 import { sendToDeadLetter } from "../_shared/dead-letter.ts";
 import { recordMetrics, startTimer } from "../_shared/metrics.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
+import { isPermanentRecipientError } from "../_shared/outbound-errors.ts";
 
 const MAX_ATTEMPTS = 5;
 const FUNCTION_NAME = "process-outbound-queue";
@@ -36,13 +37,16 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { data: items, error: fetchError } = await supabase
-      .from('outbound_queue')
-      .select('id, to_phone_e164, payload_json, status, attempts, message_id, tenant_id, channel:whatsapp_channels(id, provider, provider_account_id, access_token)')
-      .in('status', ['pending', 'failed'])
-      .lte('next_retry_at', new Date().toISOString())
-      .order('created_at', { ascending: true })
-      .limit(20);
+    // Reivindica os itens numa instrucao so (FOR UPDATE SKIP LOCKED): ciclos sobrepostos nao enviam o mesmo item.
+    const { data: claimed, error: claimError } = await supabase.rpc('claim_outbound_queue', { p_limit: 20 });
+    const claimedIds = ((claimed ?? []) as Array<{ id: string }>).map((r) => r.id);
+    const { data: items, error: fetchError } = claimError || !claimedIds.length
+      ? { data: [], error: claimError }
+      : await supabase
+        .from('outbound_queue')
+        .select('id, to_phone_e164, payload_json, status, attempts, message_id, tenant_id, channel:whatsapp_channels(id, provider, provider_account_id, access_token)')
+        .in('id', claimedIds)
+        .order('created_at', { ascending: true });
 
     if (fetchError) {
       log.error("Error fetching queue", { error: fetchError.message });
@@ -66,8 +70,6 @@ serve(async (req) => {
 
     for (const item of items) {
       try {
-        await supabase.from('outbound_queue').update({ status: 'processing' }).eq('id', item.id);
-
         const channel = item.channel;
         if (!channel) throw new Error('Channel not found');
 
@@ -164,13 +166,16 @@ serve(async (req) => {
         log.info(`Sent queue item`, { itemId: item.id, providerMsgId });
         processed++;
       } catch (err: unknown) {
-        const errorMsg = err.message || 'Unknown error';
-        const newAttempts = (item.attempts || 0) + 1;
+        const errorMsg = (err as Error)?.message || 'Unknown error';
+        // Numero sem WhatsApp: falha definitiva ja na 1a tentativa e fora do disjuntor
+        // (antes 5 contatos assim seguidos abriam o disjuntor e travavam o envio de TODOS os clientes da loja).
+        const permanent = isPermanentRecipientError(errorMsg);
+        const newAttempts = permanent ? MAX_ATTEMPTS : (item.attempts || 0) + 1;
         const tenantId = item.tenant_id;
         const providerName = (item.channel as Record<string, unknown>)?.provider;
 
         // Record circuit breaker failure
-        if (providerName && tenantId) {
+        if (!permanent && providerName && tenantId) {
           await recordFailure({ provider: providerName, tenantId }, errorMsg);
         }
 
@@ -181,7 +186,7 @@ serve(async (req) => {
 
           if (item.message_id) {
             await supabase.from('messages').update({
-              status: 'failed', error_json: { error: errorMsg, attempts: newAttempts },
+              status: 'failed', error_json: { error: errorMsg, attempts: newAttempts, ...(permanent ? { code: 'recipient_unreachable' } : {}) },
             }).eq('id', item.message_id);
           }
 
@@ -238,9 +243,9 @@ serve(async (req) => {
       correlationId,
       status: "error",
       durationMs: elapsed(),
-      errorMessage: error.message,
+      errorMessage: error instanceof Error ? error.message : String(error),
     });
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

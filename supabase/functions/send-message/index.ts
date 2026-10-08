@@ -11,6 +11,8 @@ interface SendMessagePayload {
   sender_id?: string;
   sender_name?: string;
   direction?: string;
+  /** Id gerado pelo painel a cada clique em enviar: o mesmo id nao cria segunda mensagem. */
+  client_message_id?: string;
 }
 
 serve(async (req) => {
@@ -32,7 +34,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const payload: SendMessagePayload = await req.json();
-    const { conversation_id, content, sender_id, sender_name, direction = 'outbound' } = payload;
+    const { conversation_id, content, sender_id, sender_name, direction = 'outbound', client_message_id } = payload;
 
     log.info('📤 Send message request:', { conversation_id, content: content.substring(0, 50) + '...' });
 
@@ -64,6 +66,21 @@ serve(async (req) => {
       req,
       '*, contact:contacts(id, phone, name, metadata), integration:integrations(id, metadata, status)'
     );
+
+    // Idempotencia: mesmo clique reenviado (duplo clique, retry de rede) devolve a mensagem que ja existe.
+    const clientId = typeof client_message_id === 'string' && client_message_id.length <= 80 ? client_message_id : null;
+    const findDuplicate = async () => {
+      if (!clientId) return null;
+      const { data } = await supabase.from('messages').select('id').eq('conversation_id', conversation_id)
+        .eq('metadata->>client_message_id', clientId).maybeSingle();
+      return data?.id ?? null;
+    };
+    const already = await findDuplicate();
+    if (already) {
+      return new Response(JSON.stringify({ success: true, message_id: already, duplicate: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Token check
     const { data: hasTokens } = await supabase.rpc('has_enough_tokens', {
@@ -103,11 +120,14 @@ serve(async (req) => {
           status: 'sent',
           direction: 'internal_note',
           type: 'text',
-          metadata: { agent_name: sender_name || 'Atendente' },
+          metadata: { agent_name: sender_name || 'Atendente', ...(clientId ? { client_message_id: clientId } : {}) },
         })
         .select()
         .single();
 
+      if (msgError?.code === '23505') {
+        return new Response(JSON.stringify({ success: true, message_id: await findDuplicate(), duplicate: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
       if (msgError) throw msgError;
 
       return new Response(JSON.stringify({ success: true, message_id: message.id }), {
@@ -140,11 +160,14 @@ serve(async (req) => {
         status: 'queued',
         direction: 'outbound',
         type: 'text',
-        metadata: { agent_name: sender_name || 'Atendente' },
+        metadata: { agent_name: sender_name || 'Atendente', ...(clientId ? { client_message_id: clientId } : {}) },
       })
       .select()
       .single();
 
+    if (msgError?.code === '23505') {
+      return new Response(JSON.stringify({ success: true, message_id: await findDuplicate(), duplicate: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     if (msgError) throw msgError;
 
     // Resolver número real: se o contato ainda tem @lid no phone,
@@ -227,7 +250,8 @@ serve(async (req) => {
   } catch (error: unknown) {
     // Auth guard throws Response objects — pass them through
     if (error instanceof Response) return error;
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage = error instanceof Error ? error.message
+      : (typeof (error as { message?: unknown })?.message === 'string' ? (error as { message: string }).message : 'Unknown error');
     log.error('❌ Send message error:', error);
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,

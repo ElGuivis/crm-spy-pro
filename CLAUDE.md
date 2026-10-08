@@ -192,6 +192,10 @@ O `ai-chat` só sabe o que está no banco **do tenant da conversa**; nada de nic
 - **Qualidade**: `scripts/ai-golden-set.ts` (18 perguntas: produto, escopo, invenção, privacidade, segurança, perfil; roda contra produção, 1 token cada, limpa o que cria). Os 3 modelos acima passam 18/18 (20b 1,5 s; 120b 1,8 s; qwen 1,2 s). Rodar depois de mexer em prompt, perfil ou catálogo.
 - **Armadilhas**: o `ai-chat` lê a pergunta do histórico em `messages` (`sender_type='contact'`), não de `combined_message_content`; para testar, inserir a mensagem (prefixo ZZ) e apagar. Respostas do bot precisam de `direction:'outbound'` (o padrão da coluna é `inbound`). Estoque real da loja é baixo (174 variações com estoque, 1.849 produtos pai inativos).
 
+## Atendimento: regras anti-duplicidade (07/10/2026)
+
+- Webhook do WhatsApp: dedup por `provider_message_id` (indice unico) e corrida de contato/conversa tratada no 23505 (reaproveita o que ja existe). Fila de saida/mensagens/buffer da IA: sempre reivindicar por RPC atomica. Numero sem WhatsApp (Evolution 400 `exists:false`) e falha definitiva e NAO conta no disjuntor (`_shared/outbound-errors.ts`). Mensagem do bot/automacao SEMPRE com `direction:'outbound'`. Inatividade fecha primeiro (condicional) e so depois avisa; conversa de automacao fecha sem aviso.
+
 ## Convenções e regras de tamanho
 
 - **Limites**: pages ≤400L, components shared ≤250L, hooks ≤200L, edge `index.ts` ≤500L, `_shared/` ≤300L.
@@ -266,4 +270,5 @@ ssh -i ~/.ssh/spypro_vps root@37.148.134.55 "cd /opt/supabase && sh run.sh statu
 - `20261005000005`: identidade do cliente (`customer_key(email, telefone)`, view `customer_rfm_latest`, correção de `get_rfm_audience_li_customers`)
 - `20261006000001-003`: cupons — índice único completo, `expires_at` nulo, `recompute_coupon_usage` + `refresh_coupon_usage` por pedidos (valor total) + `get_coupon_performance` (desconto por uso) + índice de código de cupom em `li_orders`
 - `20261007000003-006`: IA por loja — `tenant_business_profiles`, `get_catalog_summary()`, `tenant_knowledge_docs`, extensão `unaccent` + `immutable_unaccent`, RPCs `search_available_products` e `search_knowledge_docs` (só service_role)
+- `20261007000009-010`: atendimento sem duplicidade — indice unico de conversa aberta por (contato, origem); `claim_outbound_queue`/`claim_message_queue`/`claim_ai_buffer` (reivindicacao atomica com SKIP LOCKED; processador NUNCA le e depois marca); `add_message_to_buffer` com uuid; indice de `client_message_id` em messages (send-message idempotente). Teste: `scripts/audit-atendimento.ts` (19 cenarios, contato falso DDD 00, roda na VPS)
 - `20261004000015`: grupos de clientes da loja (`li_group_jobs`, `li_group_job_items`, `get_rfm_audience_li_customers`, cron `li-group-jobs`)

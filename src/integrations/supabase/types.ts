@@ -9895,6 +9895,7 @@ export type Database = {
           created_at: string
           id: string
           last_error: string | null
+          locked_at: string | null
           message_id: string | null
           next_retry_at: string
           payload_json: Json
@@ -9908,6 +9909,7 @@ export type Database = {
           created_at?: string
           id?: string
           last_error?: string | null
+          locked_at?: string | null
           message_id?: string | null
           next_retry_at?: string
           payload_json: Json
@@ -9921,6 +9923,7 @@ export type Database = {
           created_at?: string
           id?: string
           last_error?: string | null
+          locked_at?: string | null
           message_id?: string | null
           next_retry_at?: string
           payload_json?: Json
@@ -11259,6 +11262,13 @@ export type Database = {
           revenue_total: number
         }[]
       }
+      claim_ai_buffer: {
+        Args: { p_conversation?: string }
+        Returns: {
+          conversation_id: string
+          message_ids: string[]
+        }[]
+      }
       claim_domain_events: {
         Args: { p_limit?: number }
         Returns: {
@@ -11304,6 +11314,18 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      claim_message_queue: {
+        Args: { p_limit?: number }
+        Returns: {
+          id: string
+        }[]
+      }
+      claim_outbound_queue: {
+        Args: { p_limit?: number }
+        Returns: {
+          id: string
+        }[]
       }
       cleanup_customer_touches: { Args: never; Returns: number }
       cleanup_domain_events: { Args: never; Returns: number }

@@ -47,13 +47,16 @@ Deno.serve(async (req) => {
     const now = new Date();
 
     // Fetch messages ready to process
-    const { data: messages, error: fetchError } = await supabase
-      .from('message_queue')
-      .select('id, tenant_id, channel, recipient, message_content, subject, html_content, whatsapp_integration_id, email_integration_id, status, retry_count, max_retries, next_retry_at, last_error, reference_type, reference_id, metadata')
-      .in('status', ['pending', 'processing'])
-      .lte('next_retry_at', now.toISOString())
-      .order('next_retry_at', { ascending: true })
-      .limit(50);
+    // Reivindica os itens numa instrucao so (FOR UPDATE SKIP LOCKED): ciclos sobrepostos nao enviam o mesmo item.
+    const { data: claimed, error: claimError } = await supabase.rpc('claim_message_queue', { p_limit: 50 });
+    const claimedIds = ((claimed ?? []) as Array<{ id: string }>).map((r) => r.id);
+    const { data: messages, error: fetchError } = claimError || !claimedIds.length
+      ? { data: [], error: claimError }
+      : await supabase
+        .from('message_queue')
+        .select('id, tenant_id, channel, recipient, message_content, subject, html_content, whatsapp_integration_id, email_integration_id, status, retry_count, max_retries, next_retry_at, last_error, reference_type, reference_id, metadata')
+        .in('id', claimedIds)
+        .order('next_retry_at', { ascending: true });
 
     if (fetchError) throw new Error(`Failed to fetch messages: ${fetchError.message}`);
 

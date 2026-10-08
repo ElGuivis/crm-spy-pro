@@ -20,6 +20,7 @@ interface Conversation {
   tenant_id: string;
   last_message_at: string;
   current_ai_agent_id: string | null;
+  source: string | null;
   contacts: { phone: string; name: string | null };
 }
 
@@ -59,6 +60,7 @@ serve(async (req) => {
         tenant_id,
         last_message_at,
         current_ai_agent_id,
+        source,
         contacts!inner(phone, name)
       `)
       .in('status', ['bot', 'open', 'pending'])
@@ -196,6 +198,43 @@ serve(async (req) => {
         const defaultMessage = 'Por inatividade estamos finalizando a conversa. Fique à vontade para mandar uma nova mensagem quando precisar!';
         const messageToSend = inactivityMessage || defaultMessage;
 
+        // Fecha PRIMEIRO, de forma condicional: se outra rodada ja fechou (ou o cliente voltou a escrever),
+        // nao envia o aviso de novo. Antes enviava e so depois fechava, e uma falha no fechamento repetia o aviso a cada 5 min.
+        const defaultAgentId = tenantConfigsMap.get(tenantId)?.defaultAgentId || null;
+        const { data: closedRow, error: updateError } = await supabase
+          .from('conversations')
+          .update({
+            status: 'closed',
+            closed_at: new Date().toISOString(),
+            assigned_to: null,
+            ai_enabled: true,
+            kanban_column_id: targetColumnId,
+            current_ai_agent_id: defaultAgentId,
+            bot_state_json: null,
+            buffered_message_ids: [],
+            pending_ai_response_at: null,
+          })
+          .eq('id', conversation.id)
+          .is('closed_at', null)
+          .lt('last_message_at', cutoffTime.toISOString())
+          .select('id')
+          .maybeSingle();
+
+        if (updateError) {
+          log.error('Error closing conversation', { conversationId: conversation.id, error: updateError.message });
+          totalFailed++;
+          continue;
+        }
+        if (!closedRow) {
+          log.info('Conversation changed since the check, skipping', { conversationId: conversation.id });
+          continue;
+        }
+        log.info('Conversation closed due to inactivity', { conversationId: conversation.id });
+        totalProcessed++;
+
+        // Conversa criada por automacao (cashback, aniversario...) nunca foi um atendimento: fecha sem mandar "encerrando o atendimento".
+        if (conversation.source === 'automation') continue;
+
         // Get integration details for sending message
         if (conversation.integration_id && evolutionApiUrl && evolutionApiKey) {
           const { data: integration } = await supabase
@@ -274,33 +313,6 @@ serve(async (req) => {
           }
         }
 
-        // Get tenant's default AI agent for resetting
-        const tenantConfig = tenantConfigsMap.get(tenantId);
-        const defaultAgentId = tenantConfig?.defaultAgentId || null;
-
-        // Close the conversation - move to target column
-        const { error: updateError } = await supabase
-          .from('conversations')
-          .update({
-            status: 'closed',
-            closed_at: new Date().toISOString(),
-            assigned_to: null,
-            ai_enabled: true,
-            kanban_column_id: targetColumnId,
-            current_ai_agent_id: defaultAgentId,
-            bot_state_json: null,
-            buffered_message_ids: [],
-            pending_ai_response_at: null,
-          })
-          .eq('id', conversation.id);
-
-        if (updateError) {
-          log.error('Error closing conversation', { conversationId: conversation.id, error: updateError.message });
-          totalFailed++;
-        } else {
-          log.info('Conversation closed due to inactivity', { conversationId: conversation.id });
-          totalProcessed++;
-        }
       } catch (convError) {
         log.error('Error processing conversation', { conversationId: conv.id, error: convError instanceof Error ? convError.message : String(convError) });
         totalFailed++;

@@ -176,10 +176,11 @@ export function useMessages(conversationId: string | null) {
         .from('messages')
         .select('id, conversation_id, content, content_type, sender_type, direction, type, status, media_url, provider_message_id, error_json, created_at')
         .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: false })
         .limit(200);
       if (error) throw error;
-      return (data || []) as unknown as Message[];
+      // As 200 MAIS RECENTES, na ordem de leitura (antes vinham as 200 mais antigas e conversa longa perdia o fim).
+      return ((data || []) as unknown as Message[]).reverse();
     },
     enabled: !!conversationId,
     staleTime: 1000 * 60 * 5,
@@ -213,7 +214,10 @@ export function useMessages(conversationId: string | null) {
           );
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        // Ao (re)conectar, busca de novo: mensagem que chegou com a conexao caida nao aparecia ate trocar de conversa.
+        if (status === 'SUBSCRIBED') queryClient.invalidateQueries({ queryKey });
+      });
 
     return () => { supabase.removeChannel(channel); };
   }, [conversationId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -234,6 +238,7 @@ export function useSendMessage() {
           conversation_id: conversationId,
           content,
           direction,
+          client_message_id: crypto.randomUUID(),
           sender_id: user.id,
           sender_name: user.user_metadata?.full_name || user.email || 'Atendente',
         },

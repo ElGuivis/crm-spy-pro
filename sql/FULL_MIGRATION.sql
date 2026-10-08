@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict wK4VNCcLhhOyc0ebWv9zlay8fR3RYSgHvzF9dZBbHoKq9jN7SnL8yaqX0LhMfor
+\restrict CSL4zVgJdkM3mjxpby4vH7RowEqq7dwgfqWgIQqX9h96U1VuIEos2cTejIai3fq
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -169,26 +169,19 @@ CREATE TYPE public.team_role AS ENUM (
 
 
 --
--- Name: add_message_to_buffer(uuid, text, integer); Type: FUNCTION; Schema: public; Owner: -
+-- Name: add_message_to_buffer(uuid, uuid, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.add_message_to_buffer(_conversation_id uuid, _message_id text, _delay_seconds integer DEFAULT 3) RETURNS void
+CREATE FUNCTION public.add_message_to_buffer(_conversation_id uuid, _message_id uuid, _delay_seconds integer DEFAULT 3) RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
 BEGIN
   UPDATE public.conversations
-  SET 
-    buffered_message_ids = array_append(
-      COALESCE(buffered_message_ids, ARRAY[]::TEXT[]), 
-      _message_id
-    ),
-    pending_ai_response_at = COALESCE(
-      pending_ai_response_at,
-      NOW() + (_delay_seconds || ' seconds')::INTERVAL
-    ),
-    updated_at = NOW()
-  WHERE id = _conversation_id;
+     SET buffered_message_ids = array_append(coalesce(buffered_message_ids, ARRAY[]::uuid[]), _message_id),
+         pending_ai_response_at = coalesce(pending_ai_response_at, now() + make_interval(secs => _delay_seconds)),
+         updated_at = now()
+   WHERE id = _conversation_id;
 END;
 $$;
 
@@ -400,6 +393,32 @@ CREATE FUNCTION public.churn_at_risk_customers(p_tenant_id uuid, p_threshold num
 $$;
 
 
+--
+-- Name: claim_ai_buffer(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.claim_ai_buffer(p_conversation uuid DEFAULT NULL::uuid) RETURNS TABLE(conversation_id uuid, message_ids uuid[])
+    LANGUAGE sql
+    SET search_path TO 'public'
+    AS $$
+  WITH c AS (
+    SELECT cv.id, cv.buffered_message_ids AS ids
+      FROM public.conversations cv
+     WHERE cv.pending_ai_response_at IS NOT NULL AND cv.pending_ai_response_at <= now()
+       AND cardinality(coalesce(cv.buffered_message_ids, ARRAY[]::uuid[])) > 0
+       AND cv.status = 'bot' AND cv.ai_enabled
+       AND (p_conversation IS NULL OR cv.id = p_conversation)
+     FOR UPDATE SKIP LOCKED
+  ), u AS (
+    UPDATE public.conversations x
+       SET pending_ai_response_at = NULL, buffered_message_ids = ARRAY[]::uuid[]
+      FROM c WHERE x.id = c.id
+    RETURNING x.id
+  )
+  SELECT c.id, c.ids FROM c JOIN u ON u.id = c.id;
+$$;
+
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
@@ -490,6 +509,48 @@ BEGIN
       FOR UPDATE SKIP LOCKED)
   RETURNING q.*;
 END;
+$$;
+
+
+--
+-- Name: claim_message_queue(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.claim_message_queue(p_limit integer DEFAULT 50) RETURNS TABLE(id uuid)
+    LANGUAGE sql
+    SET search_path TO 'public'
+    AS $$
+  UPDATE public.message_queue q
+     SET status = 'processing'
+   WHERE q.id IN (
+     SELECT m.id FROM public.message_queue m
+      WHERE (m.status = 'pending' AND m.next_retry_at <= now())
+         OR (m.status = 'processing' AND m.updated_at < now() - interval '10 minutes')
+      ORDER BY m.next_retry_at
+      LIMIT greatest(1, least(coalesce(p_limit, 50), 200))
+      FOR UPDATE SKIP LOCKED)
+  RETURNING q.id;
+$$;
+
+
+--
+-- Name: claim_outbound_queue(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.claim_outbound_queue(p_limit integer DEFAULT 20) RETURNS TABLE(id uuid)
+    LANGUAGE sql
+    SET search_path TO 'public'
+    AS $$
+  UPDATE public.outbound_queue q
+     SET status = 'processing', locked_at = now()
+   WHERE q.id IN (
+     SELECT o.id FROM public.outbound_queue o
+      WHERE (o.status IN ('pending', 'failed') AND o.next_retry_at <= now())
+         OR (o.status = 'processing' AND o.locked_at < now() - interval '10 minutes')
+      ORDER BY o.created_at
+      LIMIT greatest(1, least(coalesce(p_limit, 20), 100))
+      FOR UPDATE SKIP LOCKED)
+  RETURNING q.id;
 $$;
 
 
@@ -7775,6 +7836,7 @@ CREATE TABLE public.outbound_queue (
     next_retry_at timestamp with time zone DEFAULT now() NOT NULL,
     last_error text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    locked_at timestamp with time zone,
     CONSTRAINT outbound_queue_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'processing'::text, 'sent'::text, 'failed'::text, 'dead'::text])))
 );
 
@@ -12325,6 +12387,20 @@ CREATE INDEX tenant_knowledge_docs_tenant_idx ON public.tenant_knowledge_docs US
 --
 
 CREATE UNIQUE INDEX uniq_chatbot_flow_sessions_active ON public.chatbot_flow_sessions USING btree (conversation_id) WHERE (is_active = true);
+
+
+--
+-- Name: ux_conversations_one_open_per_contact_source; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_conversations_one_open_per_contact_source ON public.conversations USING btree (tenant_id, contact_id, source) WHERE ((closed_at IS NULL) AND ((status)::text = ANY ((ARRAY['bot'::character varying, 'open'::character varying, 'pending'::character varying])::text[])));
+
+
+--
+-- Name: ux_messages_client_message_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_messages_client_message_id ON public.messages USING btree (conversation_id, ((metadata ->> 'client_message_id'::text))) WHERE ((metadata ->> 'client_message_id'::text) IS NOT NULL);
 
 
 --
@@ -19361,5 +19437,5 @@ ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict wK4VNCcLhhOyc0ebWv9zlay8fR3RYSgHvzF9dZBbHoKq9jN7SnL8yaqX0LhMfor
+\unrestrict CSL4zVgJdkM3mjxpby4vH7RowEqq7dwgfqWgIQqX9h96U1VuIEos2cTejIai3fq
 

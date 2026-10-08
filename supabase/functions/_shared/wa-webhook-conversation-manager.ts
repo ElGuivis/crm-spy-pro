@@ -81,12 +81,24 @@ export async function findOrCreateConversation(ctx: WaCtx): Promise<Response | n
       .select()
       .single();
 
-    if (createError) {
+    if (createError?.code === '23505') {
+      // Outra chamada abriu a conversa deste contato no mesmo instante (indice unico): usa a que ficou.
+      const { data: raced, error: racedError } = await supabase
+        .from('conversations').select(CONVERSATION_COLUMNS)
+        .eq('tenant_id', tenantId).eq('contact_id', contact.id).eq('source', 'organic')
+        .is('closed_at', null).in('status', ['bot', 'open', 'pending'])
+        .order('created_at', { ascending: false }).limit(1).single();
+      if (racedError || !raced) throw racedError ?? createError;
+      conversation = raced;
+      isNewConversation = false;
+      log.info('💬 Conversa criada em paralelo por outra chamada, reaproveitada:', raced.id);
+    } else if (createError) {
       log.error('❌ Error creating conversation:', createError);
       throw createError;
+    } else {
+      conversation = newConversation;
+      log.info('💬 New conversation created:', conversation.id, startOrderVerificationFlow ? '(with order verification)' : '');
     }
-    conversation = newConversation;
-    log.info('💬 New conversation created:', conversation.id, startOrderVerificationFlow ? '(with order verification)' : '');
   } else if (conversationError) {
     throw conversationError;
   }

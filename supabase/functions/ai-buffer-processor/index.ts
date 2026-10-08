@@ -20,23 +20,24 @@ serve(async (req) => {
 
     log.info("Starting");
 
-    const { data: pendingConversations, error: fetchError } = await supabase
-      .from('conversations')
-      .select(`
-        id,
-        tenant_id,
-        contact_id,
-        integration_id,
-        current_ai_agent_id,
-        pending_ai_response_at,
-        buffered_message_ids,
-        contacts!inner(phone)
-      `)
-      .not('pending_ai_response_at', 'is', null)
-      .lte('pending_ai_response_at', new Date().toISOString())
-      .not('buffered_message_ids', 'eq', '{}')
-      .eq('status', 'bot')
-      .eq('ai_enabled', true);
+    // Le e zera o buffer numa instrucao so: dois processadores (webhook + cron) nunca respondem a mesma rajada,
+    // e mensagem que chegar depois fica no buffer para a proxima rodada (antes era apagada sem resposta).
+    let body: { conversation_id?: string } = {};
+    try { body = await req.json(); } catch { /* chamada do cron sem corpo */ }
+    const { data: claimed, error: claimError } = await supabase.rpc('claim_ai_buffer', { p_conversation: body.conversation_id ?? null });
+    if (claimError) {
+      log.error("Error claiming buffer", { error: claimError.message });
+      throw claimError;
+    }
+    const claimedRows = (claimed ?? []) as Array<{ conversation_id: string; message_ids: string[] }>;
+    const { data: convRows, error: fetchError } = claimedRows.length
+      ? await supabase
+        .from('conversations')
+        .select('id, tenant_id, contact_id, integration_id, current_ai_agent_id, contacts!inner(phone)')
+        .in('id', claimedRows.map((r) => r.conversation_id))
+      : { data: [], error: null };
+    const idsByConversation = new Map(claimedRows.map((r) => [r.conversation_id, r.message_ids]));
+    const pendingConversations = (convRows ?? []).map((c) => ({ ...c, buffered_message_ids: idsByConversation.get(c.id) ?? [] }));
 
     if (fetchError) {
       log.error("Error fetching pending conversations", { error: fetchError.message });
@@ -105,11 +106,6 @@ serve(async (req) => {
           log.error("No contact phone", { conversationId: conversation.id });
           continue;
         }
-
-        await supabase
-          .from('conversations')
-          .update({ pending_ai_response_at: null, buffered_message_ids: [] })
-          .eq('id', conversation.id);
 
         const aiResponse = await fetch(`${supabaseUrl}/functions/v1/ai-chat`, {
           method: 'POST',

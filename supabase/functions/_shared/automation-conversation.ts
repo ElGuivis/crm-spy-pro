@@ -59,12 +59,17 @@ export async function ensureAutomationConversation({
         .select('id')
         .single();
 
-      if (createErr || !newContact) {
+      let contactId = newContact?.id as string | undefined;
+      if (createErr?.code === '23505') {
+        const { data: raced } = await supabase.from('contacts').select('id').eq('tenant_id', tenantId).eq('phone', normalizedPhone).maybeSingle();
+        contactId = raced?.id;
+      }
+      if (!contactId) {
         console.error('[automation-conversation] Failed to create contact:', createErr);
         return null;
       }
       
-      return await createConversation(supabase, tenantId, newContact.id, integrationId, messageContent, automationType, metadata);
+      return await createConversation(supabase, tenantId, contactId, integrationId, messageContent, automationType, metadata);
     }
 
     // Check for existing open automation conversation
@@ -166,6 +171,16 @@ async function createConversation(
     .select('id')
     .single();
 
+  if (convErr?.code === '23505') {
+    // Indice unico: ja existe conversa de automacao aberta para este contato (outra chamada criou agora).
+    const { data: raced } = await supabase.from('conversations').select('id')
+      .eq('tenant_id', tenantId).eq('contact_id', contactId).eq('source', 'automation')
+      .is('closed_at', null).in('status', ['bot', 'open', 'pending'])
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (!raced) return null;
+    await saveOutboundMessage(supabase, raced.id, tenantId, messageContent, automationType);
+    return raced.id;
+  }
   if (convErr || !conv) {
     console.error('[automation-conversation] Failed to create conversation:', convErr);
     return null;
@@ -190,6 +205,7 @@ async function saveOutboundMessage(
       conversation_id: conversationId,
       tenant_id: tenantId,
       sender_type: 'system',
+      direction: 'outbound',
       content,
       content_type: 'text',
       metadata: {

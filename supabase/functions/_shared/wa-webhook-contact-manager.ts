@@ -64,12 +64,20 @@ export async function findOrCreateContact(ctx: WaCtx): Promise<Response | null> 
       .insert({ tenant_id: tenantId, phone, name: contactName, metadata: contactMetadata })
       .select()
       .single();
-    if (createError) {
+    if (createError?.code === '23505') {
+      // Duas mensagens do mesmo numero chegaram juntas: a outra chamada criou o contato primeiro.
+      const { data: existing, error: refetchError } = await supabase
+        .from('contacts').select(CONTACT_COLUMNS).eq('tenant_id', tenantId).eq('phone', phone).single();
+      if (refetchError || !existing) throw refetchError ?? createError;
+      contact = existing;
+      log.info('👤 Contato criado em paralelo por outra chamada, reaproveitado:', existing.id);
+    } else if (createError) {
       log.error('❌ Error creating contact:', createError);
       throw createError;
+    } else {
+      contact = newContact;
+      log.info('👤 New contact created:', contact.id, `phone: ${phone}`, isLidContact ? `(LID: ${lidIdentifier})` : '');
     }
-    contact = newContact;
-    log.info('👤 New contact created:', contact.id, `phone: ${phone}`, isLidContact ? `(LID: ${lidIdentifier})` : '');
   } else if (contactError) {
     throw contactError;
   } else {

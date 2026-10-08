@@ -107,6 +107,7 @@ export async function handleChatbotFlow(ctx: WaCtx): Promise<Response | null> {
       conversation_id: conversation.id,
       tenant_id: tenantId,
       sender_type: "bot",
+      direction: "outbound",
       content: text,
       status: sendResult.success ? "sent" : "failed",
     });
