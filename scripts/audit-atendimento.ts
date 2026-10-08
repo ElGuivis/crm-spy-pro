@@ -299,6 +299,27 @@ await scenario("E2 numero da instancia fica salvo na integracao", async () => {
   return { ok: !!i[0]?.metadata?.phoneNumber, detail: `phoneNumber=${i[0]?.metadata?.phoneNumber ?? "(vazio)"}` };
 });
 
+// ---- Bloco F: midia ----
+await scenario("F1 foto do cliente: webhook responde e guarda a mensagem mesmo sem conseguir baixar", async () => {
+  const p = newPhone();
+  const token = await hmac(INSTANCE);
+  const r = await fetch(`${URL_}/functions/v1/whatsapp-webhook/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event: "messages.upsert", instance: INSTANCE, sender: "5511956100001@s.whatsapp.net", data: { key: { id: uid(), fromMe: false, remoteJid: `${p}@s.whatsapp.net` }, pushName: "ZZ", message: { imageMessage: { url: "https://mmg.whatsapp.net/x.enc", caption: "olha" } }, messageTimestamp: 1 } }) });
+  await sleep(2500);
+  const cs = await rest(`contacts?tenant_id=eq.${TENANT}&phone=eq.${p}&select=id`) as { id: string }[];
+  const cv = await rest(`conversations?contact_id=eq.${cs[0].id}&select=id`) as { id: string }[];
+  const ms = await rest(`messages?conversation_id=eq.${cv[0].id}&direction=eq.inbound&select=content,content_type`) as { content: string; content_type: string }[];
+  return { ok: r.status === 200 && ms[0]?.content_type === "image" && ms[0]?.content === "olha", detail: `status=${r.status} msg=${JSON.stringify(ms[0])}` };
+});
+
+await scenario("F2 bucket chat-media: grava e gera URL assinada", async () => {
+  const path = `${TENANT}/ZZ/zz-audit.txt`;
+  const up = await fetch(`${URL_}/storage/v1/object/chat-media/${path}`, { method: "POST", headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "text/plain" }, body: "ok" });
+  const sg = await fetch(`${URL_}/storage/v1/object/sign/chat-media/${path}`, { method: "POST", headers: H, body: JSON.stringify({ expiresIn: 60 }) });
+  const sj = await sg.json().catch(() => ({}));
+  await fetch(`${URL_}/storage/v1/object/chat-media/${path}`, { method: "DELETE", headers: H });
+  return { ok: up.status < 300 && sg.status < 300 && !!(sj.signedURL || sj.signedUrl), detail: `upload=${up.status} assinar=${sg.status}` };
+});
+
 console.log("\nRESULTADO DA AUDITORIA");
 for (const r of results) console.log(`${r.ok ? "OK   " : "FALHA"} ${r.name}\n        ${r.detail}`);
 console.log(`\n${results.filter((r) => r.ok).length}/${results.length} cenarios ok`);

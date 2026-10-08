@@ -76,7 +76,13 @@ export async function processMessagingEvent(supabase: Supabase, channel: IgChann
       if (profile) { displayName = profile.name || profile.username || null; instagramUsername = profile.username || null; profilePicUrl = profile.profile_pic || null; log.info(`[ig-worker] Fetched profile for ${contactIgsid}: ${displayName} (@${instagramUsername})`); }
     } catch (e: unknown) { log.warn(`[ig-worker] Profile fetch error for ${contactIgsid}:`, e instanceof Error ? e.message : e); }
     const { data: newContact } = await supabase.from("instagram_contacts").insert({ tenant_id: channel.tenant_id, channel_id: channel.id, igsid: contactIgsid, display_name: displayName, instagram_username: instagramUsername, profile_pic_url: profilePicUrl, first_seen_at: timestamp, last_seen_at: timestamp, last_user_interaction_at: isIncoming ? timestamp : null, standard_window_expires_at: isIncoming ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : null, source_first_entry: entrypointType }).select("id").single();
-    contactId = newContact!.id;
+    if (newContact) contactId = newContact.id;
+    else {
+      // Outra chamada criou o mesmo contato agora (indice unico canal+igsid): usa o que ficou.
+      const { data: raced } = await supabase.from("instagram_contacts").select("id").eq("channel_id", channel.id).eq("igsid", contactIgsid).maybeSingle();
+      if (!raced) throw new Error("Falha ao criar contato do Instagram");
+      contactId = raced.id;
+    }
   }
 
   const { data: thread } = await supabase.from("instagram_threads").select("id, thread_status").eq("channel_id", channel.id).eq("contact_id", contactId).maybeSingle();
@@ -89,13 +95,31 @@ export async function processMessagingEvent(supabase: Supabase, channel: IgChann
     await supabase.from("instagram_threads").update(threadUpdate).eq("id", threadId);
   } else {
     const { data: newThread } = await supabase.from("instagram_threads").insert({ tenant_id: channel.tenant_id, channel_id: channel.id, contact_id: contactId, thread_status: "open", current_mode: "bot_active", entrypoint_type: entrypointType, entrypoint_ref: entrypointRef, last_message_at: timestamp, last_message_preview: event.message?.text?.substring(0, 200) || null }).select("id").single();
-    threadId = newThread!.id;
+    if (newThread) threadId = newThread.id;
+    else {
+      const { data: racedThread } = await supabase.from("instagram_threads").select("id").eq("channel_id", channel.id).eq("contact_id", contactId).maybeSingle();
+      if (!racedThread) throw new Error("Falha ao criar conversa do Instagram");
+      threadId = racedThread.id;
+    }
     if (entrypointType === "ref_url" && entrypointRef) {
       const rpcResult = await supabase.rpc("increment_deep_link_conversations", { p_ref_key: entrypointRef }).catch(() => null);
       if (!rpcResult?.data) {
         const { data: linkRow } = await supabase.from("instagram_deep_links").select("id, conversation_count").eq("ref_key", entrypointRef).eq("channel_id", channel.id).maybeSingle();
         if (linkRow) await supabase.from("instagram_deep_links").update({ conversation_count: (linkRow.conversation_count || 0) + 1 }).eq("id", linkRow.id).catch(() => {});
       }
+    }
+  }
+
+  if (event.message) {
+    const msg = event.message;
+    const providerMsgId = msg.mid;
+    {
+      const textBody = msg.text || null;
+      let messageType = "text", mediaUrl: string | null = null, msgPayload: Record<string, unknown> | null = null;
+      if (msg.attachments && msg.attachments.length > 0) { const att = msg.attachments[0]; messageType = att.type || "attachment"; mediaUrl = att.payload?.url || null; msgPayload = { attachments: msg.attachments }; }
+      if (msg.quick_reply) msgPayload = { ...(msgPayload || {}), quick_reply: msg.quick_reply };
+      const { error: msgInsertErr } = await supabase.from("instagram_messages").insert({ tenant_id: channel.tenant_id, thread_id: threadId, provider_message_id: providerMsgId, direction: isIncoming ? "inbound" : "outbound", message_type: messageType, text_body: textBody, media_url: mediaUrl, payload: msgPayload, delivery_status: isIncoming ? "delivered" : "sent" });
+      if (msgInsertErr?.code === "23505") { log.info(`[ig-worker] Mensagem ${providerMsgId} ja processada, ignorando (sem repetir gatilhos)`); return; }
     }
   }
 
@@ -136,18 +160,6 @@ export async function processMessagingEvent(supabase: Supabase, channel: IgChann
     await handleWatchlistAutoDm(supabase, channel, "dm_auto_reply", contactIgsid, threadId, contactId).catch((e: unknown) => log.warn("[ig-worker] DM auto-reply watchlist error:", e));
   }
 
-  if (event.message) {
-    const msg = event.message;
-    const providerMsgId = msg.mid;
-    const { data: existingMsg } = await supabase.from("instagram_messages").select("id").eq("provider_message_id", providerMsgId).maybeSingle();
-    if (!existingMsg) {
-      const textBody = msg.text || null;
-      let messageType = "text", mediaUrl: string | null = null, msgPayload: Record<string, unknown> | null = null;
-      if (msg.attachments && msg.attachments.length > 0) { const att = msg.attachments[0]; messageType = att.type || "attachment"; mediaUrl = att.payload?.url || null; msgPayload = { attachments: msg.attachments }; }
-      if (msg.quick_reply) msgPayload = { ...(msgPayload || {}), quick_reply: msg.quick_reply };
-      await supabase.from("instagram_messages").insert({ tenant_id: channel.tenant_id, thread_id: threadId, provider_message_id: providerMsgId, direction: isIncoming ? "inbound" : "outbound", message_type: messageType, text_body: textBody, media_url: mediaUrl, payload: msgPayload, delivery_status: isIncoming ? "delivered" : "sent" });
-    }
-  }
 
   if (event.delivery) { for (const mid of event.delivery.mids || []) { await supabase.from("instagram_messages").update({ delivery_status: "delivered" }).eq("provider_message_id", mid); } }
   if (event.read) { await supabase.from("instagram_messages").update({ delivery_status: "read" }).eq("thread_id", threadId).eq("direction", "outbound").in("delivery_status", ["sent", "delivered"]); }

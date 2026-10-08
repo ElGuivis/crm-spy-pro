@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { Message } from "@/hooks/useAtendimentos";
 import { format } from "date-fns";
+import { MessageMedia } from "./MessageMedia";
 import { Check, CheckCheck, Clock, AlertCircle, StickyNote } from "lucide-react";
 
 interface MessageBubbleProps {
@@ -61,7 +62,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             : "bg-muted text-foreground rounded-bl-sm"
         )}
       >
+        {message.media_url && <MessageMedia path={message.media_url} contentType={message.content_type} />}
         <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+        {message.status === "failed" && <p className="text-xs mt-1 text-destructive-foreground/90 bg-destructive/80 rounded px-1.5 py-0.5 inline-block">Não entregue{message.error_json && typeof (message.error_json as { code?: string }).code === "string" && (message.error_json as { code?: string }).code === "recipient_unreachable" ? " (número sem WhatsApp)" : ""}</p>}
         <div className={cn("flex items-center gap-1 mt-1", isOutbound ? "justify-end" : "justify-start")}>
           <span className={cn("text-xs", isOutbound ? "text-primary-foreground/70" : "text-muted-foreground")}>{time}</span>
           {isOutbound && <StatusIcon status={message.status} />}

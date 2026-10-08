@@ -18,6 +18,7 @@ import {
 import { handleMenuTrigger } from "../_shared/wa-webhook-menu-trigger.ts";
 import { handleChatbotFlow } from "../_shared/wa-webhook-flow-handler.ts";
 import { routeToAI } from "../_shared/wa-webhook-ai-routing.ts";
+import { saveInboundMedia } from "../_shared/wa-webhook-media.ts";
 import { verifyWaWebhookToken, waTokenFromUrl } from "../_shared/wa-webhook-token.ts";
 
 declare const EdgeRuntime: { waitUntil: (promise: Promise<void>) => void } | undefined;
@@ -191,6 +192,10 @@ serve(async (req) => {
     } else {
       await chatwootSyncTask;
     }
+
+    // Baixa foto/audio/video/documento em segundo plano (nao atrasa a resposta do bot)
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(saveInboundMedia(ctx));
+    else await saveInboundMedia(ctx);
 
     result = await handleLidPhoneCapture(ctx);
     if (result) return result;

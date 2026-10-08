@@ -20,6 +20,7 @@ export interface EvolutionMessage {
       imageMessage?: { url?: string; caption?: string };
       audioMessage?: { url?: string };
       documentMessage?: { url?: string; fileName?: string };
+      videoMessage?: { url?: string; caption?: string };
       buttonsResponseMessage?: { selectedButtonId: string; selectedDisplayText: string };
       listResponseMessage?: { singleSelectReply?: { selectedRowId: string }; title?: string };
     };
@@ -64,6 +65,10 @@ export function parseMessageContent(payload: EvolutionMessage): ParsedMessageCon
     text = "[Áudio]";
     contentType = "audio";
     mediaUrl = msg.audioMessage.url || "";
+  } else if (msg.videoMessage) {
+    text = msg.videoMessage.caption || "[Vídeo]";
+    contentType = "video";
+    mediaUrl = msg.videoMessage.url || "";
   } else if (msg.documentMessage) {
     text = msg.documentMessage.fileName || "[Documento]";
     contentType = "document";

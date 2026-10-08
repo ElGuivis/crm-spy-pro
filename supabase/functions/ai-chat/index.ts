@@ -113,6 +113,16 @@ serve(async (req) => {
     const initializationOnly = payload.initialization_only || false;
     if (!currentMessage && !payload.combined_message_content && !initializationOnly) throw new Error('Message not found');
 
+    // Idempotência: se já existe resposta (bot, IA ou atendente) depois desta mensagem, uma chamada repetida
+    // (reenvio do webhook, buffer + cron) não responde de novo.
+    if (currentMessage && !payload.combined_message_content && !initializationOnly) {
+      const answered = messageHistory.some((m: any) => m.direction === 'outbound' && m.created_at > currentMessage.created_at);
+      if (answered) {
+        log.info('⏭️ AI skipped: message already answered');
+        return new Response(JSON.stringify({ success: true, skipped: true, reason: 'already_answered' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+
     const messageContent = payload.combined_message_content || currentMessage?.content || '';
     log.info(`📝 Processing: "${messageContent.substring(0, 100)}" (initialization_only: ${initializationOnly})`);
 

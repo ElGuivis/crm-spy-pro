@@ -29,14 +29,16 @@ serve(async (req) => {
   try {
     requireInternalAuth(req);
 
-    const { data: items, error } = await supabase
-      .from("instagram_outbox")
-      .select("*, contact:instagram_contacts(igsid), channel:instagram_channels(id, access_token_encrypted, ig_user_id, status)")
-      .in("status", ["pending", "retry"])
-      .lte("send_after", new Date().toISOString())
-      .lt("attempt_count", MAX_ATTEMPTS)
-      .order("created_at", { ascending: true })
-      .limit(20);
+    // Reivindicacao atomica (FOR UPDATE SKIP LOCKED): ciclos sobrepostos nao enviam a mesma DM duas vezes.
+    const { data: claimed, error: claimError } = await supabase.rpc("claim_instagram_outbox", { p_limit: 20 });
+    const claimedIds = ((claimed ?? []) as Array<{ id: string }>).map((r) => r.id);
+    const { data: items, error } = claimError || !claimedIds.length
+      ? { data: [], error: claimError }
+      : await supabase
+        .from("instagram_outbox")
+        .select("*, contact:instagram_contacts(igsid), channel:instagram_channels(id, access_token_encrypted, ig_user_id, status)")
+        .in("id", claimedIds)
+        .order("created_at", { ascending: true });
 
     if (error) throw error;
     if (!items || items.length === 0) {
@@ -50,8 +52,6 @@ serve(async (req) => {
 
     for (const item of items) {
       try {
-        await supabase.from("instagram_outbox").update({ status: "sending" }).eq("id", item.id);
-
         const channel = item.channel as { id: string; access_token_encrypted: string; ig_user_id: string; status: string } | null;
         const contact = item.contact as { igsid: string } | null;
 

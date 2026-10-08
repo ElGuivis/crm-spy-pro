@@ -6682,6 +6682,7 @@ export type Database = {
           id: string
           idempotency_key: string
           last_attempt_at: string | null
+          locked_at: string | null
           message_kind: string
           payload: Json
           provider_message_id: string | null
@@ -6701,6 +6702,7 @@ export type Database = {
           id?: string
           idempotency_key: string
           last_attempt_at?: string | null
+          locked_at?: string | null
           message_kind?: string
           payload: Json
           provider_message_id?: string | null
@@ -6720,6 +6722,7 @@ export type Database = {
           id?: string
           idempotency_key?: string
           last_attempt_at?: string | null
+          locked_at?: string | null
           message_kind?: string
           payload?: Json
           provider_message_id?: string | null
@@ -7214,6 +7217,7 @@ export type Database = {
           error_message: string | null
           event_hash: string | null
           id: string
+          locked_at: string | null
           parse_status: string | null
           payload: Json
           processed: boolean
@@ -7228,6 +7232,7 @@ export type Database = {
           error_message?: string | null
           event_hash?: string | null
           id?: string
+          locked_at?: string | null
           parse_status?: string | null
           payload: Json
           processed?: boolean
@@ -7242,6 +7247,7 @@ export type Database = {
           error_message?: string | null
           event_hash?: string | null
           id?: string
+          locked_at?: string | null
           parse_status?: string | null
           payload?: Json
           processed?: boolean
@@ -11314,6 +11320,18 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      claim_instagram_deliveries: {
+        Args: { p_limit?: number }
+        Returns: {
+          id: string
+        }[]
+      }
+      claim_instagram_outbox: {
+        Args: { p_limit?: number }
+        Returns: {
+          id: string
+        }[]
       }
       claim_message_queue: {
         Args: { p_limit?: number }

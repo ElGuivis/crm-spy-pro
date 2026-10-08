@@ -21,11 +21,16 @@ serve(async (req) => {
   try {
     requireInternalAuth(req);
 
-    const { data: deliveries, error } = await supabase
-      .from("instagram_webhook_deliveries")
-      .select("id, channel_id, payload, parse_status, event_hash")
-      .eq("processed", false).eq("signature_valid", true).in("parse_status", ["pending"])
-      .order("created_at", { ascending: true }).limit(20);
+    // Reivindicacao atomica: dois workers (cron + disparo imediato) nunca processam o mesmo evento.
+    const { data: claimed, error: claimError } = await supabase.rpc("claim_instagram_deliveries", { p_limit: 20 });
+    const claimedIds = ((claimed ?? []) as Array<{ id: string }>).map((r) => r.id);
+    const { data: deliveries, error } = claimError || !claimedIds.length
+      ? { data: [], error: claimError }
+      : await supabase
+        .from("instagram_webhook_deliveries")
+        .select("id, channel_id, payload, parse_status, event_hash")
+        .in("id", claimedIds)
+        .order("created_at", { ascending: true });
 
     if (error) throw error;
     if (!deliveries || deliveries.length === 0) {
@@ -37,8 +42,6 @@ serve(async (req) => {
 
     for (const delivery of deliveries) {
       try {
-        await supabase.from("instagram_webhook_deliveries").update({ parse_status: "processing" }).eq("id", delivery.id);
-
         const payload = delivery.payload as Record<string, unknown>;
         const entries = (payload?.entry || []) as Record<string, unknown>[];
 

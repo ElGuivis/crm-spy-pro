@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict CSL4zVgJdkM3mjxpby4vH7RowEqq7dwgfqWgIQqX9h96U1VuIEos2cTejIai3fq
+\restrict C2Yb60f8gZ7eqIye5O5mNGGx4qkxOptVWEsHG7QyWjI4anVelZXGXNEIJ7zVYQT
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -509,6 +509,48 @@ BEGIN
       FOR UPDATE SKIP LOCKED)
   RETURNING q.*;
 END;
+$$;
+
+
+--
+-- Name: claim_instagram_deliveries(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.claim_instagram_deliveries(p_limit integer DEFAULT 20) RETURNS TABLE(id uuid)
+    LANGUAGE sql
+    SET search_path TO 'public'
+    AS $$
+  UPDATE public.instagram_webhook_deliveries d
+     SET parse_status = 'processing', locked_at = now()
+   WHERE d.id IN (
+     SELECT x.id FROM public.instagram_webhook_deliveries x
+      WHERE x.processed = false AND x.signature_valid
+        AND (x.parse_status = 'pending' OR (x.parse_status = 'processing' AND x.locked_at < now() - interval '10 minutes'))
+      ORDER BY x.created_at
+      LIMIT greatest(1, least(coalesce(p_limit, 20), 100))
+      FOR UPDATE SKIP LOCKED)
+  RETURNING d.id;
+$$;
+
+
+--
+-- Name: claim_instagram_outbox(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.claim_instagram_outbox(p_limit integer DEFAULT 20) RETURNS TABLE(id uuid)
+    LANGUAGE sql
+    SET search_path TO 'public'
+    AS $$
+  UPDATE public.instagram_outbox q
+     SET status = 'sending', locked_at = now()
+   WHERE q.id IN (
+     SELECT o.id FROM public.instagram_outbox o
+      WHERE ((o.status IN ('pending', 'retry', 'queued')) AND o.send_after <= now() AND o.attempt_count < 5)
+         OR (o.status = 'sending' AND o.locked_at < now() - interval '10 minutes')
+      ORDER BY o.created_at
+      LIMIT greatest(1, least(coalesce(p_limit, 20), 100))
+      FOR UPDATE SKIP LOCKED)
+  RETURNING q.id;
 $$;
 
 
@@ -6695,7 +6737,8 @@ CREATE TABLE public.instagram_outbox (
     error_code text,
     error_message text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    locked_at timestamp with time zone
 );
 
 
@@ -6870,7 +6913,8 @@ CREATE TABLE public.instagram_webhook_deliveries (
     processed_at timestamp with time zone,
     parse_status text DEFAULT 'pending'::text,
     error_message text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    locked_at timestamp with time zone
 );
 
 
@@ -12394,6 +12438,20 @@ CREATE UNIQUE INDEX uniq_chatbot_flow_sessions_active ON public.chatbot_flow_ses
 --
 
 CREATE UNIQUE INDEX ux_conversations_one_open_per_contact_source ON public.conversations USING btree (tenant_id, contact_id, source) WHERE ((closed_at IS NULL) AND ((status)::text = ANY ((ARRAY['bot'::character varying, 'open'::character varying, 'pending'::character varying])::text[])));
+
+
+--
+-- Name: ux_instagram_messages_provider_message_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_instagram_messages_provider_message_id ON public.instagram_messages USING btree (provider_message_id) WHERE (provider_message_id IS NOT NULL);
+
+
+--
+-- Name: ux_instagram_threads_channel_contact; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_instagram_threads_channel_contact ON public.instagram_threads USING btree (channel_id, contact_id);
 
 
 --
@@ -19437,5 +19495,5 @@ ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict CSL4zVgJdkM3mjxpby4vH7RowEqq7dwgfqWgIQqX9h96U1VuIEos2cTejIai3fq
+\unrestrict C2Yb60f8gZ7eqIye5O5mNGGx4qkxOptVWEsHG7QyWjI4anVelZXGXNEIJ7zVYQT
 
