@@ -7,7 +7,8 @@ import { isCircuitClosed, recordSuccess, recordFailure } from "../_shared/circui
 import { sendToDeadLetter } from "../_shared/dead-letter.ts";
 import { recordMetrics, startTimer } from "../_shared/metrics.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
-import { isPermanentRecipientError } from "../_shared/outbound-errors.ts";
+import { isAmbiguousSendError, isPermanentRecipientError } from "../_shared/outbound-errors.ts";
+import { refundMessageToken } from "../_shared/token-refund.ts";
 
 const MAX_ATTEMPTS = 5;
 const FUNCTION_NAME = "process-outbound-queue";
@@ -119,6 +120,7 @@ serve(async (req) => {
             method: 'POST',
             headers: { 'apikey': evolutionApiKey, 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
+            signal: AbortSignal.timeout(25000),
           });
 
           sendResult = await response.json();
@@ -169,7 +171,9 @@ serve(async (req) => {
         const errorMsg = (err as Error)?.message || 'Unknown error';
         // Numero sem WhatsApp: falha definitiva ja na 1a tentativa e fora do disjuntor
         // (antes 5 contatos assim seguidos abriam o disjuntor e travavam o envio de TODOS os clientes da loja).
-        const permanent = isPermanentRecipientError(errorMsg);
+        // Tempo esgotado: pode ter saido. Nao repete (duplicaria); fica como falha visivel para o atendente decidir.
+        const unconfirmed = isAmbiguousSendError(errorMsg);
+        const permanent = isPermanentRecipientError(errorMsg) || unconfirmed;
         const newAttempts = permanent ? MAX_ATTEMPTS : (item.attempts || 0) + 1;
         const tenantId = item.tenant_id;
         const providerName = (item.channel as Record<string, unknown>)?.provider;
@@ -186,9 +190,12 @@ serve(async (req) => {
 
           if (item.message_id) {
             await supabase.from('messages').update({
-              status: 'failed', error_json: { error: errorMsg, attempts: newAttempts, ...(permanent ? { code: 'recipient_unreachable' } : {}) },
+              status: 'failed', error_json: { error: errorMsg, attempts: newAttempts, ...(permanent ? { code: unconfirmed ? 'send_unconfirmed' : 'recipient_unreachable' } : {}) },
             }).eq('id', item.message_id);
           }
+
+          // Nao entregue de vez: devolve o token (menos quando pode ter saido).
+          if (item.message_id && !unconfirmed) await refundMessageToken(supabase, tenantId, item.message_id);
 
           // Send to unified dead letter queue
           await sendToDeadLetter({

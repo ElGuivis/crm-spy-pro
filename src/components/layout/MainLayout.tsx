@@ -10,6 +10,7 @@ import { PageTransition } from "@/components/common/PageTransition";
 import { OnboardingTour } from "@/components/onboarding/OnboardingTour";
 import { ChangelogDialog } from "@/components/help/ChangelogDialog";
 import { MobileMenuProvider } from "@/contexts/MobileMenuContext";
+import { useHandoffAlert } from "@/hooks/useHandoffAlert";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -19,6 +20,7 @@ const FULLSCREEN_ROUTES = ['/atendimentos'];
 
 export function MainLayout({ children }: MainLayoutProps) {
   const location = useLocation();
+  useHandoffAlert();
   const isFullscreen = FULLSCREEN_ROUTES.includes(location.pathname);
   const isMobile = useIsMobile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);

@@ -36,7 +36,7 @@ async function hook(h: Hook) {
     : { conversation: h.text ?? "" };
   const body = h.event === "messages.update"
     ? { event: "messages.update", instance: INSTANCE, data: { key: { id, fromMe: true, remoteJid: `${h.phone}@s.whatsapp.net` }, status: h.status } }
-    : { event: "messages.upsert", instance: INSTANCE, data: { key: { id, fromMe: !!h.fromMe, remoteJid: `${h.phone}@s.whatsapp.net` }, pushName: "ZZ Auditoria", message, messageTimestamp: Math.floor(Date.now() / 1000) } };
+    : { event: "messages.upsert", instance: INSTANCE, sender: "5511956100001@s.whatsapp.net", data: { key: { id, fromMe: !!h.fromMe, remoteJid: `${h.phone}@s.whatsapp.net` }, pushName: "ZZ Auditoria", message, messageTimestamp: Math.floor(Date.now() / 1000) } };
   const t0 = performance.now();
   const r = await fetch(`${URL_}/functions/v1/whatsapp-webhook/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const j = await r.json().catch(() => ({}));
@@ -276,6 +276,27 @@ await scenario("D3 numero sem WhatsApp: falha definitiva e disjuntor continua fe
   const q = await rest(`outbound_queue?to_phone_e164=eq.${p}&select=status,attempts`) as { status: string; attempts: number }[];
   const pending = q.filter((x) => x.status === "pending" || x.status === "processing" || x.status === "failed").length;
   return { ok: cb[0]?.state === "closed" && pending === 0, detail: `disjuntor=${cb[0]?.state}/${cb[0]?.failure_count} fila: ${q.map((x) => x.status + "x" + x.attempts).join(",")}` };
+});
+
+// ---- Bloco E: reembolso de token e numero da instancia ----
+await scenario("E1 mensagem nao entregue devolve o token (uma vez so)", async () => {
+  const bal = async () => (await rest(`tenant_tokens?tenant_id=eq.${TENANT}&select=balance`) as { balance: number }[])[0].balance;
+  const before = await bal();
+  const p = newPhone();
+  await hook({ text: "oi", phone: p });
+  await sleep(1500);
+  await fetch(`${URL_}/functions/v1/process-outbound-queue`, { method: "POST", headers: H, body: "{}" });
+  await sleep(800);
+  await fetch(`${URL_}/functions/v1/process-outbound-queue`, { method: "POST", headers: H, body: "{}" });
+  await sleep(500);
+  const after = await bal();
+  return { ok: after === before, detail: `saldo antes=${before} depois=${after}` };
+});
+
+await scenario("E2 numero da instancia fica salvo na integracao", async () => {
+  await hook({ text: "oi", phone: newPhone() });
+  const i = await rest(`integrations?tenant_id=eq.${TENANT}&type=eq.evolution_whatsapp&select=metadata`) as { metadata: { phoneNumber?: string } }[];
+  return { ok: !!i[0]?.metadata?.phoneNumber, detail: `phoneNumber=${i[0]?.metadata?.phoneNumber ?? "(vazio)"}` };
 });
 
 console.log("\nRESULTADO DA AUDITORIA");

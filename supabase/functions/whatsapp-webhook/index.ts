@@ -95,7 +95,15 @@ serve(async (req) => {
     }
 
     const integrationMeta = integration.metadata as IntegrationMetadata;
-    const instancePhoneNumber = integrationMeta?.phoneNumber || '';
+    let instancePhoneNumber = integrationMeta?.phoneNumber || '';
+    // Autocorreção: todo webhook traz o dono da instância em `sender`; se o número não está salvo, grava.
+    const senderNumber = typeof payload.sender === 'string' ? payload.sender.split('@')[0].replace(/\D/g, '') : '';
+    if (!instancePhoneNumber && senderNumber.length >= 10) {
+      instancePhoneNumber = senderNumber;
+      await supabase.from('integrations').update({
+        metadata: { ...(integration.metadata as Record<string, unknown>), phoneNumber: senderNumber, phoneNumberUpdatedAt: new Date().toISOString() },
+      }).eq('id', integration.id);
+    }
     log.info('📞 Instance phone number for filtering:', instancePhoneNumber || 'NOT_SET');
 
     // Resolve phone (handles LID contacts and normal contacts)

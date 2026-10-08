@@ -105,12 +105,32 @@ export function useConversations(inboxId: string | null, filters?: ConversationF
         if (tagConversationIds.length === 0) return []; // No matches
       }
 
+      // Busca no servidor (nome, telefone e texto das mensagens), em todo o historico e nao so nas 100 mais recentes.
+      let searchOr: string | null = null;
+      const term = filters?.search?.trim().replace(/[%,()*]/g, ' ').trim();
+      if (term) {
+        const digits = term.replace(/\D/g, '');
+        const [byContact, byMessage] = await Promise.all([
+          supabase.from('contacts').select('id').eq('tenant_id', tenantId)
+            .or([`name.ilike.%${term}%`, digits.length >= 3 ? `phone.ilike.%${digits}%` : null].filter(Boolean).join(',')).limit(100),
+          supabase.from('messages').select('conversation_id').eq('tenant_id', tenantId).ilike('content', `%${term}%`)
+            .order('created_at', { ascending: false }).limit(100),
+        ]);
+        const contactIds = (byContact.data || []).map((r) => r.id);
+        const convIds = [...new Set((byMessage.data || []).map((r) => r.conversation_id))];
+        const parts = [contactIds.length ? `contact_id.in.(${contactIds.join(',')})` : null, convIds.length ? `id.in.(${convIds.join(',')})` : null].filter(Boolean);
+        if (!parts.length) return [];
+        searchOr = parts.join(',');
+      }
+
       let query = supabase
         .from('conversations')
         .select('id, tenant_id, contact_id, channel_id, inbox_id, status, priority, assigned_to, handoff_mode, ai_enabled, bot_state_json, kanban_column_id, current_ai_agent_id, last_message_at, last_inbound_at, last_outbound_at, last_incoming_message_id, ai_sentiment, integration_id, verification_data, verification_state, lead_capture_state, lead_capture_data, source, created_at, updated_at, contact:contacts(id, tenant_id, phone, name, email, metadata, li_customer_id, created_at, updated_at)')
         .eq('tenant_id', tenantId)
         .order('last_message_at', { ascending: false, nullsFirst: false })
         .limit(100);
+
+      if (searchOr) query = query.or(searchOr);
 
       if (inboxId) {
         query = query.eq('inbox_id', inboxId);
@@ -139,21 +159,10 @@ export function useConversations(inboxId: string | null, filters?: ConversationF
       const { data, error } = await query;
       if (error) throw error;
       
-      let result = (data || []).map((c) => ({
+      const result = (data || []).map((c) => ({
         ...c,
         contact: c.contact || { id: c.contact_id, name: null as string | null, phone: 'Desconhecido', avatar_url: null as string | null },
       })) as unknown as Conversation[];
-
-      // Client-side search (name, phone, preview)
-      if (filters?.search) {
-        const q = filters.search.toLowerCase();
-        result = result.filter(c => {
-          const name = c.contact?.name?.toLowerCase() || '';
-          const phone = c.contact?.phone?.toLowerCase() || '';
-          const preview = (c.last_message_preview || '').toLowerCase();
-          return name.includes(q) || phone.includes(q) || preview.includes(q);
-        });
-      }
 
       return result;
     },
