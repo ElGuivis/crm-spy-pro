@@ -41,10 +41,22 @@ export async function handleChatbotFlow(ctx: WaCtx): Promise<Response | null> {
   // 1. Sessão ativa? (sempre tem prioridade — não perder estado do flow)
   const { data: activeSession } = await supabase
     .from("chatbot_flow_sessions")
-    .select("id, flow_id, session")
+    .select("id, flow_id, session, updated_at")
     .eq("conversation_id", conversation.id)
     .eq("is_active", true)
     .maybeSingle();
+
+  // Saida da sessao: o cliente digitou menu/sair/cancelar ou abandonou o flow ha mais de 12 h.
+  // Antes a sessao ficava presa e engolia toda mensagem seguinte da conversa.
+  if (activeSession) {
+    const lowerInput = messageContent.toLowerCase().trim();
+    const stale = Date.now() - new Date((activeSession as { updated_at?: string }).updated_at ?? Date.now()).getTime() > 12 * 3600 * 1000;
+    if (stale || ["menu", "sair", "cancelar", "voltar", "inicio", "início", "0"].includes(lowerInput)) {
+      await supabase.from("chatbot_flow_sessions").update({ is_active: false, completed_at: new Date().toISOString() }).eq("id", (activeSession as { id: string }).id);
+      log.info(`🤖 Sessão de flow encerrada (${stale ? "inativa" : "cliente pediu para sair"})`);
+      return null;
+    }
+  }
 
   let flowId: string;
   let inputSession: FlowSession | null;

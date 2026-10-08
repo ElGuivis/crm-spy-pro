@@ -173,6 +173,11 @@ serve(async (req) => {
     result = await findOrCreateConversation(ctx);
     if (result) return result;
 
+    // Tela de Canais mostrava "Sem número": completa o número do canal quando está vazio (no-op nas demais mensagens).
+    if (senderNumber.length >= 10 && ctx.conversation.channel_id) {
+      await supabase.from('whatsapp_channels').update({ phone_e164: senderNumber }).eq('id', ctx.conversation.channel_id).is('phone_e164', null);
+    }
+
     // Chatwoot sync runs in background to reduce latency
     const chatwootSyncTask = syncWithChatwoot({
       supabase,

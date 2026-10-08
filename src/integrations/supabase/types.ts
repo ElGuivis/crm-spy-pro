@@ -11414,6 +11414,7 @@ export type Database = {
           with_contact: number
         }[]
       }
+      get_atendimento_health: { Args: { p_tenant: string }; Returns: Json }
       get_best_send_days: {
         Args: { p_tenant_id: string }
         Returns: {

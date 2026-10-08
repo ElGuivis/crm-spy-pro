@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Wifi, WifiOff, Smartphone, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
+import { AtendimentoHealthCard } from "./AtendimentoHealthCard";
 
 export function ChannelSettings() {
   const { channels, isLoading } = useChannels();
@@ -10,6 +11,7 @@ export function ChannelSettings() {
 
   return (
     <div className="space-y-6">
+      <AtendimentoHealthCard />
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

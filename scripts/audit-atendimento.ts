@@ -313,11 +313,45 @@ await scenario("F1 foto do cliente: webhook responde e guarda a mensagem mesmo s
 
 await scenario("F2 bucket chat-media: grava e gera URL assinada", async () => {
   const path = `${TENANT}/ZZ/zz-audit.txt`;
-  const up = await fetch(`${URL_}/storage/v1/object/chat-media/${path}`, { method: "POST", headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "text/plain" }, body: "ok" });
+  const up = await fetch(`${URL_}/storage/v1/object/chat-media/${path}`, { method: "POST", headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, "Content-Type": "text/plain", "x-upsert": "true" }, body: "ok" });
   const sg = await fetch(`${URL_}/storage/v1/object/sign/chat-media/${path}`, { method: "POST", headers: H, body: JSON.stringify({ expiresIn: 60 }) });
   const sj = await sg.json().catch(() => ({}));
   await fetch(`${URL_}/storage/v1/object/chat-media/${path}`, { method: "DELETE", headers: H });
   return { ok: up.status < 300 && sg.status < 300 && !!(sj.signedURL || sj.signedUrl), detail: `upload=${up.status} assinar=${sg.status}` };
+});
+
+// ---- Bloco G: reabertura ----
+await scenario("G1 cliente volta depois da conversa fechada: abre UMA conversa nova com boas-vindas", async () => {
+  const p = newPhone();
+  await hook({ text: "oi", phone: p }); await sleep(800);
+  const cs = await rest(`contacts?tenant_id=eq.${TENANT}&phone=eq.${p}&select=id`) as { id: string }[];
+  await rest(`conversations?contact_id=eq.${cs[0].id}`, { method: "PATCH", body: JSON.stringify({ status: "closed", closed_at: new Date().toISOString() }) });
+  const rs = await Promise.all([hook({ text: "oi de novo", phone: p }), hook({ text: "tem camiseta?", phone: p })]);
+  await sleep(1500);
+  const all = await rest(`conversations?contact_id=eq.${cs[0].id}&select=status,closed_at`) as { status: string; closed_at: string | null }[];
+  const open = all.filter((c) => !c.closed_at).length;
+  return { ok: all.length === 2 && open === 1 && rs.every((r) => r.status < 500), detail: `conversas=${all.length} abertas=${open} 5xx=${rs.filter((r) => r.status >= 500).length}` };
+});
+
+await scenario("G2 mensagem muito longa e com emoji/quebra de linha", async () => {
+  const p = newPhone();
+  const r = await hook({ text: "olá 😀\n".repeat(400), phone: p });
+  const c = await counts(p);
+  return { ok: r.status < 500 && c.inbound === 1, detail: `status=${r.status} inbound=${c.inbound}` };
+});
+
+// ---- Bloco H: painel de saude e numero do canal ----
+await scenario("H1 funcao de saude responde e o sistema esta sem fila parada", async () => {
+  const r = await rpc("get_atendimento_health", { p_tenant: TENANT });
+  const h = r.data as Record<string, unknown>;
+  const ok = r.status === 200 && h && "stuck_in_queue" in h && h.stuck_in_queue === 0 && h.circuit_open === false && typeof h.duplicate_suspects_24h === "number";
+  return { ok: !!ok, detail: JSON.stringify(h).slice(0, 260) };
+});
+
+await scenario("H2 canal ganha o numero do WhatsApp", async () => {
+  await hook({ text: "oi", phone: newPhone() });
+  const ch = await rest(`whatsapp_channels?tenant_id=eq.${TENANT}&select=phone_e164`) as { phone_e164: string | null }[];
+  return { ok: !!ch[0]?.phone_e164, detail: `phone_e164=${ch[0]?.phone_e164 ?? "(vazio)"}` };
 });
 
 console.log("\nRESULTADO DA AUDITORIA");
