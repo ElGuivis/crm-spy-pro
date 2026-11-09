@@ -34,6 +34,7 @@ const Products = lazy(() => import("./pages/Products"));
 const RFM = lazy(() => import("./pages/RFM"));
 const Team = lazy(() => import("./pages/Team"));
 const Tokens = lazy(() => import("./pages/Tokens"));
+const GoogleAds = lazy(() => import("./pages/GoogleAds"));
 const Envios = lazy(() => import("./pages/Envios"));
 const BulkCampaigns = lazy(() => import("./pages/BulkCampaigns"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -107,6 +108,7 @@ const App = () => (
                             <Route path="/fidelidade/:integrationId" element={<Fidelidade />} />
                             <Route path="/team" element={<Team />} />
                             <Route path="/tokens" element={<Tokens />} />
+                            <Route path="/google-ads" element={<GoogleAds />} />
                             <Route path="/envios" element={<Envios />} />
                             <Route path="/envios/:integrationId" element={<Envios />} />
                             <Route path="/disparos" element={<BulkCampaigns />} />

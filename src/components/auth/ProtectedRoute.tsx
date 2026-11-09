@@ -37,6 +37,7 @@ const routePermissionMap: Record<string, string> = {
   '/white-label': 'settings',
   '/team': 'settings',
   '/tokens': 'settings',
+  '/google-ads': 'settings',
 };
 
 // Permission to default route mapping (first allowed route)

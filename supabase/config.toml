@@ -428,3 +428,15 @@ verify_jwt = false
 [functions.domain-event-processor]
 # INTERNAL (cron) — in-code auth via requireInternalAuth
 verify_jwt = false
+
+[functions.google-ads-sync]
+# HYBRID — usuario (JWT, uma conta do proprio tenant) ou cron (todas) via requireUserOrInternalAuth
+verify_jwt = false
+
+[functions.google-ads-diagnose]
+# HYBRID — usuario (JWT, uma conta do proprio tenant) ou cron (todas) via requireUserOrInternalAuth
+verify_jwt = false
+
+[functions.google-ads-settings]
+# AUTHENTICATED — in-code auth via requireUserAuth (+ is_tenant_admin)
+verify_jwt = false

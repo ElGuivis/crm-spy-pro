@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Plug, Settings, Headset, Zap,
   ShoppingCart, UserCircle, Package, Ticket, UsersRound, Coins,
-  Truck, Megaphone, Grid3X3, BookImage, Mail, Activity, Instagram, Star, ShoppingBasket,
+  Truck, Megaphone, Grid3X3, BookImage, Mail, Activity, Instagram, Star, ShoppingBasket, Target,
 } from "lucide-react";
 
 export interface NavItem {
@@ -64,6 +64,7 @@ export const navGroups: NavGroup[] = [
       { icon: Coins, label: "Tokens", href: "/tokens", adminOnly: true },
       { icon: UsersRound, label: "Equipe", href: "/team", adminOnly: true },
       { icon: Activity, label: "Operações", href: "/operations", adminOnly: true },
+      { icon: Target, label: "Google Ads", href: "/google-ads", adminOnly: true },
       { icon: Settings, label: "Configurações", href: "/settings", permissionKey: "settings" },
     ]
   }
