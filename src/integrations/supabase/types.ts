@@ -4833,6 +4833,8 @@ export type Database = {
         Row: {
           account_id: string
           bidding_strategy_type: string | null
+          budget_explicitly_shared: boolean | null
+          budget_resource_name: string | null
           campaign_id: number
           channel_type: string | null
           daily_budget_micros: number | null
@@ -4850,6 +4852,8 @@ export type Database = {
         Insert: {
           account_id: string
           bidding_strategy_type?: string | null
+          budget_explicitly_shared?: boolean | null
+          budget_resource_name?: string | null
           campaign_id: number
           channel_type?: string | null
           daily_budget_micros?: number | null
@@ -4867,6 +4871,8 @@ export type Database = {
         Update: {
           account_id?: string
           bidding_strategy_type?: string | null
+          budget_explicitly_shared?: boolean | null
+          budget_resource_name?: string | null
           campaign_id?: number
           channel_type?: string | null
           daily_budget_micros?: number | null
@@ -4891,6 +4897,117 @@ export type Database = {
           },
           {
             foreignKeyName: "google_ads_campaigns_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      google_ads_conversion_actions: {
+        Row: {
+          account_id: string
+          category: string | null
+          conversion_action_id: number
+          counting_type: string | null
+          id: string
+          include_in_conversions_metric: boolean | null
+          name: string
+          origin: string | null
+          primary_for_goal: boolean | null
+          status: string
+          synced_at: string
+          tenant_id: string
+          type: string | null
+        }
+        Insert: {
+          account_id: string
+          category?: string | null
+          conversion_action_id: number
+          counting_type?: string | null
+          id?: string
+          include_in_conversions_metric?: boolean | null
+          name: string
+          origin?: string | null
+          primary_for_goal?: boolean | null
+          status: string
+          synced_at?: string
+          tenant_id: string
+          type?: string | null
+        }
+        Update: {
+          account_id?: string
+          category?: string | null
+          conversion_action_id?: number
+          counting_type?: string | null
+          id?: string
+          include_in_conversions_metric?: boolean | null
+          name?: string
+          origin?: string | null
+          primary_for_goal?: boolean | null
+          status?: string
+          synced_at?: string
+          tenant_id?: string
+          type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_ads_conversion_actions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "google_ads_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_ads_conversion_actions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      google_ads_conversion_monthly: {
+        Row: {
+          account_id: string
+          conversion_action_name: string
+          conversions: number
+          conversions_value: number
+          id: string
+          month: string
+          synced_at: string
+          tenant_id: string
+        }
+        Insert: {
+          account_id: string
+          conversion_action_name: string
+          conversions?: number
+          conversions_value?: number
+          id?: string
+          month: string
+          synced_at?: string
+          tenant_id: string
+        }
+        Update: {
+          account_id?: string
+          conversion_action_name?: string
+          conversions?: number
+          conversions_value?: number
+          id?: string
+          month?: string
+          synced_at?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_ads_conversion_monthly_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "google_ads_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_ads_conversion_monthly_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -11656,6 +11773,121 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "customer_rfm_snapshots_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      google_ads_account_monthly: {
+        Row: {
+          account_id: string | null
+          clicks: number | null
+          conversions: number | null
+          conversions_value: number | null
+          cost_micros: number | null
+          impressions: number | null
+          month: string | null
+          tenant_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_ads_campaign_daily_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "google_ads_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_ads_campaign_daily_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      google_ads_campaign_lifetime: {
+        Row: {
+          account_id: string | null
+          campaign_id: number | null
+          clicks: number | null
+          conversions: number | null
+          conversions_value: number | null
+          cost_micros: number | null
+          first_spend_date: string | null
+          impressions: number | null
+          last_spend_date: string | null
+          tenant_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_ads_campaign_daily_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "google_ads_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_ads_campaign_daily_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      google_ads_campaign_monthly: {
+        Row: {
+          account_id: string | null
+          campaign_id: number | null
+          clicks: number | null
+          conversions: number | null
+          conversions_value: number | null
+          cost_micros: number | null
+          days_with_spend: number | null
+          impressions: number | null
+          month: string | null
+          tenant_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_ads_campaign_daily_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "google_ads_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_ads_campaign_daily_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      google_ads_conversion_lifetime: {
+        Row: {
+          account_id: string | null
+          conversion_action_name: string | null
+          conversions: number | null
+          conversions_value: number | null
+          first_month: string | null
+          last_month: string | null
+          tenant_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_ads_conversion_monthly_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "google_ads_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_ads_conversion_monthly_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"

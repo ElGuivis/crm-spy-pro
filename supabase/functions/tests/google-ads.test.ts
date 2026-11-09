@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects, assertThrows } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals, assertRejects, assertThrows } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   clearTokenCache,
   describeApiError,
@@ -199,6 +199,7 @@ Deno.test("syncAccount: grava campanhas, metricas, metadados e auditoria", async
   await withFetch((url, init) => {
     if (url.includes("oauth2")) return jsonRes({ access_token: "at", expires_in: 3600 });
     const q: string = JSON.parse(String(init.body)).query;
+    if (q.includes("conversion_action_name")) return jsonRes({ results: [] });
     if (q.includes("FROM customer")) return jsonRes({ results: [{ customer: { descriptiveName: "Chronic", currencyCode: "BRL", timeZone: "America/Sao_Paulo", status: "ENABLED" } }] });
     if (q.includes("FROM billing_setup")) return jsonRes({ results: [{ billingSetup: { status: "APPROVED" } }] });
     if (q.includes("FROM account_budget")) return jsonRes({ results: [{ accountBudget: { resourceName: "customers/5220063897/accountBudgets/6607136390", status: "APPROVED", approvedSpendingLimitMicros: "131470090000", adjustedSpendingLimitMicros: "131520330000", amountServedMicros: "131520330000", approvedStartDateTime: "2021-07-06 13:44:45" } }] });
@@ -206,7 +207,7 @@ Deno.test("syncAccount: grava campanhas, metricas, metadados e auditoria", async
     return jsonRes({ results: [{ campaign: { id: "7", name: "Teste", status: "ENABLED" } }] });
   }, async () => {
     const r = await syncAccount(client, ACCOUNT, CREDS, { days: 7, actor: "system" });
-    assertEquals(r, { account_id: "a1", customer_id: "5220063897", ok: true, campaigns: 1, daily_rows: 1, days: 7 });
+    assertEquals({ ...r, start: undefined, end: undefined }, { account_id: "a1", customer_id: "5220063897", ok: true, campaigns: 1, daily_rows: 1, days: 7, start: undefined, end: undefined });
     assertEquals(writes["google_ads_campaigns:upsert"].length, 1);
     assertEquals(writes["google_ads_campaign_daily:upsert"].length, 1);
     const upd = writes["google_ads_accounts:update"][0][0] as Record<string, unknown>;
@@ -276,5 +277,37 @@ Deno.test("syncAccount: 403 nas consultas opcionais (faturamento/limite) vira av
   await withFetch(route(400), async () => {
     const r = await syncAccount(b.client, ACCOUNT, CREDS, { actor: "system" });
     assertEquals(r.ok, false); // consulta malformada NAO pode ser engolida em silencio
+  });
+});
+
+Deno.test("syncAccount: janela historica (end_date) + acoes de conversao e conversoes por mes agregadas", async () => {
+  const { client, writes } = fakeSupabase();
+  const queries: string[] = [];
+  await withFetch((url, init) => {
+    if (url.includes("oauth2")) return jsonRes({ access_token: "at", expires_in: 3600 });
+    const q: string = JSON.parse(String(init.body)).query;
+    queries.push(q);
+    if (q.includes("conversion_action_name")) {
+      return jsonRes({ results: [
+        { segments: { month: "2023-06-01", conversionActionName: "Compra" }, metrics: { conversions: 2, conversionsValue: 100 } },
+        { segments: { month: "2023-06-01", conversionActionName: "Compra" }, metrics: { conversions: 1, conversionsValue: 50 } },
+        { segments: { month: "2023-06-01", conversionActionName: "Ligacao" }, metrics: { conversions: 5, conversionsValue: 0 } },
+      ] });
+    }
+    if (q.includes("FROM conversion_action")) return jsonRes({ results: [{ conversionAction: { id: "99", name: "Compra", status: "ENABLED", type: "WEBPAGE", category: "PURCHASE", primaryForGoal: true, includeInConversionsMetric: true } }] });
+    if (q.includes("FROM customer")) return jsonRes({ results: [{ customer: { descriptiveName: "C" } }] });
+    return jsonRes({ results: [] });
+  }, async () => {
+    const r = await syncAccount(client, ACCOUNT, CREDS, { days: 31, endDate: "2023-06-30", actor: "system" });
+    assertEquals(r.ok, true);
+    assertEquals(r.start, "2023-05-31");
+    assertEquals(r.end, "2023-06-30");
+    assert(queries.some((q) => q.includes("BETWEEN '2023-05-31' AND '2023-06-30'")));
+    const conv = writes["google_ads_conversion_monthly:upsert"][0] as Record<string, unknown>[];
+    assertEquals(conv.length, 2);
+    const compra = conv.find((c) => c.conversion_action_name === "Compra")!;
+    assertEquals([compra.conversions, compra.conversions_value, compra.month], [3, 150, "2023-06-01"]);
+    const act = writes["google_ads_conversion_actions:upsert"][0][0] as Record<string, unknown>;
+    assertEquals([act.conversion_action_id, act.category, act.primary_for_goal], [99, "PURCHASE", true]);
   });
 });

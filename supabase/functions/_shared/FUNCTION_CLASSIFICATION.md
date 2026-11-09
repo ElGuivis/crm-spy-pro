@@ -23,6 +23,7 @@ All resource lookups MUST include `.eq('tenant_id', authTenantId)`.
 | email-campaign-send-test | User sends test email |
 | evolution-api | User manages WhatsApp instances |
 | get-store-statuses | User checks store status |
+| google-ads-apply | Admin aplica/desfaz recomendacoes no Google Ads (unica funcao que escreve na conta; tela Google Ads) |
 | google-ads-settings | Admin edita o teto mensal de gastos do Google Ads (tela Google Ads) |
 | instagram-block-user | User action |
 | instagram-create-cta-link | User action |
@@ -80,6 +81,7 @@ Internal callers use `Authorization: Bearer <service_role_key>` or `x-cron-secre
 | bling-sync | `useBlingSync.ts` | cron, shared helpers (service_role) |
 | bulk-campaign-processor | `BulkCampaigns.tsx` | `schedule_bulk_campaigns()` Postgres fn (cron #33) |
 | google-ads-diagnose | tela Google Ads (usuario: 1 conta do proprio tenant) | cron `google-ads-diagnose` (service_role: todas as contas) |
+| google-ads-strategist | tela Google Ads (admin: 1 conta do proprio tenant) | — (so sob demanda; interno via service_role) |
 | google-ads-sync | tela Google Ads (usuario: 1 conta do proprio tenant) | cron `google-ads-sync` (service_role: todas as contas) |
 | email-campaign-send | `ConfirmSendDialog.tsx` | `schedule_email_campaigns()` Postgres fn (cron #34) |
 | instagram-healthcheck | `InstagramChannelContext`, `useInstagramChannel` | cron monitoring (service_role) |

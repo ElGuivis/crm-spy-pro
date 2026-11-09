@@ -10,7 +10,7 @@ import { MAX_SYNC_DAYS, syncAccount, type SyncResult } from "../_shared/google-a
  * google-ads-sync — HYBRID.
  *  - Usuario (JWT): sincroniza UMA conta do PROPRIO tenant (account_id obrigatorio).
  *  - Interno (cron / service_role): sincroniza as contas ativas de todos os tenants (ou so a de account_id).
- * Body: { account_id?: uuid, days?: 1..365 }.
+ * Body: { account_id?: uuid, days?: 1..365, end_date?: AAAA-MM-DD (janela que termina nessa data, para carregar o historico) }.
  * Somente leitura na API do Google. Para depois de ~100 s e devolve o que ficou pendente em `skipped`.
  */
 const TIME_BUDGET_MS = 100_000;
@@ -36,6 +36,11 @@ serve(async (req) => {
     const days = body.days === undefined ? undefined : Number(body.days);
     if (days !== undefined && (!Number.isInteger(days) || days < 1 || days > MAX_SYNC_DAYS)) {
       return json({ error: `days deve ser um inteiro entre 1 e ${MAX_SYNC_DAYS}` }, 400);
+    }
+
+    const endDate = body.end_date === undefined ? undefined : String(body.end_date);
+    if (endDate !== undefined && (!/^\d{4}-\d{2}-\d{2}$/.test(endDate) || Number.isNaN(Date.parse(endDate)) || endDate < "2015-01-01" || endDate > new Date().toISOString().slice(0, 10))) {
+      return json({ error: "end_date deve ser AAAA-MM-DD, entre 2015-01-01 e hoje" }, 400);
     }
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
@@ -65,7 +70,7 @@ serve(async (req) => {
         skipped.push(account.id);
         continue;
       }
-      const result = await syncAccount(supabase, account, creds, { days, actor });
+      const result = await syncAccount(supabase, account, creds, { days, actor, endDate });
       if (!result.ok) log.warn("sync falhou", { account_id: account.id, error: result.error });
       results.push(result);
     }

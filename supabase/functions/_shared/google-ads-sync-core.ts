@@ -23,6 +23,8 @@ export interface SyncResult {
   campaigns?: number;
   daily_rows?: number;
   days?: number;
+  start?: string;
+  end?: string;
   error?: string;
 }
 
@@ -51,6 +53,8 @@ export function mapCampaignRow(row: GaqlRow, tenantId: string, accountId: string
     channel_type: str(c.advertisingChannelType),
     bidding_strategy_type: str(c.biddingStrategyType),
     daily_budget_micros: row.campaignBudget?.amountMicros != null ? num(row.campaignBudget.amountMicros) : null,
+    budget_resource_name: str(c.campaignBudget),
+    budget_explicitly_shared: typeof row.campaignBudget?.explicitlyShared === "boolean" ? row.campaignBudget.explicitlyShared : null,
     start_date: toDate(c.startDateTime),
     end_date: toDate(c.endDateTime),
     serving_status: str(c.servingStatus),
@@ -117,7 +121,7 @@ const CAMPAIGN_QUERY = `
   SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type,
          campaign.bidding_strategy_type, campaign.start_date_time, campaign.end_date_time,
          campaign.serving_status, campaign.primary_status, campaign.primary_status_reasons,
-         campaign_budget.amount_micros
+         campaign.campaign_budget, campaign_budget.amount_micros, campaign_budget.explicitly_shared
   FROM campaign`;
 
 const dailyQuery = (start: string, end: string) => `
@@ -125,6 +129,48 @@ const dailyQuery = (start: string, end: string) => `
          metrics.conversions, metrics.conversions_value
   FROM campaign
   WHERE segments.date BETWEEN '${start}' AND '${end}'`;
+
+const CONVERSION_ACTION_QUERY = `
+  SELECT conversion_action.id, conversion_action.name, conversion_action.status, conversion_action.type,
+         conversion_action.category, conversion_action.origin, conversion_action.primary_for_goal,
+         conversion_action.include_in_conversions_metric, conversion_action.counting_type
+  FROM conversion_action`;
+
+const conversionMonthlyQuery = (start: string, end: string) => `
+  SELECT segments.month, segments.conversion_action_name, metrics.conversions, metrics.conversions_value
+  FROM customer
+  WHERE segments.date BETWEEN '${start}' AND '${end}'`;
+
+export function mapConversionActionRow(row: GaqlRow, tenantId: string, accountId: string) {
+  const c = row.conversionAction ?? {};
+  return {
+    tenant_id: tenantId,
+    account_id: accountId,
+    conversion_action_id: num(c.id),
+    name: str(c.name) ?? "(sem nome)",
+    status: str(c.status) ?? "UNKNOWN",
+    type: str(c.type),
+    category: str(c.category),
+    origin: str(c.origin),
+    primary_for_goal: typeof c.primaryForGoal === "boolean" ? c.primaryForGoal : null,
+    include_in_conversions_metric: typeof c.includeInConversionsMetric === "boolean" ? c.includeInConversionsMetric : null,
+    counting_type: str(c.countingType),
+    synced_at: new Date().toISOString(),
+  };
+}
+
+export function mapConversionMonthlyRow(row: GaqlRow, tenantId: string, accountId: string) {
+  const m = row.metrics ?? {};
+  return {
+    tenant_id: tenantId,
+    account_id: accountId,
+    month: toDate(row.segments?.month) ?? "",
+    conversion_action_name: str(row.segments?.conversionActionName) ?? "(sem nome)",
+    conversions: num(m.conversions),
+    conversions_value: num(m.conversionsValue),
+    synced_at: new Date().toISOString(),
+  };
+}
 
 const CUSTOMER_QUERY = "SELECT customer.descriptive_name, customer.currency_code, customer.time_zone, customer.status FROM customer";
 const BILLING_QUERY = "SELECT billing_setup.status FROM billing_setup";
@@ -171,20 +217,22 @@ export async function syncAccount(
   supabase: SupabaseClient,
   account: SyncAccountRow,
   creds: GoogleAdsCredentials,
-  opts: { days?: number; actor: string },
+  opts: { days?: number; actor: string; endDate?: string },
 ): Promise<SyncResult> {
   const base = { account_id: account.id, customer_id: account.customer_id };
-  const { start, end } = dateRange(opts.days ?? DEFAULT_SYNC_DAYS);
+  const { start, end } = dateRange(opts.days ?? DEFAULT_SYNC_DAYS, opts.endDate ? new Date(`${opts.endDate}T12:00:00Z`) : new Date());
   const accountCreds = { ...creds, loginCustomerId: account.login_customer_id ?? creds.loginCustomerId };
   const warnings: string[] = [];
 
   try {
-    const [customerRows, campaignRows, dailyRows, billingRows, budgetRows] = await Promise.all([
+    const [customerRows, campaignRows, dailyRows, billingRows, budgetRows, convActionRows, convMonthlyRows] = await Promise.all([
       gaqlSearch(accountCreds, account.customer_id, CUSTOMER_QUERY),
       gaqlSearch(accountCreds, account.customer_id, CAMPAIGN_QUERY),
       gaqlSearch(accountCreds, account.customer_id, dailyQuery(start, end)),
       optionalSearch(accountCreds, account.customer_id, BILLING_QUERY, warnings),
       optionalSearch(accountCreds, account.customer_id, ACCOUNT_BUDGET_QUERY, warnings),
+      optionalSearch(accountCreds, account.customer_id, CONVERSION_ACTION_QUERY, warnings),
+      optionalSearch(accountCreds, account.customer_id, conversionMonthlyQuery(start, end), warnings),
     ]);
 
     const campaigns = campaignRows.map((r) => mapCampaignRow(r, account.tenant_id, account.id));
@@ -194,6 +242,19 @@ export async function syncAccount(
     await upsertChunks(supabase, "google_ads_campaigns", campaigns, "account_id,campaign_id");
     await upsertChunks(supabase, "google_ads_campaign_daily", daily, "account_id,campaign_id,date");
     await upsertChunks(supabase, "google_ads_account_budget", budgets, "account_id,account_budget_id");
+
+    const convActions = convActionRows.map((r) => mapConversionActionRow(r, account.tenant_id, account.id)).filter((a) => a.conversion_action_id > 0);
+    // Agrega por (mes, acao): a consulta pode devolver varias linhas para o mesmo par.
+    const convMap = new Map<string, ReturnType<typeof mapConversionMonthlyRow>>();
+    for (const r of convMonthlyRows) {
+      const row = mapConversionMonthlyRow(r, account.tenant_id, account.id);
+      if (!row.month) continue;
+      const k = `${row.month}|${row.conversion_action_name}`;
+      const prev = convMap.get(k);
+      if (prev) { prev.conversions += row.conversions; prev.conversions_value += row.conversions_value; } else convMap.set(k, row);
+    }
+    await upsertChunks(supabase, "google_ads_conversion_actions", convActions, "account_id,conversion_action_id");
+    await upsertChunks(supabase, "google_ads_conversion_monthly", [...convMap.values()], "account_id,month,conversion_action_name");
 
     const cust = customerRows[0]?.customer ?? {};
     await supabase.from("google_ads_accounts").update({
@@ -212,10 +273,10 @@ export async function syncAccount(
       account_id: account.id,
       actor: opts.actor,
       action: "sync",
-      after_state: { campaigns: campaigns.length, daily_rows: daily.length, account_budgets: budgets.length, warnings, start, end },
+      after_state: { campaigns: campaigns.length, daily_rows: daily.length, account_budgets: budgets.length, conversion_actions: convActions.length, conversion_months: convMap.size, warnings, start, end },
     });
 
-    return { ...base, ok: true, campaigns: campaigns.length, daily_rows: daily.length, days: opts.days ?? DEFAULT_SYNC_DAYS };
+    return { ...base, ok: true, campaigns: campaigns.length, daily_rows: daily.length, days: opts.days ?? DEFAULT_SYNC_DAYS, start, end };
   } catch (err) {
     const message = (err instanceof Error ? err.message : String(err)).slice(0, 500);
     await supabase.from("google_ads_accounts").update({ last_error: message }).eq("id", account.id);

@@ -150,3 +150,37 @@ async function postWithRetry(
   }
   throw lastError!;
 }
+
+/**
+ * Escrita no Google Ads (mutate). Sem retentativa em 5xx/429: uma alteracao duplicada ou duvidosa e pior que um erro claro.
+ * So renova o token e tenta de novo UMA vez em 401. `path` e relativo a /customers/<id>/, ex.: "campaigns:mutate".
+ */
+export async function mutateResource(
+  creds: GoogleAdsCredentials,
+  customerId: string,
+  path: "campaigns:mutate" | "campaignBudgets:mutate",
+  operation: Record<string, unknown>,
+  fetchFn: FetchFn = fetch,
+): Promise<unknown> {
+  if (!/^\d{10}$/.test(customerId)) throw new GoogleAdsApiError("customer_id invalido (use 10 digitos)", 400, "BAD_CUSTOMER_ID");
+  let lastError: GoogleAdsApiError | undefined;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const accessToken = await getAccessToken(creds, fetchFn);
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${accessToken}`,
+      "developer-token": creds.developerToken,
+      "Content-Type": "application/json",
+    };
+    if (creds.loginCustomerId) headers["login-customer-id"] = creds.loginCustomerId;
+    const res = await fetchFn(`${API_BASE}/${GOOGLE_ADS_API_VERSION}/customers/${customerId}/${path}`, {
+      method: "POST", headers, body: JSON.stringify({ operations: [operation] }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (res.ok) return json;
+    const { message, code } = describeApiError(json);
+    lastError = new GoogleAdsApiError(message, res.status, code);
+    if (res.status === 401 && attempt === 1) { tokenCache.clear(); continue; }
+    break;
+  }
+  throw lastError!;
+}

@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
+import { invokeGoogleAds as invoke } from "@/lib/googleAdsInvoke";
 
 export type GoogleAdsAccount = Tables<"google_ads_accounts">;
 export type GoogleAdsCampaign = Tables<"google_ads_campaigns">;
@@ -68,22 +69,6 @@ export function useGoogleAdsData(accountId: string | undefined) {
       };
     },
   });
-}
-
-/** Mensagem útil do erro de uma edge function (o corpo traz { error }). */
-async function invoke(fn: string, body: Record<string, unknown>) {
-  const { data, error } = await supabase.functions.invoke(fn, { body });
-  if (error) {
-    let msg = error.message;
-    try {
-      const ctx = (error as { context?: Response }).context;
-      const j = ctx ? await ctx.json() : null;
-      if (j?.error) msg = j.error;
-    } catch { /* mantém a mensagem padrão */ }
-    throw new Error(msg);
-  }
-  if (data?.error) throw new Error(data.error);
-  return data;
 }
 
 export function useGoogleAdsActions(accountId: string | undefined) {
