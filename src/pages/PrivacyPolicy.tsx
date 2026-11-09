@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { SpyProLogo } from "@/components/common/SpyProLogo";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { GoogleAdsDataSection } from "@/components/legal/GoogleAdsDataSection";
 
 const PrivacyPolicy = () => {
   return (
@@ -118,6 +119,8 @@ const PrivacyPolicy = () => {
               significativas por e-mail ou através de aviso na plataforma.
             </p>
           </section>
+
+          <GoogleAdsDataSection />
 
           <section>
             <h2 className="text-xl font-semibold mt-8 mb-3">10. Contato</h2>

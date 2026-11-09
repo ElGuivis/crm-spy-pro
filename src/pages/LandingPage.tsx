@@ -6,6 +6,7 @@ import { LoyaltyEcosystem } from "@/components/landing/LoyaltyEcosystem";
 import { FeaturesSection } from "@/components/landing/FeaturesSection";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { ComparisonSection } from "@/components/landing/ComparisonSection";
+import { AdsManagerSection } from "@/components/landing/AdsManagerSection";
 import { VisualDemo } from "@/components/landing/VisualDemo";
 import {
   Scenarios, MidCTA, ObjectionBreaker, FAQSection, FinalCTA, LandingFooter,
@@ -29,6 +30,7 @@ export default function LandingPage() {
         <ObjectionBreaker />
         <FAQSection />
         <FinalCTA />
+        <AdsManagerSection />
       </main>
       <LandingFooter />
     </div>

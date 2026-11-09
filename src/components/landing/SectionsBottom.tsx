@@ -199,6 +199,8 @@ export function LandingFooter() {
             <a href="#funcionalidades" className="hover:text-foreground transition-colors">Funcionalidades</a>
             <a href="#como-funciona" className="hover:text-foreground transition-colors">Como funciona</a>
             <a href="#faq" className="hover:text-foreground transition-colors">FAQ</a>
+            <Link to="/privacidade" className="hover:text-foreground transition-colors">Política de privacidade</Link>
+            <Link to="/termos" className="hover:text-foreground transition-colors">Termos de uso</Link>
             <Link to="/auth" className="hover:text-foreground transition-colors">Login</Link>
           </div>
           <p className="text-xs text-muted-foreground">© {new Date().getFullYear()} SpyPro. Todos os direitos reservados.</p>

@@ -89,6 +89,20 @@ const TermsOfService = () => {
           </section>
 
           <section>
+            <h2 className="text-xl font-semibold mt-8 mb-3">SpyPro Ads Manager (Google Ads)</h2>
+            <p>
+              O SpyPro Ads Manager é uma ferramenta de uso interno da equipe SpyPro. O acesso aos dados do
+              Google Ads depende de autorização do administrador da conta, que pode revogá-la a qualquer momento
+              em{" "}
+              <a href="https://myaccount.google.com/permissions" className="text-primary underline" rel="noopener noreferrer">
+                myaccount.google.com/permissions
+              </a>
+              . Detalhes sobre o uso desses dados estão na{" "}
+              <a href="/privacidade#google-ads" className="text-primary underline">Política de Privacidade</a>.
+            </p>
+          </section>
+
+          <section>
             <h2 className="text-xl font-semibold mt-8 mb-3">7. Propriedade Intelectual</h2>
             <p>
               Todo o conteúdo, design, código e funcionalidades da plataforma SpyPro CRM são de propriedade 
