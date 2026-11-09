@@ -168,10 +168,11 @@ Deno.test("mapDailyRow: converte micros e numeros em texto", () => {
     segments: { date: "2026-11-08" },
     metrics: { impressions: "1200", clicks: "30", costMicros: "45500000", conversions: 2.5, conversionsValue: 310.4 },
   };
-  assertEquals(mapDailyRow(row, "t1", "a1"), {
+  const mapped = mapDailyRow(row, "t1", "a1");
+  assertEquals(mapped, {
     tenant_id: "t1", account_id: "a1", campaign_id: 7, date: "2026-11-08",
     impressions: 1200, clicks: 30, cost_micros: 45500000, conversions: 2.5, conversions_value: 310.4,
-    synced_at: mapDailyRow(row, "t1", "a1").synced_at,
+    synced_at: mapped.synced_at,
   });
 });
 

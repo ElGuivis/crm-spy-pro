@@ -1,6 +1,7 @@
 import { Target } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { PageTransition } from "@/components/common/PageTransition";
+import { AiAdvisorCard } from "@/components/google-ads/AiAdvisorCard";
 import { AccountStatusCard } from "@/components/google-ads/AccountStatusCard";
 import { ActivityCard } from "@/components/google-ads/ActivityCard";
 import { AlertsCard } from "@/components/google-ads/AlertsCard";
@@ -62,6 +63,7 @@ const GoogleAds = () => {
                 account={account} campaigns={data.campaigns} report={strategy.data?.report ?? null}
                 plan={strategy.data?.plan ?? []} canEdit={canEdit} actions={planActions}
               />
+              <AiAdvisorCard account={account} canEdit={canEdit} />
               <BudgetCapCard
                 account={account} campaigns={data.campaigns} canEdit={canEdit}
                 saving={saveMonthlyCap.isPending} onSave={(cap) => saveMonthlyCap.mutate(cap)}

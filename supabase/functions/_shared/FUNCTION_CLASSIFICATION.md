@@ -23,6 +23,7 @@ All resource lookups MUST include `.eq('tenant_id', authTenantId)`.
 | email-campaign-send-test | User sends test email |
 | evolution-api | User manages WhatsApp instances |
 | get-store-statuses | User checks store status |
+| google-ads-ai | Admin lista as IAs integradas e pede o parecer do consultor com IA (tela Google Ads) |
 | google-ads-apply | Admin aplica/desfaz recomendacoes no Google Ads (unica funcao que escreve na conta; tela Google Ads) |
 | google-ads-settings | Admin edita o teto mensal de gastos do Google Ads (tela Google Ads) |
 | instagram-block-user | User action |

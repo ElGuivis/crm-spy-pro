@@ -102,3 +102,11 @@ Deno.test("buildStrategy: o relatorio compactado cabe no limite de 20 mil caract
   const r = buildStrategy({ ...input, campaigns: many, lifetime: life, monthly: [] });
   assert(JSON.stringify({ ...r, campaigns: r.campaigns.slice(0, 12) }).length < 20000);
 });
+
+Deno.test("buildStrategy: campanha ja ligada com o orcamento do plano nao gera linha (nada a aplicar)", () => {
+  const first = buildStrategy(input);
+  const line = first.plan.find((p) => p.action === "set_budget")!;
+  const already = campaigns.map((c) => c.campaign_id === line.campaign_id ? { ...c, daily_budget_micros: line.daily_budget_micros } : c);
+  const second = buildStrategy({ ...input, campaigns: already });
+  assertEquals(second.plan.some((p) => p.campaign_id === line.campaign_id), false);
+});

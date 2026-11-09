@@ -231,6 +231,8 @@ export function buildStrategy(input: StrategyInput): StrategyReport {
       if (x.b < STRATEGY.minDailyBudgetMicros) continue;
       picked.add(x.a.campaign_id);
       const camp = input.campaigns.find((c) => c.campaign_id === x.a.campaign_id)!;
+      // Ja esta exatamente assim no Google: nao ha o que aplicar (evita pendencia vazia depois de aplicar o plano).
+      if (camp.status === "ENABLED" && camp.daily_budget_micros === x.b) continue;
       plan.push({
         campaign_id: x.a.campaign_id, name: x.a.name,
         action: camp.status === "ENABLED" ? "set_budget" : "enable",
