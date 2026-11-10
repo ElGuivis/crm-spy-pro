@@ -201,7 +201,7 @@ Deno.serve(async (req) => {
         const todayStart = brtDayStartIso(); // 00:00 de Brasília
         const { data: alreadyProcessed } = await supabase
           .from('birthday_executions')
-          .select('customer_phone, customer_email, status, coupon_code, error_message')
+          .select('customer_phone, customer_email, status, coupon_code, error_message, created_at')
           .eq('config_id', config.id)
           .gte('created_at', todayStart)
           .in('status', ['sent', 'pending', 'failed']);
@@ -216,6 +216,7 @@ Deno.serve(async (req) => {
             failedToday.set(k, { count: prev.count + (final ? MAX_FAILED_ATTEMPTS_PER_DAY : 1), coupon: (e.coupon_code as string | null) || prev.coupon });
           } else processedKeys.add(k);
         }
+        const lastSentAt = (alreadyProcessed ?? []).reduce<Date | null>((m, e) => { const t = new Date(e.created_at as string); return !m || t > m ? t : m; }, null);
         const vars = birthdayVars(config);
 
         // Get WhatsApp config
@@ -241,8 +242,9 @@ Deno.serve(async (req) => {
           const k = `${c.phone || ''}|${c.email || ''}`;
           return !processedKeys.has(k) && (failedToday.get(k)?.count ?? 0) < MAX_FAILED_ATTEMPTS_PER_DAY;
         });
-        const quota = paceQuota(pending.length);
+        const quota = paceQuota(pending.length, lastSentAt);
         log.info(`[BIRTHDAY] ${pending.length} pendente(s); cota desta execução: ${quota}`);
+        if (quota === 0) continue; // ainda não é a hora do próximo envio
         let attempted = 0;
 
         for (const customer of birthdayCustomers) {

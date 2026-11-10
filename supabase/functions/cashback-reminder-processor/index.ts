@@ -10,7 +10,7 @@ import { ensureAutomationConversation } from "../_shared/automation-conversation
 import { sendWhatsAppMessage as sharedSendWhatsApp, type WhatsAppConfig } from "../_shared/whatsapp-sender.ts";
 import { canContact, recordTouches } from "../_shared/contact-policy.ts";
 import { unsubscribeFor } from "../_shared/email-unsubscribe-link.ts";
-import { brtDate, inSendWindow } from "../_shared/brt.ts";
+import { brtDate, brtDayStartIso, inSendWindow } from "../_shared/brt.ts";
 import { paceQuota, pauseBetweenSends } from "../_shared/send-pacing.ts";
 
 const RUN_BUDGET_MS = 110_000; // o runtime derruba a chamada perto de 150 s
@@ -100,7 +100,11 @@ Deno.serve(async (req) => {
     log.info(`Found ${pendingReminders.length} pending reminders`);
     let processedCount = 0, successCount = 0, failedCount = 0;
     // ritmo: divide os lembretes do dia pelas execuções que restam na janela (não sai tudo de uma vez)
-    const quota = paceQuota(pendingReminders.length);
+    const { data: lastSent } = await supabase.from('cashback_reminders').select('sent_at').gte('sent_at', brtDayStartIso()).order('sent_at', { ascending: false }).limit(1).maybeSingle();
+    const quota = paceQuota(pendingReminders.length, lastSent?.sent_at ? new Date(lastSent.sent_at as string) : null);
+    if (quota === 0) {
+      return new Response(JSON.stringify({ success: true, message: 'Ainda não é a hora do próximo envio', processed: 0 }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
     const runStartedAt = Date.now();
     log.info(`Cota desta execução: ${quota} de ${pendingReminders.length}`);
 

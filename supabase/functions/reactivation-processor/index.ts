@@ -166,8 +166,10 @@ Deno.serve(async (req) => {
           const e = execMap.get(k);
           return !!k && (!e || e.lastExecDate < dayStart);
         });
-        const quota = paceQuota(pending.length);
+        const lastSentAt = [...execMap.values()].reduce<Date | null>((m, e) => (e.lastExecDate >= dayStart && (!m || e.lastExecDate > m) ? e.lastExecDate : m), null);
+        const quota = paceQuota(pending.length, lastSentAt);
         log.info(`[REACTIVATION] ${pending.length} pendente(s); cota desta execução: ${quota}`);
+        if (quota === 0) continue; // ainda não é a hora do próximo envio
         let attempted = 0;
 
         for (const customer of inactiveCustomers) {
