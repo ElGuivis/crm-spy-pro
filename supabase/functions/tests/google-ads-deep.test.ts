@@ -1,7 +1,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { clearTokenCache, type GoogleAdsCredentials } from "../_shared/google-ads-api.ts";
 import { ALL_DATASETS, defaultWindow, PRESETS, runDeep, snapStart } from "../_shared/google-ads-deep-runner.ts";
-import { mergeRows } from "../_shared/google-ads-deep-types.ts";
+import { localToUtcIso, mergeRows } from "../_shared/google-ads-deep-types.ts";
 
 const CREDS: GoogleAdsCredentials = { developerToken: "d", clientId: "c", clientSecret: "s", refreshToken: "r", loginCustomerId: "9667440809" };
 const jsonRes = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } });
@@ -93,11 +93,11 @@ Deno.test("products ignora produto sem id; changes converte data e hora do event
   ], async () => {
     assertEquals((await ds("products").fetch(ctx)).length, 1);
   });
-  await withGoogle(() => [{
+  await withGoogle((q) => q.includes("customer.time_zone") ? [{ customer: { timeZone: "America/Sao_Paulo" } }] : [{
     changeEvent: { resourceName: "customers/1/changeEvents/123~0~0", changeDateTime: "2026-11-09 20:47:22.006835", changeResourceType: "CAMPAIGN_BUDGET", resourceChangeOperation: "UPDATE", changedFields: "amount_micros", userEmail: "a@b.c" },
   }], async () => {
     const [c] = await ds("changes").fetch({ ...ctx, end: "2026-11-09" });
-    assertEquals([c.event_key, c.changed_at, c.operation], ["123~0~0", "2026-11-09T20:47:22.006835Z", "UPDATE"]);
+    assertEquals([c.event_key, c.changed_at, c.operation], ["123~0~0", "2026-11-09T23:47:22.006835Z", "UPDATE"]);
   });
 });
 
@@ -126,4 +126,12 @@ Deno.test("runDeep: mescla duplicatas antes de gravar, respeita o tempo e regist
     assertEquals(late.skipped, ["products"]);
     assertEquals((writes["google_ads_audit_log:insert"] ?? []).length, 2);
   });
+});
+
+Deno.test("localToUtcIso: hora local da conta vira UTC (Sao Paulo = UTC-3); sem fuso, assume UTC; texto invalido vira null", () => {
+  assertEquals(localToUtcIso("2026-11-09 20:47:22.006835", "America/Sao_Paulo"), "2026-11-09T23:47:22.006835Z");
+  assertEquals(localToUtcIso("2026-01-01 23:30:00", "America/Sao_Paulo"), "2026-01-02T02:30:00Z");
+  assertEquals(localToUtcIso("2026-11-09 20:00:00", null), "2026-11-09T20:00:00Z");
+  assertEquals(localToUtcIso("2026-11-09 20:00:00", "Fuso/Invalido"), "2026-11-09T20:00:00Z");
+  assertEquals(localToUtcIso("lixo", "America/Sao_Paulo"), null);
 });

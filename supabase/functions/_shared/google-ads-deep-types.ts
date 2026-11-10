@@ -55,6 +55,27 @@ export const lastId = (resource: unknown): string | null => {
   return s ? s.split("/").pop() ?? null : null;
 };
 
+/**
+ * O Google devolve datas/horas no FUSO DA CONTA ("2026-11-09 20:47:22.006835"). Converte para UTC ISO ("...Z") usando o fuso IANA.
+ * Sem fuso valido, assume UTC (comportamento antigo).
+ */
+export function localToUtcIso(local: string, timeZone: string | null): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(\.\d+)?/.exec(local);
+  if (!m) return null;
+  const frac = m[7] ?? "";
+  const guess = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+  let offset = 0;
+  if (timeZone) {
+    try {
+      const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })
+        .formatToParts(new Date(guess)).map((x) => [x.type, x.value]));
+      offset = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - guess;
+    } catch { offset = 0; }
+  }
+  const iso = new Date(guess - offset).toISOString().slice(0, 19);
+  return `${iso}${frac}Z`;
+}
+
 /** Junta varias linhas da mesma chave somando os campos numericos informados. */
 export function mergeRows(rows: Record<string, unknown>[], keys: string[], sum: string[]): Record<string, unknown>[] {
   const out = new Map<string, Record<string, unknown>>();

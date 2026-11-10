@@ -1,6 +1,6 @@
 /** Datasets de ESTRUTURA da conta (o que existe e como esta configurado) + desempenho de vida inteira. Somente leitura. */
 import { gaqlSearch } from "./google-ads-api.ts";
-import { base, type Dataset, type DatasetCtx, lastId, met, METRICS, nul, num, type Row, str } from "./google-ads-deep-types.ts";
+import { base, type Dataset, type DatasetCtx, lastId, localToUtcIso, met, METRICS, nul, num, type Row, str } from "./google-ads-deep-types.ts";
 
 const search = (ctx: DatasetCtx, q: string): Promise<Row[]> => gaqlSearch(ctx.creds, ctx.customerId, q) as Promise<Row[]>;
 const life = (ctx: DatasetCtx) => `segments.date BETWEEN '${ctx.lifetimeStart}' AND '${ctx.end}'`;
@@ -158,6 +158,7 @@ const changes: Dataset = {
     const to = new Date(`${ctx.end}T00:00:00Z`);
     const from = new Date(to.getTime() - 29 * 86_400_000).toISOString().slice(0, 10);
     const until = new Date(to.getTime() + 86_400_000).toISOString().slice(0, 10);
+    const tz = String((await search(ctx, "SELECT customer.time_zone FROM customer"))[0]?.customer?.timeZone ?? "") || null;
     const rows = await search(ctx, `SELECT change_event.change_date_time, change_event.change_resource_type, change_event.resource_change_operation,
       change_event.changed_fields, change_event.user_email, change_event.client_type, change_event.campaign FROM change_event
       WHERE change_event.change_date_time >= '${from}' AND change_event.change_date_time < '${until}' ORDER BY change_event.change_date_time DESC LIMIT 10000`);
@@ -165,7 +166,7 @@ const changes: Dataset = {
       const e = r.changeEvent ?? {};
       const fields = e.changedFields;
       return {
-        ...base(ctx), event_key: lastId(e.resourceName) ?? "", changed_at: String(e.changeDateTime ?? "").replace(" ", "T") + "Z",
+        ...base(ctx), event_key: lastId(e.resourceName) ?? "", changed_at: localToUtcIso(String(e.changeDateTime ?? ""), tz) ?? "",
         resource_type: str(e.changeResourceType), operation: str(e.resourceChangeOperation),
         changed_fields: (typeof fields === "string" ? fields : Array.isArray(fields?.paths) ? fields.paths.join(",") : "").slice(0, 500) || null,
         user_email: str(e.userEmail), client_type: str(e.clientType), campaign_resource: str(e.campaign),
