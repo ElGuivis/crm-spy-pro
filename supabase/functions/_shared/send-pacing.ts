@@ -12,7 +12,12 @@ export function paceQuota(remaining: number, d: Date = new Date()): number {
   return remaining <= 0 ? 0 : Math.ceil(remaining / runsLeftToday(d));
 }
 
-/** Espera entre duas mensagens (aleatória, para não sair em rajada). */
-export function pauseBetweenSends(minMs = 8_000, maxMs = 20_000): Promise<void> {
-  return new Promise((r) => setTimeout(r, minMs + Math.random() * (maxMs - minMs)));
+/** Intervalo médio entre mensagens: espalha a cota dentro do orçamento da execução (~100 s), entre 3 s (lista grande) e 14 s (lista pequena). */
+export function gapMs(quota: number, budgetMs = 100_000): number {
+  return Math.min(14_000, Math.max(3_000, Math.floor(budgetMs / Math.max(quota, 1))));
+}
+
+/** Espera entre duas mensagens (aleatória em torno do intervalo da cota, para não sair em rajada). */
+export function pauseBetweenSends(quota = 1): Promise<void> {
+  return new Promise((r) => setTimeout(r, gapMs(quota) * (0.6 + Math.random() * 0.8)));
 }

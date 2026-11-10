@@ -227,7 +227,7 @@ Deno.serve(async (req) => {
           await supabase.from('cashback_reminders').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', reminder.id);
           await supabase.from('cashback_executions').insert({ config_id: reminder.config_id, coupon_id: reminder.coupon_id, reminder_id: reminder.id, coupon_code: reminder.coupon?.coupon_code, action_type: 'reminder_sent', status: (whatsappSent || emailSent) ? 'success' : 'queued', tokens_used: (whatsappSent || emailSent) ? 5 : 0, tenant_id: tenantId, metadata: { reminder_number: reminder.reminder_number, whatsapp_sent: whatsappSent, email_sent: emailSent } });
           successCount++;
-          if (processedCount < quota) await pauseBetweenSends();
+          if (processedCount < quota) await pauseBetweenSends(quota);
         } else {
           throw new Error('No channels configured');
         }

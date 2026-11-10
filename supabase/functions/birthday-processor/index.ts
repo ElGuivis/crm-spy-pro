@@ -436,7 +436,7 @@ Deno.serve(async (req) => {
             });
 
             totalProcessed++;
-            if (attempted < quota) await pauseBetweenSends();
+            if (attempted < quota) await pauseBetweenSends(quota);
           } catch (custError: unknown) {
             const msg = custError instanceof Error ? custError.message : 'Unknown error';
             log.error(`[BIRTHDAY] Error processing ${customer.name}:`, msg);
