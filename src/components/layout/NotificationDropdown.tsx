@@ -46,8 +46,8 @@ export function NotificationDropdown() {
       // 1. Recent orders (last 5)
       const { data: recentOrders } = await supabase
         .from('li_orders')
-        .select('id, order_number, raw_json, totals_json, updated_at_local, integration_id')
-        .order('updated_at_local', { ascending: false })
+        .select('id, order_number, raw_json, totals_json, created_at_remote, integration_id')
+        .order('created_at_remote', { ascending: false })
         .limit(5);
 
       if (recentOrders) {
@@ -60,7 +60,7 @@ export function NotificationDropdown() {
             type: 'new_order',
             title: `Pedido #${order.order_number || 'N/A'}`,
             description: `${raw.cliente_nome || 'Cliente'} ${total ? '• ' + total : ''}`,
-            timestamp: order.updated_at_local || '',
+            timestamp: order.created_at_remote || '',
             read: false,
             link: `/sales/${order.integration_id}`,
             icon: 'cart',

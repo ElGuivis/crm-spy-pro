@@ -84,7 +84,7 @@ export function useNewOrdersNotification() {
         const { data } = await supabase
           .from('li_orders')
           .select('id')
-          .order('updated_at_local', { ascending: false })
+          .order('created_at_remote', { ascending: false })
           .limit(1)
           .maybeSingle();
 
@@ -97,16 +97,17 @@ export function useNewOrdersNotification() {
 
       const { data: lastSeenOrder } = await supabase
         .from('li_orders')
-        .select('updated_at_local')
+        .select('created_at_remote')
         .eq('id', lastSeenOrderId)
         .maybeSingle();
 
-      if (lastSeenOrder) {
+      if (lastSeenOrder?.created_at_remote) {
+        // "novo" = pedido CRIADO depois do último visto (atualização de pedido antigo não conta)
         const since = new Date(Date.now() - UNSEEN_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
         const { count } = await supabase
           .from('li_orders')
           .select('id', { count: 'exact', head: true })
-          .gt('updated_at_local', lastSeenOrder.updated_at_local)
+          .gt('created_at_remote', lastSeenOrder.created_at_remote)
           .gte('created_at_remote', since);
 
         setNewOrdersCount(count || 0);
@@ -121,7 +122,7 @@ export function useNewOrdersNotification() {
     const { data } = await supabase
       .from('li_orders')
       .select('id')
-      .order('updated_at_local', { ascending: false })
+      .order('created_at_remote', { ascending: false })
       .limit(1)
       .maybeSingle();
 

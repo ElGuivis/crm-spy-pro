@@ -122,7 +122,6 @@ export async function updateOrderStatuses(
           status_id: apiStatusId || order.status_id,
           status_name: apiStatusNome || order.status_name,
           raw_json: mergedRaw,
-          updated_at_local: new Date().toISOString(),
           last_status_check_at: new Date().toISOString(),
         };
 
@@ -139,6 +138,10 @@ export async function updateOrderStatuses(
         const statusChanged = apiStatusId !== null && (apiStatusId !== order.status_id || apiStatusNome !== order.status_name);
         const currentTrackingCode2 = (order.raw_json as Record<string, unknown>)?.codigo_rastreio || null;
         const trackingChanged = codigoRastreio && codigoRastreio !== currentTrackingCode2;
+        // updated_at_local = "mudou de verdade" (alimenta o sino de notificações): só atualiza com mudança de status, rastreio ou valor;
+        // a revalidação de pedidos antigos sem mudança só registra a conferência (last_status_check_at)
+        const totalChanged = apiOrder.valor_total != null && parseFloat(apiOrder.valor_total) !== Number((order.totals_json as { total?: number } | null)?.total ?? NaN);
+        if (statusChanged || trackingChanged || totalChanged) updateData.updated_at_local = new Date().toISOString();
 
         if (statusChanged) log.info(`[FULL-SYNC] Order #${order.order_number} status: "${order.status_name}" -> "${apiStatusNome}"`);
         if (trackingChanged) log.info(`[FULL-SYNC] Order #${order.order_number} tracking: ${codigoRastreio}`);
