@@ -23,7 +23,8 @@ const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", curr
 interface Proposal { key: string; fields: Record<string, unknown> }
 
 /** Cria/atualiza/expira as propostas de uma familia (prefixo da chave) sem mexer no que o usuario ja decidiu. */
-async function reconcile(supabase: SupabaseClient, accountId: string, tenantId: string, prefix: string, proposals: Proposal[]) {
+/** `gone`: estado de uma proposta que deixou de valer. "resolved" = o objetivo ja foi atingido (termo ja negativado, meta ja desligada). */
+async function reconcile(supabase: SupabaseClient, accountId: string, tenantId: string, prefix: string, proposals: Proposal[], gone: "expired" | "resolved" = "expired") {
   const existing = must(await supabase.from("google_ads_recommendations").select("id, dedupe_key, status")
     .eq("account_id", accountId).eq("agent", BUILD_AGENT).like("dedupe_key", `${prefix}%`), "propostas") as Array<{ id: string; dedupe_key: string; status: string }>;
   const prev = new Map(existing.map((e) => [e.dedupe_key, e]));
@@ -40,7 +41,7 @@ async function reconcile(supabase: SupabaseClient, accountId: string, tenantId: 
   }
   const live = new Set(proposals.map((p) => p.key));
   // Pendente OU que falhou e deixou de valer (ex.: a situacao ja foi resolvida) sai da lista.
-  for (const old of existing) if ((old.status === "pending" || old.status === "failed") && !live.has(old.dedupe_key)) await supabase.from("google_ads_recommendations").update({ status: "expired", error: null }).eq("id", old.id);
+  for (const old of existing) if ((old.status === "pending" || old.status === "failed" || old.status === "blocked") && !live.has(old.dedupe_key)) await supabase.from("google_ads_recommendations").update({ status: gone, error: null }).eq("id", old.id);
 }
 
 // ---------------------------------------------------------------------------
@@ -79,7 +80,7 @@ export async function proposeNegatives(supabase: SupabaseClient, accountId: stri
         payload: { campaign_id: cid, terms: list.map((x) => x.text), term_costs: list.map((x) => ({ text: x.text, cost: x.cost })) },
       },
     }));
-    await reconcile(supabase, accountId, acc.tenant_id, "neg:", proposals);
+    await reconcile(supabase, accountId, acc.tenant_id, "neg:", proposals, "resolved");
     return { ok: true, proposals: proposals.length };
   } catch (err) {
     return { ok: false, error: (err instanceof Error ? err.message : String(err)).slice(0, 400) };
@@ -119,7 +120,7 @@ export async function proposeConversionFixes(supabase: SupabaseClient, accountId
         },
       });
     }
-    await reconcile(supabase, accountId, acc.tenant_id, "goal:", proposals);
+    await reconcile(supabase, accountId, acc.tenant_id, "goal:", proposals, "resolved");
     return { ok: true, proposals: proposals.length };
   } catch (err) {
     return { ok: false, error: (err instanceof Error ? err.message : String(err)).slice(0, 400) };

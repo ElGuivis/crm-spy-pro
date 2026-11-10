@@ -100,7 +100,7 @@ export async function runStrategy(supabase: SupabaseClient, accountId: string, a
     }
     const live = new Set(rows.map((r) => r.key));
     for (const old of prev.values()) {
-      if (old.status === "pending" && !live.has(old.dedupe_key)) {
+      if ((old.status === "pending" || old.status === "blocked") && !live.has(old.dedupe_key)) {
         await supabase.from("google_ads_recommendations").update({ status: "expired" }).eq("id", old.id);
       }
     }

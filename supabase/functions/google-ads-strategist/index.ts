@@ -4,6 +4,7 @@ import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts";
 import { createLogger, getCorrelationId } from "../_shared/correlation.ts";
 import { proposeRebuilds } from "../_shared/google-ads-build-runner.ts";
+import { reviewOpenProposals } from "../_shared/google-ads-review-runner.ts";
 import { runStrategy } from "../_shared/google-ads-strategy-runner.ts";
 
 /**
@@ -48,6 +49,9 @@ serve(async (req) => {
     if (result.ok && result.report) {
       const b = await proposeRebuilds(supabase, accountId, result.report);
       if (!b.ok) log.warn("propostas de reconstrucao falharam", { error: b.error });
+      // Revisor: barra o que se contradiz, muda pouco, tem poucos dados ou duplica campanha ligada.
+      const rv = await reviewOpenProposals(supabase, accountId);
+      if (!rv.ok) log.warn("revisao de propostas falhou", { error: rv.error });
     }
     return json(result, result.ok ? 200 : 500);
   } catch (err) {

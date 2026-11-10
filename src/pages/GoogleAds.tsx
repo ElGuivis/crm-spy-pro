@@ -5,6 +5,7 @@ import { AiAdvisorCard } from "@/components/google-ads/AiAdvisorCard";
 import { AccountStatusCard } from "@/components/google-ads/AccountStatusCard";
 import { ActivityCard } from "@/components/google-ads/ActivityCard";
 import { AlertsCard } from "@/components/google-ads/AlertsCard";
+import { BlockedProposalsCard } from "@/components/google-ads/BlockedProposalsCard";
 import { BudgetCapCard } from "@/components/google-ads/BudgetCapCard";
 import { CampaignsTable } from "@/components/google-ads/CampaignsTable";
 import { DataBrowser } from "@/components/google-ads/DataBrowser";
@@ -87,6 +88,7 @@ const GoogleAds = () => {
                 account={account} campaigns={data.campaigns} report={strategy.data?.report ?? null}
                 plan={strategy.data?.plan ?? []} canEdit={canEdit} actions={planActions}
               />
+              <BlockedProposalsCard accountId={account.id} />
               <BuildCards
                 negatives={build.data?.negatives ?? []} rebuilds={build.data?.rebuilds ?? []} campaigns={data.campaigns} actions={buildActions}
                 goals={impl.suggestions.filter((s) => s.kind === "set_conversion_goal")} impl={impl}
