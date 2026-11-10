@@ -11,6 +11,7 @@ import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { ensureAutomationConversation } from "../_shared/automation-conversation.ts";
 import { brtParts, brtDateAfter, brtDayStartIso, birthMonthDay, inSendWindow } from "../_shared/brt.ts";
 import { paceQuota, pauseBetweenSends } from "../_shared/send-pacing.ts";
+import { isAmbiguousSendError, isPermanentRecipientError } from "../_shared/outbound-errors.ts";
 import { buildBirthdaySpec, birthdayVars, fillBirthday } from "../_shared/birthday-coupon.ts";
 
 const MAX_FAILED_ATTEMPTS_PER_DAY = 3;
@@ -200,7 +201,7 @@ Deno.serve(async (req) => {
         const todayStart = brtDayStartIso(); // 00:00 de Brasília
         const { data: alreadyProcessed } = await supabase
           .from('birthday_executions')
-          .select('customer_phone, customer_email, status, coupon_code')
+          .select('customer_phone, customer_email, status, coupon_code, error_message')
           .eq('config_id', config.id)
           .gte('created_at', todayStart)
           .in('status', ['sent', 'pending', 'failed']);
@@ -211,7 +212,8 @@ Deno.serve(async (req) => {
           const k = `${e.customer_phone || ''}|${e.customer_email || ''}`;
           if (e.status === 'failed') {
             const prev = failedToday.get(k) ?? { count: 0, coupon: null };
-            failedToday.set(k, { count: prev.count + 1, coupon: (e.coupon_code as string | null) || prev.coupon });
+            const final = isPermanentRecipientError(String(e.error_message ?? "")) || isAmbiguousSendError(String(e.error_message ?? "")); // número sem WhatsApp ou envio incerto: não repete
+            failedToday.set(k, { count: prev.count + (final ? MAX_FAILED_ATTEMPTS_PER_DAY : 1), coupon: (e.coupon_code as string | null) || prev.coupon });
           } else processedKeys.add(k);
         }
         const vars = birthdayVars(config);
