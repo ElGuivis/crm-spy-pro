@@ -1,3 +1,4 @@
+import { isSaleStatus } from "@/lib/orderStatus";
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -23,18 +24,17 @@ export function useRFMCohort(integrationId: string, sourceType: string) {
       let orders: { customer_id: string; order_date: string }[] = [];
 
       if (sourceType === 'loja_integrada') {
-        const paidStatuses = ['Pedido Pago', 'Pedido Enviado', 'Pedido Entregue'];
+        // venda = tudo que não é cancelado/devolvido/aguardando (@/lib/orderStatus)
         
         // Fetch in pages to avoid 1000-row limit
-        const allOrders: { customer_id: string | null; created_at_remote: string | null }[] = [];
+        const allOrders: { customer_id: string | null; created_at_remote: string | null; status_name: string | null }[] = [];
         let from = 0;
         const pageSize = 1000;
         while (true) {
           const { data: batch, error } = await supabase
             .from('li_orders')
-            .select('customer_id, created_at_remote')
+            .select('customer_id, created_at_remote, status_name')
             .eq('integration_id', integrationId)
-            .in('status_name', paidStatuses)
             .not('customer_id', 'is', null)
             .range(from, from + pageSize - 1);
           if (error) throw error;
@@ -45,7 +45,7 @@ export function useRFMCohort(integrationId: string, sourceType: string) {
         }
 
         orders = allOrders.flatMap(o =>
-          o.customer_id && o.created_at_remote
+          o.customer_id && o.created_at_remote && isSaleStatus(o.status_name)
             ? [{ customer_id: o.customer_id, order_date: o.created_at_remote }]
             : []);
 

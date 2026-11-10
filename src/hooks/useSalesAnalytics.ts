@@ -1,3 +1,4 @@
+import { isSaleStatus } from "@/lib/orderStatus";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -15,7 +16,7 @@ export interface SalesAnalyticsData {
   avgTicket: number;
 }
 
-const EFFECTIVE_STATUSES = ["Pedido Entregue", "Pedido Enviado", "Pedido Pago"];
+// venda = tudo que não é cancelado/devolvido/aguardando (regra única em @/lib/orderStatus)
 
 async function fetchSalesAnalytics(tenantId: string): Promise<SalesAnalyticsData> {
   const thirtyDaysAgo = subDays(new Date(), 30).toISOString();
@@ -37,7 +38,7 @@ async function fetchSalesAnalytics(tenantId: string): Promise<SalesAnalyticsData
       : Promise.resolve({ data: [] as { produto_nome: string; quantidade: number; valor_total: number; order_id: string }[] }),
   ]);
 
-  const effectiveLI = (liOrders || []).filter(o => EFFECTIVE_STATUSES.includes(o.status_name || ""));
+  const effectiveLI = (liOrders || []).filter(o => isSaleStatus(o.status_name));
   const effectiveBling = blingOrders || [];
   const getLITotal = (o: typeof effectiveLI[number]): number => {
     return Number(jsonAs<LiTotals>(o.totals_json)?.total || 0);

@@ -1,3 +1,4 @@
+import { isSaleStatus } from "../_shared/order-status.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4'
 type ServiceClient = ReturnType<typeof createClient>;
 import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts"
@@ -75,11 +76,12 @@ Deno.serve(async (req) => {
     let cachedBlingPaidOrders: Record<string, unknown>[] | null = null
 
     if (source_type === 'loja_integrada') {
-      const paidStatuses = ['Pedido Pago', 'Pedido Enviado', 'Pedido Entregue']
-      const orders = await fetchAllRows('li_orders', (from: Record<string, unknown>) =>
+      // venda = tudo que não é cancelado/devolvido/aguardando (_shared/order-status.ts)
+      const allLiOrders = await fetchAllRows('li_orders', (from: Record<string, unknown>) =>
         from.select('id, customer_id, totals_json, status_name, created_at_remote, raw_json')
-          .eq('integration_id', integration_id).eq('tenant_id', tenantId).in('status_name', paidStatuses)
+          .eq('integration_id', integration_id).eq('tenant_id', tenantId)
       )
+      const orders = allLiOrders.filter((o: Record<string, unknown>) => isSaleStatus(o.status_name as string | null))
       cachedLiOrders = orders
 
       log.info(`[RFM] LI orders fetched: ${orders.length} (all-time)`)
@@ -151,7 +153,7 @@ Deno.serve(async (req) => {
         })
       }
     } else if (source_type === 'bling') {
-      const orders = await fetchAllRows('bling_orders', (from: Record<string, unknown>) =>
+      const allLiOrders = await fetchAllRows('bling_orders', (from: Record<string, unknown>) =>
         from.select('id, cliente_id, cliente_nome, cliente_email, cliente_telefone, cliente_cpf_cnpj, valor_total, situacao_nome, data_criacao')
           .eq('integration_id', integration_id).eq('tenant_id', tenantId)
       )

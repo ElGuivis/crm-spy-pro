@@ -63,7 +63,7 @@ export async function diagnoseAccount(
       supabase.from("google_ads_conversion_actions").select("name, category, status, primary_for_goal").eq("account_id", accountId),
       supabase.from("google_ads_conversion_monthly").select("conversion_action_name, month, conversions").eq("account_id", accountId).gte("month", sinceMonth).limit(1000),
       supabase.from("li_orders").select("id", { count: "exact", head: true }).eq("tenant_id", account.tenant_id)
-        .in("status_name", ["Pedido Entregue", "Pedido Enviado", "Pedido Pago"]).gte("created_at_remote", sinceOrders),
+        .not("status_name", "ilike", "%cancel%").not("status_name", "ilike", "%devolvid%").not("status_name", "ilike", "%chargeback%").not("status_name", "ilike", "aguardando%").gte("created_at_remote", sinceOrders),
     ]);
 
     const input: RuleInput = {
