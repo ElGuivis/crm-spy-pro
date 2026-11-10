@@ -10,9 +10,11 @@ import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { ensureAutomationConversation } from "../_shared/automation-conversation.ts";
 import { brtParts, brtDateAfter, brtDayStartIso, birthMonthDay, inSendWindow } from "../_shared/brt.ts";
+import { paceQuota, pauseBetweenSends } from "../_shared/send-pacing.ts";
 import { buildBirthdaySpec, birthdayVars, fillBirthday } from "../_shared/birthday-coupon.ts";
 
 const MAX_FAILED_ATTEMPTS_PER_DAY = 3;
+const RUN_BUDGET_MS = 110_000; // o runtime derruba a chamada perto de 150 s
 
 const BIRTHDAY_TOKEN_COST = 3;
 const PAGE_SIZE = 1000;
@@ -81,6 +83,7 @@ Deno.serve(async (req) => {
     const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
 
     const supabase = createClient(supabaseUrl, supabaseKey);
+    const runStartedAt = Date.now();
 
     // mensagem ao cliente só entre 08h e 21h de Brasília (o cron roda de hora em hora; o primeiro disparo do dia é às 08h)
     if (!inSendWindow()) {
@@ -231,7 +234,17 @@ Deno.serve(async (req) => {
         const apiKey = config.store_integration?.api_key;
         const authHeader = apiKey ? liAuthHeader(apiKey) : null;
 
+        // ritmo: divide quem falta pelas execuções que restam na janela (o dia não sai de uma vez) e deixa intervalo entre as mensagens
+        const pending = birthdayCustomers.filter((c) => {
+          const k = `${c.phone || ''}|${c.email || ''}`;
+          return !processedKeys.has(k) && (failedToday.get(k)?.count ?? 0) < MAX_FAILED_ATTEMPTS_PER_DAY;
+        });
+        const quota = paceQuota(pending.length);
+        log.info(`[BIRTHDAY] ${pending.length} pendente(s); cota desta execução: ${quota}`);
+        let attempted = 0;
+
         for (const customer of birthdayCustomers) {
+          if (attempted >= quota || Date.now() - runStartedAt > RUN_BUDGET_MS) break;
           const customerKey = `${customer.phone || ''}|${customer.email || ''}`;
           if (processedKeys.has(customerKey)) {
             log.info(`[BIRTHDAY] Already processed ${customer.name} today, skipping`);
@@ -263,6 +276,7 @@ Deno.serve(async (req) => {
 
             // Cupom: loja integrada pelo emissor único (livro-razão, nova tentativa em 429, código sem colisão);
             // outras lojas seguem só com o código sorteado, como antes.
+            attempted++;
             let couponCode = generateCouponCode();
             if (storeType === 'loja_integrada' && authHeader && config.store_integration?.id) {
               const expiresDate = brtDateAfter(config.coupon_duration_days);
@@ -422,6 +436,7 @@ Deno.serve(async (req) => {
             });
 
             totalProcessed++;
+            if (attempted < quota) await pauseBetweenSends();
           } catch (custError: unknown) {
             const msg = custError instanceof Error ? custError.message : 'Unknown error';
             log.error(`[BIRTHDAY] Error processing ${customer.name}:`, msg);
