@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict DPMm7gI0iDOJr4CKtBAUE4IfhsdYyumc1CEzMJQ5kbbmvYgKCbkTiKzanjKGczR
+\restrict TDeQuBtl39cUbhXcOZkAicUcEoIcyiLkQysvquGalZOeIiJvaDdl3995zmKFZgS
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -328,6 +328,23 @@ CREATE FUNCTION public.caller_is_user(_user_id uuid) RETURNS boolean
     AS $$
   SELECT public.caller_is_trusted() OR (auth.uid() IS NOT NULL AND auth.uid() = _user_id);
 $$;
+
+
+--
+-- Name: cashback_exclusions_set_key(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.cashback_exclusions_set_key() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  NEW.customer_key := public.customer_key(NEW.email, NEW.phone);
+  IF NEW.customer_key IS NULL THEN
+    RAISE EXCEPTION 'Informe um e-mail ou telefone valido';
+  END IF;
+  RETURN NEW;
+END $$;
 
 
 --
@@ -1596,6 +1613,62 @@ $$;
 
 
 --
+-- Name: get_cashback_statement(text, text, integer, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_cashback_statement(p_search text DEFAULT NULL::text, p_status text DEFAULT NULL::text, p_limit integer DEFAULT 100, p_offset integer DEFAULT 0) RETURNS TABLE(id uuid, order_number text, customer_name text, customer_email text, customer_phone text, base_amount numeric, credit_amount numeric, display_status text, release_at timestamp with time zone, coupon_code text, expires_at timestamp with time zone, used_at timestamp with time zone, used_order_value numeric, skip_reason text, created_at timestamp with time zone)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  WITH x AS (
+    SELECT c.id, c.order_number, c.customer_name, c.customer_email, c.customer_phone, c.base_amount, c.credit_amount,
+      c.release_at, g.coupon_code, g.expires_at, g.used_at, g.used_order_value, c.skip_reason, c.created_at,
+      CASE
+        WHEN c.status = 'released' AND g.used_at IS NOT NULL THEN 'used'
+        WHEN c.status = 'released' AND g.expires_at IS NOT NULL AND g.expires_at < now() THEN 'expired'
+        WHEN c.status = 'released' THEN 'available'
+        WHEN c.status = 'releasing' THEN 'pending'
+        ELSE c.status
+      END AS display_status
+    FROM public.cashback_credits c
+    LEFT JOIN public.generated_coupons g ON g.id = c.coupon_id
+    WHERE c.tenant_id = (SELECT public.get_user_tenant_id((SELECT auth.uid())))
+      AND (p_search IS NULL OR p_search = '' OR c.customer_name ILIKE '%' || p_search || '%' OR c.customer_email ILIKE '%' || p_search || '%'
+           OR c.customer_phone ILIKE '%' || p_search || '%' OR c.order_number = p_search OR g.coupon_code ILIKE p_search)
+  )
+  SELECT x.id, x.order_number, x.customer_name, x.customer_email, x.customer_phone, x.base_amount, x.credit_amount,
+         x.display_status, x.release_at, x.coupon_code, x.expires_at, x.used_at, x.used_order_value, x.skip_reason, x.created_at
+  FROM x
+  WHERE p_status IS NULL OR p_status = '' OR x.display_status = p_status
+  ORDER BY x.created_at DESC
+  LIMIT LEAST(GREATEST(p_limit, 1), 500) OFFSET GREATEST(p_offset, 0);
+$$;
+
+
+--
+-- Name: get_cashback_totals(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_cashback_totals() RETURNS TABLE(display_status text, credits bigint, amount numeric)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  SELECT CASE
+           WHEN c.status = 'released' AND g.used_at IS NOT NULL THEN 'used'
+           WHEN c.status = 'released' AND g.expires_at IS NOT NULL AND g.expires_at < now() THEN 'expired'
+           WHEN c.status = 'released' THEN 'available'
+           WHEN c.status = 'releasing' THEN 'pending'
+           ELSE c.status
+         END AS display_status,
+         count(*), coalesce(sum(c.credit_amount), 0)
+  FROM public.cashback_credits c
+  LEFT JOIN public.generated_coupons g ON g.id = c.coupon_id
+  WHERE c.tenant_id = (SELECT public.get_user_tenant_id((SELECT auth.uid())))
+  GROUP BY 1;
+$$;
+
+
+--
 -- Name: get_catalog_summary(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -2555,6 +2628,188 @@ BEGIN
   ORDER BY (COALESCE(p.stock, c.stock, 0) <= 0) DESC, c.subscribers DESC
   LIMIT p_limit;
 END;
+$$;
+
+
+--
+-- Name: google_ads_copy_facts(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.google_ads_copy_facts(p_account uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  v_tenant uuid;
+  v_res jsonb;
+BEGIN
+  SELECT tenant_id INTO v_tenant FROM google_ads_accounts WHERE id = p_account;
+  IF v_tenant IS NULL THEN RAISE EXCEPTION 'conta nao encontrada'; END IF;
+
+  SELECT jsonb_build_object(
+    'colors', COALESCE((SELECT jsonb_agg(c ORDER BY q DESC) FROM (
+        SELECT k.c, SUM(i.qty) AS q
+        FROM unnest(ARRAY['preto','branco','verde','marrom','vermelho','bege','roxo','cinza','azul','amarelo','vinho','rosa','laranja']) AS k(c)
+        JOIN li_order_items i ON lower(i.sku) LIKE '%' || k.c || '%'
+        JOIN li_orders o ON o.id = i.order_id
+        WHERE o.tenant_id = v_tenant AND o.status_name = 'Pedido Entregue' AND o.created_at_remote >= now() - interval '18 months'
+        GROUP BY k.c HAVING SUM(i.qty) >= 50 ORDER BY 2 DESC LIMIT 4) y), '[]'::jsonb),
+    'delivered_orders', (SELECT COUNT(*) FROM li_orders WHERE tenant_id = v_tenant AND status_name = 'Pedido Entregue'),
+    'states_delivered', (SELECT COUNT(DISTINCT shipping_json->'address'->>'estado') FROM li_orders WHERE tenant_id = v_tenant AND status_name = 'Pedido Entregue'),
+    'pix_orders_12m', (SELECT COUNT(*) FROM li_orders WHERE tenant_id = v_tenant AND status_name = 'Pedido Entregue'
+                        AND payment_json->>'method' = 'Pix' AND created_at_remote >= now() - interval '12 months'),
+    'card_installment_pct', (SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE COALESCE((payment_json->>'installments')::int, 1) > 1) / NULLIF(COUNT(*), 0), 1)
+                              FROM li_orders WHERE tenant_id = v_tenant AND status_name = 'Pedido Entregue' AND payment_json->>'method' ILIKE '%cart%'),
+    'product_types', COALESCE((SELECT jsonb_agg(t ORDER BY q DESC) FROM (
+        SELECT initcap(split_part(i.name, ' ', 1)) AS t, SUM(i.qty) AS q
+        FROM li_order_items i JOIN li_orders o ON o.id = i.order_id
+        WHERE o.tenant_id = v_tenant AND o.status_name = 'Pedido Entregue' AND o.created_at_remote >= now() - interval '18 months'
+        GROUP BY 1 HAVING SUM(i.qty) >= 10 ORDER BY 2 DESC LIMIT 5) x), '[]'::jsonb)
+  ) INTO v_res;
+  RETURN v_res;
+END;
+$$;
+
+
+--
+-- Name: google_ads_crm_economics(uuid, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.google_ads_crm_economics(p_account uuid, p_months integer DEFAULT 24) RETURNS jsonb
+    LANGUAGE plpgsql STABLE
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  v_tenant uuid;
+  v_since timestamptz := now() - make_interval(months => LEAST(GREATEST(p_months, 3), 60));
+  v_res jsonb;
+  v_recon jsonb;
+BEGIN
+  SELECT tenant_id INTO v_tenant FROM google_ads_accounts WHERE id = p_account;
+  IF v_tenant IS NULL THEN RAISE EXCEPTION 'conta nao encontrada'; END IF;
+
+  WITH o AS (
+    SELECT id, customer_id, created_at_remote,
+      CASE WHEN status_name IN ('Pedido Entregue','Pedido Enviado','Pedido Pago') THEN 'valid'
+           WHEN status_name = 'Pedido Cancelado' THEN 'cancelled'
+           WHEN status_name LIKE 'Pagamento devolvido%' OR status_name LIKE '%chargeback%' THEN 'refunded'
+           ELSE 'other' END AS kind,
+      COALESCE((totals_json->>'subtotal')::numeric, 0) AS sub,
+      COALESCE((totals_json->>'discount')::numeric, 0) AS disc,
+      COALESCE((totals_json->>'shipping')::numeric, 0) AS ship,
+      COALESCE((totals_json->>'total')::numeric, 0) AS tot,
+      payment_json->>'method' AS pm
+    FROM li_orders WHERE tenant_id = v_tenant AND created_at_remote >= v_since
+  ),
+  cogs AS (
+    SELECT i.order_id, SUM(i.qty * COALESCE(p.cost_price, 0)) AS cogs, SUM(i.qty) AS units,
+           SUM(i.qty) FILTER (WHERE p.cost_price IS NULL OR p.cost_price = 0) AS units_no_cost
+    FROM li_order_items i
+    LEFT JOIN li_products p ON p.loja_integrada_product_id = i.loja_integrada_product_id AND p.tenant_id = i.tenant_id
+    WHERE i.tenant_id = v_tenant AND i.order_id IN (SELECT id FROM o WHERE kind = 'valid')
+    GROUP BY 1
+  ),
+  v AS (SELECT o.*, c.cogs, c.units, c.units_no_cost FROM o JOIN cogs c ON c.order_id = o.id WHERE o.kind = 'valid'),
+  cust AS (SELECT customer_id, COUNT(*) AS n FROM o WHERE kind = 'valid' AND customer_id IS NOT NULL GROUP BY 1)
+  SELECT jsonb_build_object(
+    'window_months', p_months,
+    'orders_valid', (SELECT COUNT(*) FROM v),
+    'orders_cancelled', (SELECT COUNT(*) FROM o WHERE kind = 'cancelled'),
+    'orders_refunded', (SELECT COUNT(*) FROM o WHERE kind = 'refunded'),
+    'revenue_valid', (SELECT ROUND(COALESCE(SUM(tot), 0), 2) FROM v),
+    'revenue_refunded', (SELECT ROUND(COALESCE(SUM(tot), 0), 2) FROM o WHERE kind = 'refunded'),
+    'avg_ticket', (SELECT ROUND(AVG(tot), 2) FROM v),
+    'avg_discount', (SELECT ROUND(AVG(disc), 2) FROM v),
+    'avg_shipping_charged', (SELECT ROUND(AVG(ship), 2) FROM v),
+    'avg_units', (SELECT ROUND(AVG(units), 2) FROM v),
+    'avg_cogs', (SELECT ROUND(AVG(cogs), 2) FROM v),
+    'pct_units_without_cost', (SELECT ROUND(100.0 * SUM(units_no_cost) / NULLIF(SUM(units), 0), 1) FROM v),
+    'product_margin_pct', (SELECT ROUND(100 * (1 - SUM(cogs) / NULLIF(SUM(sub - disc), 0)), 1) FROM v),
+    'free_shipping_pct', (SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE ship = 0) / NULLIF(COUNT(*), 0), 1) FROM v),
+    'cancel_pct', (SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE kind = 'cancelled') / NULLIF(COUNT(*) FILTER (WHERE kind IN ('valid','cancelled','refunded')), 0), 1) FROM o),
+    'refund_pct', (SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE kind = 'refunded') / NULLIF(COUNT(*) FILTER (WHERE kind IN ('valid','refunded')), 0), 1) FROM o),
+    'repeat_pct', (SELECT ROUND(100.0 * COUNT(*) FILTER (WHERE n > 1) / NULLIF(COUNT(*), 0), 1) FROM cust),
+    'payment_mix', COALESCE((SELECT jsonb_agg(jsonb_build_object('method', pm, 'pct', pct) ORDER BY pct DESC)
+        FROM (SELECT COALESCE(pm, 'n/d') AS pm, ROUND(100.0 * COUNT(*) / SUM(COUNT(*)) OVER (), 1) AS pct FROM v GROUP BY 1) m), '[]'::jsonb)
+  ) INTO v_res;
+
+  -- Conciliacao mensal dos ultimos 12 meses: gasto/conversoes/valor do Google x pedidos validos do CRM.
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+      'month', m.month, 'google_cost', ROUND(COALESCE(g.cost, 0), 2), 'google_conversions', ROUND(COALESCE(g.conv, 0), 1),
+      'google_value', ROUND(COALESCE(g.val, 0), 2), 'crm_orders', m.orders, 'crm_revenue', ROUND(m.revenue, 2)
+    ) ORDER BY m.month), '[]'::jsonb) INTO v_recon
+  FROM (
+    SELECT date_trunc('month', created_at_remote)::date AS month, COUNT(*) AS orders, SUM((totals_json->>'total')::numeric) AS revenue
+    FROM li_orders
+    WHERE tenant_id = v_tenant AND created_at_remote >= date_trunc('month', now()) - interval '11 months'
+      AND status_name IN ('Pedido Entregue','Pedido Enviado','Pedido Pago')
+    GROUP BY 1
+  ) m
+  LEFT JOIN (
+    SELECT month, SUM(cost_micros) / 1e6 AS cost, SUM(conversions) AS conv, SUM(conversions_value) AS val
+    FROM google_ads_account_monthly WHERE account_id = p_account GROUP BY 1
+  ) g ON g.month = m.month;
+
+  RETURN jsonb_build_object('metrics', v_res, 'reconciliation', v_recon);
+END;
+$$;
+
+
+--
+-- Name: google_ads_term_split(uuid, text[]); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.google_ads_term_split(p_account uuid, p_brand_terms text[]) RETURNS TABLE(total_cost bigint, total_value numeric, total_conversions numeric, brand_cost bigint, brand_value numeric, brand_conversions numeric, zero_conv_cost bigint, zero_conv_terms bigint)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  WITH t AS (
+    SELECT search_term, sum(cost_micros) AS cost, sum(conversions_value) AS val, sum(conversions) AS conv
+    FROM public.google_ads_search_terms WHERE account_id = p_account GROUP BY search_term
+  ), flagged AS (
+    SELECT *, (cardinality(coalesce(p_brand_terms, '{}')) > 0 AND EXISTS (
+      SELECT 1 FROM unnest(p_brand_terms) b WHERE length(b) >= 2 AND t.search_term ILIKE '%' || b || '%')) AS is_brand
+    FROM t
+  )
+  SELECT coalesce(sum(cost), 0)::bigint, coalesce(sum(val), 0), coalesce(sum(conv), 0),
+         coalesce(sum(cost) FILTER (WHERE is_brand), 0)::bigint, coalesce(sum(val) FILTER (WHERE is_brand), 0),
+         coalesce(sum(conv) FILTER (WHERE is_brand), 0),
+         coalesce(sum(cost) FILTER (WHERE conv = 0), 0)::bigint, count(*) FILTER (WHERE conv = 0 AND cost > 0)
+  FROM flagged;
+$$;
+
+
+--
+-- Name: google_ads_term_top(uuid, text, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.google_ads_term_top(p_account uuid, p_order text DEFAULT 'cost'::text, p_limit integer DEFAULT 50) RETURNS TABLE(search_term text, impressions bigint, clicks bigint, cost_micros bigint, conversions numeric, conversions_value numeric)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  SELECT t.search_term, sum(t.impressions)::bigint, sum(t.clicks)::bigint, sum(t.cost_micros)::bigint, sum(t.conversions), sum(t.conversions_value)
+  FROM public.google_ads_search_terms t WHERE t.account_id = p_account
+  GROUP BY t.search_term
+  HAVING p_order <> 'waste' OR sum(t.conversions) = 0
+  ORDER BY CASE WHEN p_order = 'revenue' THEN sum(t.conversions_value) ELSE sum(t.cost_micros) END DESC
+  LIMIT least(greatest(p_limit, 1), 200);
+$$;
+
+
+--
+-- Name: google_ads_term_zero(uuid, bigint, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.google_ads_term_zero(p_account uuid, p_min_cost_micros bigint, p_limit integer DEFAULT 30) RETURNS TABLE(search_term text, cost_micros bigint, clicks bigint, impressions bigint)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  SELECT search_term, sum(cost_micros)::bigint, sum(clicks)::bigint, sum(impressions)::bigint
+  FROM public.google_ads_search_terms WHERE account_id = p_account
+  GROUP BY search_term
+  HAVING sum(conversions) = 0 AND sum(cost_micros) >= p_min_cost_micros
+  ORDER BY sum(cost_micros) DESC
+  LIMIT least(greatest(p_limit, 1), 200);
 $$;
 
 
@@ -5184,7 +5439,72 @@ CREATE TABLE public.cashback_configs (
     reminder_2_days_before integer DEFAULT 3,
     reminder_2_message text DEFAULT 'Olá {{cliente_nome}}! 🚨 Última chance! Seu cupom {{cupom}} expira em {{dias_restantes}} dias. Use agora e garanta {{valor_cupom}} de desconto!'::text,
     tenant_id uuid,
-    integration_id uuid
+    integration_id uuid,
+    release_delay_days integer DEFAULT 0 NOT NULL,
+    max_cart_percent numeric,
+    min_order_mode text DEFAULT 'none'::text NOT NULL,
+    min_order_value numeric,
+    min_credit_value numeric DEFAULT 0 NOT NULL,
+    base_excludes_shipping boolean DEFAULT true NOT NULL,
+    personal_coupon boolean DEFAULT true NOT NULL,
+    cumulative boolean DEFAULT true NOT NULL,
+    cancel_on_refund boolean DEFAULT true NOT NULL,
+    CONSTRAINT cashback_configs_max_cart_percent_check CHECK (((max_cart_percent IS NULL) OR ((max_cart_percent > (0)::numeric) AND (max_cart_percent <= (100)::numeric)))),
+    CONSTRAINT cashback_configs_min_credit_check CHECK ((min_credit_value >= (0)::numeric)),
+    CONSTRAINT cashback_configs_min_order_mode_check CHECK ((min_order_mode = ANY (ARRAY['none'::text, 'fixed'::text, 'multiple'::text]))),
+    CONSTRAINT cashback_configs_min_order_value_check CHECK (((min_order_value IS NULL) OR (min_order_value >= (0)::numeric))),
+    CONSTRAINT cashback_configs_release_delay_check CHECK (((release_delay_days >= 0) AND (release_delay_days <= 365)))
+);
+
+
+--
+-- Name: cashback_credits; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cashback_credits (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    config_id uuid,
+    integration_id uuid,
+    order_number text NOT NULL,
+    order_ref text,
+    li_customer_id text,
+    customer_name text,
+    customer_email text,
+    customer_phone text,
+    customer_cpf text,
+    customer_key text,
+    base_amount numeric DEFAULT 0 NOT NULL,
+    credit_amount numeric DEFAULT 0 NOT NULL,
+    status text DEFAULT 'pending'::text NOT NULL,
+    release_at timestamp with time zone DEFAULT now() NOT NULL,
+    released_at timestamp with time zone,
+    coupon_id uuid,
+    skip_reason text,
+    attempts integer DEFAULT 0 NOT NULL,
+    last_error text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT cashback_credits_amount_check CHECK (((base_amount >= (0)::numeric) AND (credit_amount >= (0)::numeric))),
+    CONSTRAINT cashback_credits_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'releasing'::text, 'released'::text, 'cancelled'::text, 'skipped'::text, 'failed'::text])))
+);
+
+
+--
+-- Name: cashback_exclusions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.cashback_exclusions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    customer_key text NOT NULL,
+    email text,
+    phone text,
+    name text,
+    reason text,
+    created_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT cashback_exclusions_contact_check CHECK (((COALESCE(btrim(email), ''::text) <> ''::text) OR (COALESCE(btrim(phone), ''::text) <> ''::text)))
 );
 
 
@@ -6023,6 +6343,754 @@ CREATE TABLE public.generated_coupons (
 );
 
 ALTER TABLE ONLY public.generated_coupons REPLICA IDENTITY FULL;
+
+
+--
+-- Name: google_ads_account_budget; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_account_budget (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    account_budget_id bigint NOT NULL,
+    status text NOT NULL,
+    approved_spending_limit_micros bigint,
+    adjusted_spending_limit_micros bigint,
+    amount_served_micros bigint DEFAULT 0 NOT NULL,
+    approved_start_date_time timestamp with time zone,
+    approved_end_date_time timestamp with time zone,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_campaign_daily; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_campaign_daily (
+    account_id uuid NOT NULL,
+    tenant_id uuid NOT NULL,
+    campaign_id bigint NOT NULL,
+    date date NOT NULL,
+    impressions bigint DEFAULT 0 NOT NULL,
+    clicks bigint DEFAULT 0 NOT NULL,
+    cost_micros bigint DEFAULT 0 NOT NULL,
+    conversions numeric(18,4) DEFAULT 0 NOT NULL,
+    conversions_value numeric(18,4) DEFAULT 0 NOT NULL,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL,
+    all_conversions numeric(18,4) DEFAULT 0 NOT NULL,
+    all_conversions_value numeric(18,4) DEFAULT 0 NOT NULL,
+    view_through_conversions bigint DEFAULT 0 NOT NULL,
+    interactions bigint DEFAULT 0 NOT NULL
+);
+
+
+--
+-- Name: google_ads_campaign_monthly; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.google_ads_campaign_monthly WITH (security_invoker='true') AS
+ SELECT tenant_id,
+    account_id,
+    campaign_id,
+    (date_trunc('month'::text, (date)::timestamp with time zone))::date AS month,
+    (sum(impressions))::bigint AS impressions,
+    (sum(clicks))::bigint AS clicks,
+    (sum(cost_micros))::bigint AS cost_micros,
+    sum(conversions) AS conversions,
+    sum(conversions_value) AS conversions_value,
+    count(*) FILTER (WHERE (cost_micros > 0)) AS days_with_spend
+   FROM public.google_ads_campaign_daily
+  GROUP BY tenant_id, account_id, campaign_id, (date_trunc('month'::text, (date)::timestamp with time zone));
+
+
+--
+-- Name: google_ads_account_monthly; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.google_ads_account_monthly WITH (security_invoker='true') AS
+ SELECT tenant_id,
+    account_id,
+    month,
+    (sum(impressions))::bigint AS impressions,
+    (sum(clicks))::bigint AS clicks,
+    (sum(cost_micros))::bigint AS cost_micros,
+    sum(conversions) AS conversions,
+    sum(conversions_value) AS conversions_value
+   FROM public.google_ads_campaign_monthly
+  GROUP BY tenant_id, account_id, month;
+
+
+--
+-- Name: google_ads_accounts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_accounts (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    customer_id text NOT NULL,
+    login_customer_id text,
+    descriptive_name text,
+    currency_code text,
+    time_zone text,
+    status text DEFAULT 'active'::text NOT NULL,
+    mode text DEFAULT 'read_only'::text NOT NULL,
+    guardrails jsonb DEFAULT '{}'::jsonb NOT NULL,
+    last_synced_at timestamp with time zone,
+    last_error text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    customer_status text,
+    billing_status text,
+    auto_tagging_enabled boolean,
+    conversion_tracking_status text,
+    optimization_score numeric(6,4),
+    deep_synced_at timestamp with time zone,
+    CONSTRAINT google_ads_accounts_customer_id_check CHECK ((customer_id ~ '^[0-9]{10}$'::text)),
+    CONSTRAINT google_ads_accounts_login_customer_id_check CHECK (((login_customer_id IS NULL) OR (login_customer_id ~ '^[0-9]{10}$'::text))),
+    CONSTRAINT google_ads_accounts_mode_check CHECK ((mode = ANY (ARRAY['read_only'::text, 'approval'::text, 'auto'::text]))),
+    CONSTRAINT google_ads_accounts_status_check CHECK ((status = ANY (ARRAY['active'::text, 'paused'::text, 'error'::text])))
+);
+
+
+--
+-- Name: google_ads_action_outcomes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_action_outcomes (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    audit_id uuid NOT NULL,
+    horizon_days integer NOT NULL,
+    action_kind text NOT NULL,
+    entity text NOT NULL,
+    campaign_id bigint,
+    applied_at timestamp with time zone NOT NULL,
+    before_metrics jsonb NOT NULL,
+    after_metrics jsonb NOT NULL,
+    verdict text NOT NULL,
+    note text,
+    evaluated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT google_ads_action_outcomes_horizon_days_check CHECK ((horizon_days = ANY (ARRAY[7, 14]))),
+    CONSTRAINT google_ads_action_outcomes_verdict_check CHECK ((verdict = ANY (ARRAY['improved'::text, 'neutral'::text, 'worsened'::text, 'insufficient'::text, 'expected'::text])))
+);
+
+
+--
+-- Name: google_ads_ad_groups; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_ad_groups (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    ad_group_id bigint NOT NULL,
+    campaign_id bigint NOT NULL,
+    name text NOT NULL,
+    status text NOT NULL,
+    type text,
+    cpc_bid_micros bigint,
+    impressions bigint DEFAULT 0 NOT NULL,
+    clicks bigint DEFAULT 0 NOT NULL,
+    cost_micros bigint DEFAULT 0 NOT NULL,
+    conversions numeric(18,4) DEFAULT 0 NOT NULL,
+    conversions_value numeric(18,4) DEFAULT 0 NOT NULL,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_ads; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_ads (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    ad_id bigint NOT NULL,
+    ad_group_id bigint NOT NULL,
+    campaign_id bigint NOT NULL,
+    type text,
+    name text,
+    status text NOT NULL,
+    ad_strength text,
+    approval_status text,
+    final_url text,
+    headlines jsonb DEFAULT '[]'::jsonb NOT NULL,
+    descriptions jsonb DEFAULT '[]'::jsonb NOT NULL,
+    impressions bigint DEFAULT 0 NOT NULL,
+    clicks bigint DEFAULT 0 NOT NULL,
+    cost_micros bigint DEFAULT 0 NOT NULL,
+    conversions numeric(18,4) DEFAULT 0 NOT NULL,
+    conversions_value numeric(18,4) DEFAULT 0 NOT NULL,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_asset_group_assets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_asset_group_assets (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    asset_group_id bigint NOT NULL,
+    asset_id bigint NOT NULL,
+    field_type text NOT NULL,
+    status text,
+    asset_type text,
+    name text,
+    text text,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_asset_groups; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_asset_groups (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    asset_group_id bigint NOT NULL,
+    campaign_id bigint NOT NULL,
+    name text NOT NULL,
+    status text NOT NULL,
+    ad_strength text,
+    primary_status text,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_audit_log; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_audit_log (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid,
+    recommendation_id uuid,
+    actor text NOT NULL,
+    action text NOT NULL,
+    entity text,
+    before_state jsonb,
+    after_state jsonb,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_bidding_strategies; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_bidding_strategies (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    strategy_id bigint NOT NULL,
+    name text,
+    type text,
+    target_roas numeric(12,4),
+    target_cpa_micros bigint,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_campaign_conversions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_campaign_conversions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    campaign_id bigint NOT NULL,
+    month date NOT NULL,
+    conversion_action_name text NOT NULL,
+    conversions numeric(18,4) DEFAULT 0 NOT NULL,
+    conversions_value numeric(18,4) DEFAULT 0 NOT NULL,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_campaign_lifetime; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.google_ads_campaign_lifetime WITH (security_invoker='true') AS
+ SELECT tenant_id,
+    account_id,
+    campaign_id,
+    (sum(impressions))::bigint AS impressions,
+    (sum(clicks))::bigint AS clicks,
+    (sum(cost_micros))::bigint AS cost_micros,
+    sum(conversions) AS conversions,
+    sum(conversions_value) AS conversions_value,
+    min(date) FILTER (WHERE (cost_micros > 0)) AS first_spend_date,
+    max(date) FILTER (WHERE (cost_micros > 0)) AS last_spend_date
+   FROM public.google_ads_campaign_daily
+  GROUP BY tenant_id, account_id, campaign_id;
+
+
+--
+-- Name: google_ads_campaign_targets; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_campaign_targets (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    campaign_id bigint NOT NULL,
+    target_type text NOT NULL,
+    target_value numeric(18,4) NOT NULL,
+    monthly_budget_cap_micros bigint,
+    notes text,
+    updated_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT google_ads_campaign_targets_monthly_budget_cap_micros_check CHECK (((monthly_budget_cap_micros IS NULL) OR (monthly_budget_cap_micros > 0))),
+    CONSTRAINT google_ads_campaign_targets_notes_check CHECK (((notes IS NULL) OR (length(notes) <= 2000))),
+    CONSTRAINT google_ads_campaign_targets_target_type_check CHECK ((target_type = ANY (ARRAY['cpa_max'::text, 'roas_min'::text]))),
+    CONSTRAINT google_ads_campaign_targets_target_value_check CHECK ((target_value > (0)::numeric))
+);
+
+
+--
+-- Name: google_ads_campaigns; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_campaigns (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    campaign_id bigint NOT NULL,
+    name text NOT NULL,
+    status text NOT NULL,
+    channel_type text,
+    bidding_strategy_type text,
+    daily_budget_micros bigint,
+    start_date date,
+    end_date date,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL,
+    serving_status text,
+    primary_status text,
+    primary_status_reasons text[] DEFAULT '{}'::text[] NOT NULL,
+    budget_resource_name text,
+    budget_explicitly_shared boolean,
+    optimization_score numeric(6,4),
+    target_roas numeric(12,4),
+    target_cpa_micros bigint,
+    bidding_strategy_resource text,
+    search_network boolean,
+    content_network boolean
+);
+
+
+--
+-- Name: google_ads_changes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_changes (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    event_key text NOT NULL,
+    changed_at timestamp with time zone NOT NULL,
+    resource_type text,
+    operation text,
+    changed_fields text,
+    user_email text,
+    client_type text,
+    campaign_resource text,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_conversion_actions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_conversion_actions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    conversion_action_id bigint NOT NULL,
+    name text NOT NULL,
+    status text NOT NULL,
+    type text,
+    category text,
+    origin text,
+    primary_for_goal boolean,
+    include_in_conversions_metric boolean,
+    counting_type text,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_conversion_goals; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_conversion_goals (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    category text NOT NULL,
+    origin text NOT NULL,
+    biddable boolean,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_conversion_monthly; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_conversion_monthly (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    month date NOT NULL,
+    conversion_action_name text NOT NULL,
+    conversions numeric(18,4) DEFAULT 0 NOT NULL,
+    conversions_value numeric(18,4) DEFAULT 0 NOT NULL,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_conversion_lifetime; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.google_ads_conversion_lifetime WITH (security_invoker='true') AS
+ SELECT tenant_id,
+    account_id,
+    conversion_action_name,
+    sum(conversions) AS conversions,
+    sum(conversions_value) AS conversions_value,
+    min(month) AS first_month,
+    max(month) AS last_month
+   FROM public.google_ads_conversion_monthly
+  GROUP BY tenant_id, account_id, conversion_action_name;
+
+
+--
+-- Name: google_ads_demographics; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_demographics (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    campaign_id bigint NOT NULL,
+    dimension text NOT NULL,
+    value text NOT NULL,
+    impressions bigint DEFAULT 0 NOT NULL,
+    clicks bigint DEFAULT 0 NOT NULL,
+    cost_micros bigint DEFAULT 0 NOT NULL,
+    conversions numeric(18,4) DEFAULT 0 NOT NULL,
+    conversions_value numeric(18,4) DEFAULT 0 NOT NULL,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT google_ads_demographics_dimension_check CHECK ((dimension = ANY (ARRAY['age'::text, 'gender'::text])))
+);
+
+
+--
+-- Name: google_ads_device_monthly; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_device_monthly (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    campaign_id bigint NOT NULL,
+    device text NOT NULL,
+    month date NOT NULL,
+    impressions bigint DEFAULT 0 NOT NULL,
+    clicks bigint DEFAULT 0 NOT NULL,
+    cost_micros bigint DEFAULT 0 NOT NULL,
+    conversions numeric(18,4) DEFAULT 0 NOT NULL,
+    conversions_value numeric(18,4) DEFAULT 0 NOT NULL,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_geo_stats; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_geo_stats (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    campaign_id bigint NOT NULL,
+    region_key text NOT NULL,
+    region_name text,
+    location_type text DEFAULT 'UNKNOWN'::text NOT NULL,
+    impressions bigint DEFAULT 0 NOT NULL,
+    clicks bigint DEFAULT 0 NOT NULL,
+    cost_micros bigint DEFAULT 0 NOT NULL,
+    conversions numeric(18,4) DEFAULT 0 NOT NULL,
+    conversions_value numeric(18,4) DEFAULT 0 NOT NULL,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_geo_totals; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.google_ads_geo_totals WITH (security_invoker='true') AS
+ SELECT tenant_id,
+    account_id,
+    region_key,
+    max(region_name) AS region_name,
+    (sum(impressions))::bigint AS impressions,
+    (sum(clicks))::bigint AS clicks,
+    (sum(cost_micros))::bigint AS cost_micros,
+    sum(conversions) AS conversions,
+    sum(conversions_value) AS conversions_value
+   FROM public.google_ads_geo_stats
+  GROUP BY tenant_id, account_id, region_key;
+
+
+--
+-- Name: google_ads_google_recommendations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_google_recommendations (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    rec_key text NOT NULL,
+    type text NOT NULL,
+    campaign_id bigint,
+    dismissed boolean DEFAULT false NOT NULL,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_hour_stats; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_hour_stats (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    year smallint NOT NULL,
+    day_of_week text NOT NULL,
+    hour smallint NOT NULL,
+    impressions bigint DEFAULT 0 NOT NULL,
+    clicks bigint DEFAULT 0 NOT NULL,
+    cost_micros bigint DEFAULT 0 NOT NULL,
+    conversions numeric(18,4) DEFAULT 0 NOT NULL,
+    conversions_value numeric(18,4) DEFAULT 0 NOT NULL,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_impression_share; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_impression_share (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    campaign_id bigint NOT NULL,
+    month date NOT NULL,
+    impressions bigint DEFAULT 0 NOT NULL,
+    search_impression_share numeric(7,6),
+    search_top_impression_share numeric(7,6),
+    search_abs_top_impression_share numeric(7,6),
+    search_budget_lost_share numeric(7,6),
+    search_rank_lost_share numeric(7,6),
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_keywords; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_keywords (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    ad_group_id bigint NOT NULL,
+    criterion_id bigint NOT NULL,
+    campaign_id bigint NOT NULL,
+    text text NOT NULL,
+    match_type text,
+    status text NOT NULL,
+    negative boolean DEFAULT false NOT NULL,
+    quality_score smallint,
+    creative_quality text,
+    landing_page_quality text,
+    predicted_ctr text,
+    cpc_bid_micros bigint,
+    impressions bigint DEFAULT 0 NOT NULL,
+    clicks bigint DEFAULT 0 NOT NULL,
+    cost_micros bigint DEFAULT 0 NOT NULL,
+    conversions numeric(18,4) DEFAULT 0 NOT NULL,
+    conversions_value numeric(18,4) DEFAULT 0 NOT NULL,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_landing_pages; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_landing_pages (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    url text NOT NULL,
+    speed_score smallint,
+    mobile_friendly_clicks_pct numeric(7,6),
+    impressions bigint DEFAULT 0 NOT NULL,
+    clicks bigint DEFAULT 0 NOT NULL,
+    cost_micros bigint DEFAULT 0 NOT NULL,
+    conversions numeric(18,4) DEFAULT 0 NOT NULL,
+    conversions_value numeric(18,4) DEFAULT 0 NOT NULL,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_negatives; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_negatives (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    source text NOT NULL,
+    ref_id text NOT NULL,
+    campaign_id bigint,
+    text text,
+    match_type text,
+    type text,
+    member_count integer,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT google_ads_negatives_source_check CHECK ((source = ANY (ARRAY['campaign'::text, 'shared_set'::text])))
+);
+
+
+--
+-- Name: google_ads_products; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_products (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    item_id text NOT NULL,
+    title text,
+    brand text,
+    type_l1 text,
+    impressions bigint DEFAULT 0 NOT NULL,
+    clicks bigint DEFAULT 0 NOT NULL,
+    cost_micros bigint DEFAULT 0 NOT NULL,
+    conversions numeric(18,4) DEFAULT 0 NOT NULL,
+    conversions_value numeric(18,4) DEFAULT 0 NOT NULL,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_recommendations; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_recommendations (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    agent text NOT NULL,
+    kind text NOT NULL,
+    title text NOT NULL,
+    rationale text NOT NULL,
+    payload jsonb DEFAULT '{}'::jsonb NOT NULL,
+    risk text DEFAULT 'medium'::text NOT NULL,
+    status text DEFAULT 'pending'::text NOT NULL,
+    decided_by uuid,
+    decided_at timestamp with time zone,
+    applied_at timestamp with time zone,
+    error text,
+    expires_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    dedupe_key text,
+    severity text,
+    CONSTRAINT google_ads_recommendations_risk_check CHECK ((risk = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text]))),
+    CONSTRAINT google_ads_recommendations_severity_check CHECK (((severity IS NULL) OR (severity = ANY (ARRAY['critical'::text, 'high'::text, 'medium'::text, 'low'::text])))),
+    CONSTRAINT google_ads_recommendations_size_check CHECK (((length(title) <= 300) AND (length(rationale) <= 8000) AND (length((payload)::text) <= 20000))),
+    CONSTRAINT google_ads_recommendations_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'applied'::text, 'failed'::text, 'expired'::text, 'blocked'::text, 'resolved'::text])))
+);
+
+
+--
+-- Name: google_ads_search_terms; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_search_terms (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    campaign_id bigint NOT NULL,
+    ad_group_id bigint NOT NULL,
+    search_term text NOT NULL,
+    year smallint NOT NULL,
+    status text,
+    impressions bigint DEFAULT 0 NOT NULL,
+    clicks bigint DEFAULT 0 NOT NULL,
+    cost_micros bigint DEFAULT 0 NOT NULL,
+    conversions numeric(18,4) DEFAULT 0 NOT NULL,
+    conversions_value numeric(18,4) DEFAULT 0 NOT NULL,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: google_ads_unit_economics; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_unit_economics (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    window_months integer DEFAULT 24 NOT NULL,
+    metrics jsonb NOT NULL,
+    reconciliation jsonb DEFAULT '[]'::jsonb NOT NULL,
+    computed_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT google_ads_unit_economics_window_months_check CHECK (((window_months >= 3) AND (window_months <= 60)))
+);
+
+
+--
+-- Name: google_ads_user_lists; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.google_ads_user_lists (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    user_list_id bigint NOT NULL,
+    name text NOT NULL,
+    type text,
+    size_for_search bigint,
+    size_for_display bigint,
+    membership_status text,
+    membership_life_span integer,
+    synced_at timestamp with time zone DEFAULT now() NOT NULL
+);
 
 
 --
@@ -8674,6 +9742,38 @@ ALTER TABLE ONLY public.cashback_configs
 
 
 --
+-- Name: cashback_credits cashback_credits_order_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cashback_credits
+    ADD CONSTRAINT cashback_credits_order_unique UNIQUE (tenant_id, order_number);
+
+
+--
+-- Name: cashback_credits cashback_credits_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cashback_credits
+    ADD CONSTRAINT cashback_credits_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: cashback_exclusions cashback_exclusions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cashback_exclusions
+    ADD CONSTRAINT cashback_exclusions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: cashback_exclusions cashback_exclusions_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cashback_exclusions
+    ADD CONSTRAINT cashback_exclusions_unique UNIQUE (tenant_id, customer_key);
+
+
+--
 -- Name: cashback_executions cashback_executions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9071,6 +10171,478 @@ ALTER TABLE ONLY public.function_metrics
 
 ALTER TABLE ONLY public.generated_coupons
     ADD CONSTRAINT generated_coupons_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_account_budget google_ads_account_budget_account_id_account_budget_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_account_budget
+    ADD CONSTRAINT google_ads_account_budget_account_id_account_budget_id_key UNIQUE (account_id, account_budget_id);
+
+
+--
+-- Name: google_ads_account_budget google_ads_account_budget_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_account_budget
+    ADD CONSTRAINT google_ads_account_budget_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_accounts google_ads_accounts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_accounts
+    ADD CONSTRAINT google_ads_accounts_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_accounts google_ads_accounts_tenant_id_customer_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_accounts
+    ADD CONSTRAINT google_ads_accounts_tenant_id_customer_id_key UNIQUE (tenant_id, customer_id);
+
+
+--
+-- Name: google_ads_action_outcomes google_ads_action_outcomes_audit_id_horizon_days_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_action_outcomes
+    ADD CONSTRAINT google_ads_action_outcomes_audit_id_horizon_days_key UNIQUE (audit_id, horizon_days);
+
+
+--
+-- Name: google_ads_action_outcomes google_ads_action_outcomes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_action_outcomes
+    ADD CONSTRAINT google_ads_action_outcomes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_ad_groups google_ads_ad_groups_account_id_ad_group_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_ad_groups
+    ADD CONSTRAINT google_ads_ad_groups_account_id_ad_group_id_key UNIQUE (account_id, ad_group_id);
+
+
+--
+-- Name: google_ads_ad_groups google_ads_ad_groups_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_ad_groups
+    ADD CONSTRAINT google_ads_ad_groups_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_ads google_ads_ads_account_id_ad_group_id_ad_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_ads
+    ADD CONSTRAINT google_ads_ads_account_id_ad_group_id_ad_id_key UNIQUE (account_id, ad_group_id, ad_id);
+
+
+--
+-- Name: google_ads_ads google_ads_ads_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_ads
+    ADD CONSTRAINT google_ads_ads_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_asset_group_assets google_ads_asset_group_assets_account_id_asset_group_id_ass_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_asset_group_assets
+    ADD CONSTRAINT google_ads_asset_group_assets_account_id_asset_group_id_ass_key UNIQUE (account_id, asset_group_id, asset_id, field_type);
+
+
+--
+-- Name: google_ads_asset_group_assets google_ads_asset_group_assets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_asset_group_assets
+    ADD CONSTRAINT google_ads_asset_group_assets_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_asset_groups google_ads_asset_groups_account_id_asset_group_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_asset_groups
+    ADD CONSTRAINT google_ads_asset_groups_account_id_asset_group_id_key UNIQUE (account_id, asset_group_id);
+
+
+--
+-- Name: google_ads_asset_groups google_ads_asset_groups_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_asset_groups
+    ADD CONSTRAINT google_ads_asset_groups_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_audit_log google_ads_audit_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_audit_log
+    ADD CONSTRAINT google_ads_audit_log_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_bidding_strategies google_ads_bidding_strategies_account_id_strategy_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_bidding_strategies
+    ADD CONSTRAINT google_ads_bidding_strategies_account_id_strategy_id_key UNIQUE (account_id, strategy_id);
+
+
+--
+-- Name: google_ads_bidding_strategies google_ads_bidding_strategies_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_bidding_strategies
+    ADD CONSTRAINT google_ads_bidding_strategies_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_campaign_conversions google_ads_campaign_conversio_account_id_campaign_id_month__key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_campaign_conversions
+    ADD CONSTRAINT google_ads_campaign_conversio_account_id_campaign_id_month__key UNIQUE (account_id, campaign_id, month, conversion_action_name);
+
+
+--
+-- Name: google_ads_campaign_conversions google_ads_campaign_conversions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_campaign_conversions
+    ADD CONSTRAINT google_ads_campaign_conversions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_campaign_daily google_ads_campaign_daily_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_campaign_daily
+    ADD CONSTRAINT google_ads_campaign_daily_pkey PRIMARY KEY (account_id, campaign_id, date);
+
+
+--
+-- Name: google_ads_campaign_targets google_ads_campaign_targets_account_id_campaign_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_campaign_targets
+    ADD CONSTRAINT google_ads_campaign_targets_account_id_campaign_id_key UNIQUE (account_id, campaign_id);
+
+
+--
+-- Name: google_ads_campaign_targets google_ads_campaign_targets_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_campaign_targets
+    ADD CONSTRAINT google_ads_campaign_targets_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_campaigns google_ads_campaigns_account_id_campaign_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_campaigns
+    ADD CONSTRAINT google_ads_campaigns_account_id_campaign_id_key UNIQUE (account_id, campaign_id);
+
+
+--
+-- Name: google_ads_campaigns google_ads_campaigns_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_campaigns
+    ADD CONSTRAINT google_ads_campaigns_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_changes google_ads_changes_account_id_event_key_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_changes
+    ADD CONSTRAINT google_ads_changes_account_id_event_key_key UNIQUE (account_id, event_key);
+
+
+--
+-- Name: google_ads_changes google_ads_changes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_changes
+    ADD CONSTRAINT google_ads_changes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_conversion_actions google_ads_conversion_actions_account_id_conversion_action__key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_conversion_actions
+    ADD CONSTRAINT google_ads_conversion_actions_account_id_conversion_action__key UNIQUE (account_id, conversion_action_id);
+
+
+--
+-- Name: google_ads_conversion_actions google_ads_conversion_actions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_conversion_actions
+    ADD CONSTRAINT google_ads_conversion_actions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_conversion_goals google_ads_conversion_goals_account_id_category_origin_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_conversion_goals
+    ADD CONSTRAINT google_ads_conversion_goals_account_id_category_origin_key UNIQUE (account_id, category, origin);
+
+
+--
+-- Name: google_ads_conversion_goals google_ads_conversion_goals_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_conversion_goals
+    ADD CONSTRAINT google_ads_conversion_goals_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_conversion_monthly google_ads_conversion_monthly_account_id_month_conversion_a_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_conversion_monthly
+    ADD CONSTRAINT google_ads_conversion_monthly_account_id_month_conversion_a_key UNIQUE (account_id, month, conversion_action_name);
+
+
+--
+-- Name: google_ads_conversion_monthly google_ads_conversion_monthly_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_conversion_monthly
+    ADD CONSTRAINT google_ads_conversion_monthly_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_demographics google_ads_demographics_account_id_campaign_id_dimension_va_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_demographics
+    ADD CONSTRAINT google_ads_demographics_account_id_campaign_id_dimension_va_key UNIQUE (account_id, campaign_id, dimension, value);
+
+
+--
+-- Name: google_ads_demographics google_ads_demographics_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_demographics
+    ADD CONSTRAINT google_ads_demographics_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_device_monthly google_ads_device_monthly_account_id_campaign_id_device_mon_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_device_monthly
+    ADD CONSTRAINT google_ads_device_monthly_account_id_campaign_id_device_mon_key UNIQUE (account_id, campaign_id, device, month);
+
+
+--
+-- Name: google_ads_device_monthly google_ads_device_monthly_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_device_monthly
+    ADD CONSTRAINT google_ads_device_monthly_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_geo_stats google_ads_geo_stats_account_id_campaign_id_region_key_loca_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_geo_stats
+    ADD CONSTRAINT google_ads_geo_stats_account_id_campaign_id_region_key_loca_key UNIQUE (account_id, campaign_id, region_key, location_type);
+
+
+--
+-- Name: google_ads_geo_stats google_ads_geo_stats_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_geo_stats
+    ADD CONSTRAINT google_ads_geo_stats_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_google_recommendations google_ads_google_recommendations_account_id_rec_key_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_google_recommendations
+    ADD CONSTRAINT google_ads_google_recommendations_account_id_rec_key_key UNIQUE (account_id, rec_key);
+
+
+--
+-- Name: google_ads_google_recommendations google_ads_google_recommendations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_google_recommendations
+    ADD CONSTRAINT google_ads_google_recommendations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_hour_stats google_ads_hour_stats_account_id_year_day_of_week_hour_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_hour_stats
+    ADD CONSTRAINT google_ads_hour_stats_account_id_year_day_of_week_hour_key UNIQUE (account_id, year, day_of_week, hour);
+
+
+--
+-- Name: google_ads_hour_stats google_ads_hour_stats_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_hour_stats
+    ADD CONSTRAINT google_ads_hour_stats_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_impression_share google_ads_impression_share_account_id_campaign_id_month_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_impression_share
+    ADD CONSTRAINT google_ads_impression_share_account_id_campaign_id_month_key UNIQUE (account_id, campaign_id, month);
+
+
+--
+-- Name: google_ads_impression_share google_ads_impression_share_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_impression_share
+    ADD CONSTRAINT google_ads_impression_share_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_keywords google_ads_keywords_account_id_ad_group_id_criterion_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_keywords
+    ADD CONSTRAINT google_ads_keywords_account_id_ad_group_id_criterion_id_key UNIQUE (account_id, ad_group_id, criterion_id);
+
+
+--
+-- Name: google_ads_keywords google_ads_keywords_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_keywords
+    ADD CONSTRAINT google_ads_keywords_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_landing_pages google_ads_landing_pages_account_id_url_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_landing_pages
+    ADD CONSTRAINT google_ads_landing_pages_account_id_url_key UNIQUE (account_id, url);
+
+
+--
+-- Name: google_ads_landing_pages google_ads_landing_pages_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_landing_pages
+    ADD CONSTRAINT google_ads_landing_pages_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_negatives google_ads_negatives_account_id_source_ref_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_negatives
+    ADD CONSTRAINT google_ads_negatives_account_id_source_ref_id_key UNIQUE (account_id, source, ref_id);
+
+
+--
+-- Name: google_ads_negatives google_ads_negatives_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_negatives
+    ADD CONSTRAINT google_ads_negatives_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_products google_ads_products_account_id_item_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_products
+    ADD CONSTRAINT google_ads_products_account_id_item_id_key UNIQUE (account_id, item_id);
+
+
+--
+-- Name: google_ads_products google_ads_products_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_products
+    ADD CONSTRAINT google_ads_products_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_recommendations google_ads_recommendations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_recommendations
+    ADD CONSTRAINT google_ads_recommendations_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_search_terms google_ads_search_terms_account_id_campaign_id_ad_group_id__key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_search_terms
+    ADD CONSTRAINT google_ads_search_terms_account_id_campaign_id_ad_group_id__key UNIQUE (account_id, campaign_id, ad_group_id, search_term, year);
+
+
+--
+-- Name: google_ads_search_terms google_ads_search_terms_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_search_terms
+    ADD CONSTRAINT google_ads_search_terms_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_unit_economics google_ads_unit_economics_account_id_window_months_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_unit_economics
+    ADD CONSTRAINT google_ads_unit_economics_account_id_window_months_key UNIQUE (account_id, window_months);
+
+
+--
+-- Name: google_ads_unit_economics google_ads_unit_economics_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_unit_economics
+    ADD CONSTRAINT google_ads_unit_economics_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: google_ads_user_lists google_ads_user_lists_account_id_user_list_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_user_lists
+    ADD CONSTRAINT google_ads_user_lists_account_id_user_list_id_key UNIQUE (account_id, user_list_id);
+
+
+--
+-- Name: google_ads_user_lists google_ads_user_lists_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_user_lists
+    ADD CONSTRAINT google_ads_user_lists_pkey PRIMARY KEY (id);
 
 
 --
@@ -10281,6 +11853,34 @@ CREATE UNIQUE INDEX bling_connections_tenant_id_idx ON public.bling_connections 
 
 
 --
+-- Name: cashback_credits_coupon_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cashback_credits_coupon_idx ON public.cashback_credits USING btree (coupon_id) WHERE (coupon_id IS NOT NULL);
+
+
+--
+-- Name: cashback_credits_customer_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cashback_credits_customer_idx ON public.cashback_credits USING btree (tenant_id, customer_key);
+
+
+--
+-- Name: cashback_credits_due_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cashback_credits_due_idx ON public.cashback_credits USING btree (release_at) WHERE (status = 'pending'::text);
+
+
+--
+-- Name: cashback_credits_tenant_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX cashback_credits_tenant_idx ON public.cashback_credits USING btree (tenant_id, created_at DESC);
+
+
+--
 -- Name: conversations_csat_token_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -11261,6 +12861,41 @@ CREATE INDEX idx_function_metrics_tenant ON public.function_metrics USING btree 
 
 
 --
+-- Name: idx_gads_changes_time; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_gads_changes_time ON public.google_ads_changes USING btree (account_id, changed_at DESC);
+
+
+--
+-- Name: idx_gads_keywords_cost; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_gads_keywords_cost ON public.google_ads_keywords USING btree (account_id, cost_micros DESC);
+
+
+--
+-- Name: idx_gads_products_cost; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_gads_products_cost ON public.google_ads_products USING btree (account_id, cost_micros DESC);
+
+
+--
+-- Name: idx_gads_search_terms_cost; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_gads_search_terms_cost ON public.google_ads_search_terms USING btree (account_id, cost_micros DESC);
+
+
+--
+-- Name: idx_gads_search_terms_term; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_gads_search_terms_term ON public.google_ads_search_terms USING btree (account_id, search_term);
+
+
+--
 -- Name: idx_generated_coupons_config; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -11307,6 +12942,216 @@ CREATE INDEX idx_generated_coupons_tenant ON public.generated_coupons USING btre
 --
 
 CREATE INDEX idx_generated_coupons_used ON public.generated_coupons USING btree (tenant_id, used_at) WHERE (used_at IS NOT NULL);
+
+
+--
+-- Name: idx_google_ads_account_budget_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_account_budget_tenant ON public.google_ads_account_budget USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_action_outcomes_account; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_action_outcomes_account ON public.google_ads_action_outcomes USING btree (account_id, applied_at DESC);
+
+
+--
+-- Name: idx_google_ads_action_outcomes_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_action_outcomes_tenant ON public.google_ads_action_outcomes USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_ad_groups_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_ad_groups_tenant ON public.google_ads_ad_groups USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_ads_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_ads_tenant ON public.google_ads_ads USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_asset_group_assets_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_asset_group_assets_tenant ON public.google_ads_asset_group_assets USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_asset_groups_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_asset_groups_tenant ON public.google_ads_asset_groups USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_audit_log_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_audit_log_tenant ON public.google_ads_audit_log USING btree (tenant_id, created_at DESC);
+
+
+--
+-- Name: idx_google_ads_bidding_strategies_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_bidding_strategies_tenant ON public.google_ads_bidding_strategies USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_campaign_conversions_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_campaign_conversions_tenant ON public.google_ads_campaign_conversions USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_campaign_daily_tenant_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_campaign_daily_tenant_date ON public.google_ads_campaign_daily USING btree (tenant_id, date DESC);
+
+
+--
+-- Name: idx_google_ads_campaigns_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_campaigns_tenant ON public.google_ads_campaigns USING btree (tenant_id, status);
+
+
+--
+-- Name: idx_google_ads_changes_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_changes_tenant ON public.google_ads_changes USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_conv_actions_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_conv_actions_tenant ON public.google_ads_conversion_actions USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_conv_monthly_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_conv_monthly_tenant ON public.google_ads_conversion_monthly USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_conversion_goals_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_conversion_goals_tenant ON public.google_ads_conversion_goals USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_demographics_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_demographics_tenant ON public.google_ads_demographics USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_device_monthly_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_device_monthly_tenant ON public.google_ads_device_monthly USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_geo_stats_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_geo_stats_tenant ON public.google_ads_geo_stats USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_google_recommendations_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_google_recommendations_tenant ON public.google_ads_google_recommendations USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_hour_stats_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_hour_stats_tenant ON public.google_ads_hour_stats USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_impression_share_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_impression_share_tenant ON public.google_ads_impression_share USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_keywords_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_keywords_tenant ON public.google_ads_keywords USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_landing_pages_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_landing_pages_tenant ON public.google_ads_landing_pages USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_negatives_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_negatives_tenant ON public.google_ads_negatives USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_products_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_products_tenant ON public.google_ads_products USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_recommendations_tenant_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_recommendations_tenant_status ON public.google_ads_recommendations USING btree (tenant_id, status, created_at DESC);
+
+
+--
+-- Name: idx_google_ads_search_terms_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_search_terms_tenant ON public.google_ads_search_terms USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_unit_economics_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_unit_economics_tenant ON public.google_ads_unit_economics USING btree (tenant_id);
+
+
+--
+-- Name: idx_google_ads_user_lists_tenant; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_google_ads_user_lists_tenant ON public.google_ads_user_lists USING btree (tenant_id);
 
 
 --
@@ -12465,6 +14310,13 @@ CREATE UNIQUE INDEX uniq_chatbot_flow_sessions_active ON public.chatbot_flow_ses
 
 
 --
+-- Name: uq_google_ads_recommendations_dedupe; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_google_ads_recommendations_dedupe ON public.google_ads_recommendations USING btree (account_id, dedupe_key);
+
+
+--
 -- Name: ux_conversations_one_open_per_contact_source; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -12490,6 +14342,13 @@ CREATE UNIQUE INDEX ux_instagram_threads_channel_contact ON public.instagram_thr
 --
 
 CREATE UNIQUE INDEX ux_messages_client_message_id ON public.messages USING btree (conversation_id, ((metadata ->> 'client_message_id'::text))) WHERE ((metadata ->> 'client_message_id'::text) IS NOT NULL);
+
+
+--
+-- Name: cashback_exclusions cashback_exclusions_set_key; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER cashback_exclusions_set_key BEFORE INSERT OR UPDATE OF email, phone ON public.cashback_exclusions FOR EACH ROW EXECUTE FUNCTION public.cashback_exclusions_set_key();
 
 
 --
@@ -12689,6 +14548,13 @@ CREATE TRIGGER update_business_hours_updated_at BEFORE UPDATE ON public.business
 
 
 --
+-- Name: cashback_credits update_cashback_credits_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER update_cashback_credits_updated_at BEFORE UPDATE ON public.cashback_credits FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
 -- Name: cashback_reminders update_cashback_reminders_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -12749,6 +14615,27 @@ CREATE TRIGGER update_email_suppression_updated_at BEFORE UPDATE ON public.email
 --
 
 CREATE TRIGGER update_email_templates_updated_at BEFORE UPDATE ON public.email_templates FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
+-- Name: google_ads_accounts update_google_ads_accounts_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER update_google_ads_accounts_updated_at BEFORE UPDATE ON public.google_ads_accounts FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
+-- Name: google_ads_campaign_targets update_google_ads_campaign_targets_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER update_google_ads_campaign_targets_updated_at BEFORE UPDATE ON public.google_ads_campaign_targets FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+
+--
+-- Name: google_ads_recommendations update_google_ads_recommendations_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER update_google_ads_recommendations_updated_at BEFORE UPDATE ON public.google_ads_recommendations FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 
 --
@@ -13427,6 +15314,38 @@ ALTER TABLE ONLY public.cashback_configs
 
 
 --
+-- Name: cashback_credits cashback_credits_config_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cashback_credits
+    ADD CONSTRAINT cashback_credits_config_id_fkey FOREIGN KEY (config_id) REFERENCES public.cashback_configs(id) ON DELETE SET NULL;
+
+
+--
+-- Name: cashback_credits cashback_credits_coupon_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cashback_credits
+    ADD CONSTRAINT cashback_credits_coupon_id_fkey FOREIGN KEY (coupon_id) REFERENCES public.generated_coupons(id) ON DELETE SET NULL;
+
+
+--
+-- Name: cashback_credits cashback_credits_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cashback_credits
+    ADD CONSTRAINT cashback_credits_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: cashback_exclusions cashback_exclusions_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.cashback_exclusions
+    ADD CONSTRAINT cashback_exclusions_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
 -- Name: cashback_executions cashback_executions_config_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -14048,6 +15967,510 @@ ALTER TABLE ONLY public.generated_coupons
 
 ALTER TABLE ONLY public.generated_coupons
     ADD CONSTRAINT generated_coupons_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_account_budget google_ads_account_budget_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_account_budget
+    ADD CONSTRAINT google_ads_account_budget_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_account_budget google_ads_account_budget_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_account_budget
+    ADD CONSTRAINT google_ads_account_budget_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_accounts google_ads_accounts_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_accounts
+    ADD CONSTRAINT google_ads_accounts_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_action_outcomes google_ads_action_outcomes_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_action_outcomes
+    ADD CONSTRAINT google_ads_action_outcomes_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_action_outcomes google_ads_action_outcomes_audit_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_action_outcomes
+    ADD CONSTRAINT google_ads_action_outcomes_audit_id_fkey FOREIGN KEY (audit_id) REFERENCES public.google_ads_audit_log(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_action_outcomes google_ads_action_outcomes_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_action_outcomes
+    ADD CONSTRAINT google_ads_action_outcomes_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_ad_groups google_ads_ad_groups_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_ad_groups
+    ADD CONSTRAINT google_ads_ad_groups_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_ad_groups google_ads_ad_groups_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_ad_groups
+    ADD CONSTRAINT google_ads_ad_groups_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_ads google_ads_ads_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_ads
+    ADD CONSTRAINT google_ads_ads_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_ads google_ads_ads_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_ads
+    ADD CONSTRAINT google_ads_ads_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_asset_group_assets google_ads_asset_group_assets_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_asset_group_assets
+    ADD CONSTRAINT google_ads_asset_group_assets_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_asset_group_assets google_ads_asset_group_assets_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_asset_group_assets
+    ADD CONSTRAINT google_ads_asset_group_assets_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_asset_groups google_ads_asset_groups_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_asset_groups
+    ADD CONSTRAINT google_ads_asset_groups_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_asset_groups google_ads_asset_groups_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_asset_groups
+    ADD CONSTRAINT google_ads_asset_groups_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_audit_log google_ads_audit_log_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_audit_log
+    ADD CONSTRAINT google_ads_audit_log_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE SET NULL;
+
+
+--
+-- Name: google_ads_audit_log google_ads_audit_log_recommendation_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_audit_log
+    ADD CONSTRAINT google_ads_audit_log_recommendation_id_fkey FOREIGN KEY (recommendation_id) REFERENCES public.google_ads_recommendations(id) ON DELETE SET NULL;
+
+
+--
+-- Name: google_ads_audit_log google_ads_audit_log_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_audit_log
+    ADD CONSTRAINT google_ads_audit_log_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_bidding_strategies google_ads_bidding_strategies_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_bidding_strategies
+    ADD CONSTRAINT google_ads_bidding_strategies_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_bidding_strategies google_ads_bidding_strategies_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_bidding_strategies
+    ADD CONSTRAINT google_ads_bidding_strategies_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_campaign_conversions google_ads_campaign_conversions_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_campaign_conversions
+    ADD CONSTRAINT google_ads_campaign_conversions_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_campaign_conversions google_ads_campaign_conversions_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_campaign_conversions
+    ADD CONSTRAINT google_ads_campaign_conversions_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_campaign_daily google_ads_campaign_daily_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_campaign_daily
+    ADD CONSTRAINT google_ads_campaign_daily_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_campaign_daily google_ads_campaign_daily_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_campaign_daily
+    ADD CONSTRAINT google_ads_campaign_daily_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_campaign_targets google_ads_campaign_targets_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_campaign_targets
+    ADD CONSTRAINT google_ads_campaign_targets_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_campaign_targets google_ads_campaign_targets_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_campaign_targets
+    ADD CONSTRAINT google_ads_campaign_targets_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_campaigns google_ads_campaigns_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_campaigns
+    ADD CONSTRAINT google_ads_campaigns_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_campaigns google_ads_campaigns_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_campaigns
+    ADD CONSTRAINT google_ads_campaigns_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_changes google_ads_changes_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_changes
+    ADD CONSTRAINT google_ads_changes_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_changes google_ads_changes_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_changes
+    ADD CONSTRAINT google_ads_changes_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_conversion_actions google_ads_conversion_actions_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_conversion_actions
+    ADD CONSTRAINT google_ads_conversion_actions_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_conversion_actions google_ads_conversion_actions_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_conversion_actions
+    ADD CONSTRAINT google_ads_conversion_actions_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_conversion_goals google_ads_conversion_goals_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_conversion_goals
+    ADD CONSTRAINT google_ads_conversion_goals_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_conversion_goals google_ads_conversion_goals_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_conversion_goals
+    ADD CONSTRAINT google_ads_conversion_goals_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_conversion_monthly google_ads_conversion_monthly_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_conversion_monthly
+    ADD CONSTRAINT google_ads_conversion_monthly_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_conversion_monthly google_ads_conversion_monthly_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_conversion_monthly
+    ADD CONSTRAINT google_ads_conversion_monthly_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_demographics google_ads_demographics_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_demographics
+    ADD CONSTRAINT google_ads_demographics_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_demographics google_ads_demographics_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_demographics
+    ADD CONSTRAINT google_ads_demographics_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_device_monthly google_ads_device_monthly_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_device_monthly
+    ADD CONSTRAINT google_ads_device_monthly_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_device_monthly google_ads_device_monthly_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_device_monthly
+    ADD CONSTRAINT google_ads_device_monthly_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_geo_stats google_ads_geo_stats_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_geo_stats
+    ADD CONSTRAINT google_ads_geo_stats_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_geo_stats google_ads_geo_stats_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_geo_stats
+    ADD CONSTRAINT google_ads_geo_stats_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_google_recommendations google_ads_google_recommendations_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_google_recommendations
+    ADD CONSTRAINT google_ads_google_recommendations_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_google_recommendations google_ads_google_recommendations_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_google_recommendations
+    ADD CONSTRAINT google_ads_google_recommendations_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_hour_stats google_ads_hour_stats_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_hour_stats
+    ADD CONSTRAINT google_ads_hour_stats_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_hour_stats google_ads_hour_stats_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_hour_stats
+    ADD CONSTRAINT google_ads_hour_stats_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_impression_share google_ads_impression_share_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_impression_share
+    ADD CONSTRAINT google_ads_impression_share_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_impression_share google_ads_impression_share_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_impression_share
+    ADD CONSTRAINT google_ads_impression_share_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_keywords google_ads_keywords_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_keywords
+    ADD CONSTRAINT google_ads_keywords_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_keywords google_ads_keywords_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_keywords
+    ADD CONSTRAINT google_ads_keywords_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_landing_pages google_ads_landing_pages_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_landing_pages
+    ADD CONSTRAINT google_ads_landing_pages_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_landing_pages google_ads_landing_pages_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_landing_pages
+    ADD CONSTRAINT google_ads_landing_pages_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_negatives google_ads_negatives_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_negatives
+    ADD CONSTRAINT google_ads_negatives_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_negatives google_ads_negatives_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_negatives
+    ADD CONSTRAINT google_ads_negatives_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_products google_ads_products_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_products
+    ADD CONSTRAINT google_ads_products_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_products google_ads_products_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_products
+    ADD CONSTRAINT google_ads_products_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_recommendations google_ads_recommendations_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_recommendations
+    ADD CONSTRAINT google_ads_recommendations_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_recommendations google_ads_recommendations_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_recommendations
+    ADD CONSTRAINT google_ads_recommendations_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_search_terms google_ads_search_terms_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_search_terms
+    ADD CONSTRAINT google_ads_search_terms_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_search_terms google_ads_search_terms_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_search_terms
+    ADD CONSTRAINT google_ads_search_terms_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_unit_economics google_ads_unit_economics_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_unit_economics
+    ADD CONSTRAINT google_ads_unit_economics_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_unit_economics google_ads_unit_economics_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_unit_economics
+    ADD CONSTRAINT google_ads_unit_economics_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_user_lists google_ads_user_lists_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_user_lists
+    ADD CONSTRAINT google_ads_user_lists_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.google_ads_accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: google_ads_user_lists google_ads_user_lists_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.google_ads_user_lists
+    ADD CONSTRAINT google_ads_user_lists_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
 
 
 --
@@ -15736,6 +18159,13 @@ CREATE POLICY "Tenant admins can manage business profile" ON public.tenant_busin
 
 
 --
+-- Name: cashback_exclusions Tenant admins can manage cashback exclusions; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant admins can manage cashback exclusions" ON public.cashback_exclusions TO authenticated USING (((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id))) WITH CHECK (((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id)));
+
+
+--
 -- Name: cashback_configs Tenant admins can manage cashback_configs; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -15908,6 +18338,13 @@ CREATE POLICY "Tenant admins can view dead letters" ON public.dead_letter_queue 
 --
 
 CREATE POLICY "Tenant admins can view function metrics" ON public.function_metrics FOR SELECT TO authenticated USING (((tenant_id IS NULL) OR public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id)));
+
+
+--
+-- Name: google_ads_audit_log Tenant admins can view google ads audit log; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant admins can view google ads audit log" ON public.google_ads_audit_log FOR SELECT TO authenticated USING (((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)) AND public.is_tenant_admin(( SELECT auth.uid() AS uid), tenant_id)));
 
 
 --
@@ -16318,6 +18755,216 @@ CREATE POLICY "Tenant members can view cycle steps" ON public.reactivation_cycle
 --
 
 CREATE POLICY "Tenant members can view generated_coupons" ON public.generated_coupons FOR SELECT TO authenticated USING (((( SELECT auth.uid() AS uid) IS NOT NULL) AND (tenant_id = ( SELECT public.get_user_tenant_id(auth.uid()) AS get_user_tenant_id)) AND ( SELECT public.has_module_permission(auth.uid(), 'coupons'::public.module_permission) AS has_module_permission)));
+
+
+--
+-- Name: google_ads_account_budget Tenant members can view google ads account budget; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google ads account budget" ON public.google_ads_account_budget FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_accounts Tenant members can view google ads accounts; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google ads accounts" ON public.google_ads_accounts FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_campaign_targets Tenant members can view google ads campaign targets; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google ads campaign targets" ON public.google_ads_campaign_targets FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_campaigns Tenant members can view google ads campaigns; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google ads campaigns" ON public.google_ads_campaigns FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_conversion_actions Tenant members can view google ads conversion actions; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google ads conversion actions" ON public.google_ads_conversion_actions FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_conversion_monthly Tenant members can view google ads conversion monthly; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google ads conversion monthly" ON public.google_ads_conversion_monthly FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_campaign_daily Tenant members can view google ads daily metrics; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google ads daily metrics" ON public.google_ads_campaign_daily FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_recommendations Tenant members can view google ads recommendations; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google ads recommendations" ON public.google_ads_recommendations FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_action_outcomes Tenant members can view google_ads_action_outcomes; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_action_outcomes" ON public.google_ads_action_outcomes FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_ad_groups Tenant members can view google_ads_ad_groups; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_ad_groups" ON public.google_ads_ad_groups FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_ads Tenant members can view google_ads_ads; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_ads" ON public.google_ads_ads FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_asset_group_assets Tenant members can view google_ads_asset_group_assets; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_asset_group_assets" ON public.google_ads_asset_group_assets FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_asset_groups Tenant members can view google_ads_asset_groups; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_asset_groups" ON public.google_ads_asset_groups FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_bidding_strategies Tenant members can view google_ads_bidding_strategies; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_bidding_strategies" ON public.google_ads_bidding_strategies FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_campaign_conversions Tenant members can view google_ads_campaign_conversions; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_campaign_conversions" ON public.google_ads_campaign_conversions FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_changes Tenant members can view google_ads_changes; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_changes" ON public.google_ads_changes FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_conversion_goals Tenant members can view google_ads_conversion_goals; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_conversion_goals" ON public.google_ads_conversion_goals FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_demographics Tenant members can view google_ads_demographics; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_demographics" ON public.google_ads_demographics FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_device_monthly Tenant members can view google_ads_device_monthly; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_device_monthly" ON public.google_ads_device_monthly FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_geo_stats Tenant members can view google_ads_geo_stats; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_geo_stats" ON public.google_ads_geo_stats FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_google_recommendations Tenant members can view google_ads_google_recommendations; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_google_recommendations" ON public.google_ads_google_recommendations FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_hour_stats Tenant members can view google_ads_hour_stats; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_hour_stats" ON public.google_ads_hour_stats FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_impression_share Tenant members can view google_ads_impression_share; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_impression_share" ON public.google_ads_impression_share FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_keywords Tenant members can view google_ads_keywords; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_keywords" ON public.google_ads_keywords FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_landing_pages Tenant members can view google_ads_landing_pages; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_landing_pages" ON public.google_ads_landing_pages FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_negatives Tenant members can view google_ads_negatives; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_negatives" ON public.google_ads_negatives FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_products Tenant members can view google_ads_products; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_products" ON public.google_ads_products FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_search_terms Tenant members can view google_ads_search_terms; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_search_terms" ON public.google_ads_search_terms FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_unit_economics Tenant members can view google_ads_unit_economics; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_unit_economics" ON public.google_ads_unit_economics FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: google_ads_user_lists Tenant members can view google_ads_user_lists; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Tenant members can view google_ads_user_lists" ON public.google_ads_user_lists FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
 
 
 --
@@ -17509,6 +20156,20 @@ CREATE POLICY "Users can view their tenant's business profile" ON public.tenant_
 
 
 --
+-- Name: cashback_credits Users can view their tenant's cashback credits; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can view their tenant's cashback credits" ON public.cashback_credits FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
+-- Name: cashback_exclusions Users can view their tenant's cashback exclusions; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY "Users can view their tenant's cashback exclusions" ON public.cashback_exclusions FOR SELECT TO authenticated USING ((tenant_id = ( SELECT public.get_user_tenant_id(( SELECT auth.uid() AS uid)) AS get_user_tenant_id)));
+
+
+--
 -- Name: tenant_knowledge_docs Users can view their tenant's knowledge docs; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -17720,6 +20381,18 @@ ALTER TABLE public.cashback_balances ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.cashback_configs ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: cashback_credits; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.cashback_credits ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: cashback_exclusions; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.cashback_exclusions ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: cashback_executions; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18101,6 +20774,192 @@ ALTER TABLE public.function_metrics ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.generated_coupons ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_account_budget; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_account_budget ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_accounts; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_accounts ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_action_outcomes; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_action_outcomes ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_ad_groups; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_ad_groups ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_ads; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_ads ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_asset_group_assets; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_asset_group_assets ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_asset_groups; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_asset_groups ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_audit_log; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_audit_log ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_bidding_strategies; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_bidding_strategies ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_campaign_conversions; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_campaign_conversions ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_campaign_daily; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_campaign_daily ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_campaign_targets; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_campaign_targets ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_campaigns; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_campaigns ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_changes; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_changes ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_conversion_actions; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_conversion_actions ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_conversion_goals; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_conversion_goals ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_conversion_monthly; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_conversion_monthly ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_demographics; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_demographics ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_device_monthly; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_device_monthly ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_geo_stats; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_geo_stats ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_google_recommendations; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_google_recommendations ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_hour_stats; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_hour_stats ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_impression_share; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_impression_share ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_keywords; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_keywords ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_landing_pages; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_landing_pages ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_negatives; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_negatives ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_products; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_products ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_recommendations; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_recommendations ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_search_terms; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_search_terms ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_unit_economics; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_unit_economics ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: google_ads_user_lists; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.google_ads_user_lists ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: inbox_routing_rules; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19526,5 +22385,5 @@ ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict DPMm7gI0iDOJr4CKtBAUE4IfhsdYyumc1CEzMJQ5kbbmvYgKCbkTiKzanjKGczR
+\unrestrict TDeQuBtl39cUbhXcOZkAicUcEoIcyiLkQysvquGalZOeIiJvaDdl3995zmKFZgS
 

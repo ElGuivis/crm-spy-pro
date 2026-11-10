@@ -35,6 +35,8 @@ export interface IssueRequest {
   cashbackConfigId?: string | null;
   /** percentual a registrar quando o cupom é de valor fixo calculado por percentual (cashback) */
   percentageForRecord?: number;
+  /** valor em R$ a registrar quando o cupom é percentual com teto (cashback: o crédito) */
+  valueForRecord?: number;
 }
 
 export type IssueResult =
@@ -71,7 +73,7 @@ export async function issueCoupon(supabase: Supabase, req: IssueRequest): Promis
       tenant_id: req.tenantId, integration_id: req.integrationId, config_id: req.cashbackConfigId ?? null,
       coupon_code: code, issue_status: "pending", source: SOURCE_BY_ORIGIN[req.origin.type],
       origin_type: req.origin.type, origin_id: req.origin.id ?? null, origin_ref: req.origin.ref ?? null,
-      discount_percentage: tipo === "porcentagem" ? req.spec.valor : (req.percentageForRecord ?? 0), coupon_value: tipo === "fixo" ? req.spec.valor : null,
+      discount_percentage: tipo === "porcentagem" ? req.spec.valor : (req.percentageForRecord ?? 0), coupon_value: tipo === "fixo" ? req.spec.valor : (req.valueForRecord ?? null),
       coupon_type: tipo, coupon_description: req.spec.descricao ?? null, expires_at: expiresIso,
       li_data_inicio: new Date().toISOString(), li_data_fim: validade ? expiresIso : null,
       li_quantidade_uso_maximo: req.spec.quantidade != null && req.spec.quantidade < 999_999 ? req.spec.quantidade : null, li_quantidade_usada: 0, li_quantidade_por_cliente: req.spec.quantidadePorCliente ?? 1,

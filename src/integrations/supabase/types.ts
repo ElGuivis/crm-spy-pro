@@ -1961,8 +1961,11 @@ export type Database = {
       }
       cashback_configs: {
         Row: {
+          base_excludes_shipping: boolean
+          cancel_on_refund: boolean
           coupon_duration_days: number
           created_at: string
+          cumulative: boolean
           discount_percentage: number
           email_body_html: string | null
           email_body_text: string | null
@@ -1972,10 +1975,16 @@ export type Database = {
           integration_id: string | null
           integration_name: string
           is_active: boolean
+          max_cart_percent: number | null
           max_discount_value: number | null
           message_template: string | null
+          min_credit_value: number
+          min_order_mode: string
+          min_order_value: number | null
           min_purchase_value: number | null
           name: string
+          personal_coupon: boolean
+          release_delay_days: number
           reminder_1_days_before: number | null
           reminder_1_enabled: boolean | null
           reminder_1_message: string | null
@@ -1991,8 +2000,11 @@ export type Database = {
           whatsapp_integration_id: string | null
         }
         Insert: {
+          base_excludes_shipping?: boolean
+          cancel_on_refund?: boolean
           coupon_duration_days?: number
           created_at?: string
+          cumulative?: boolean
           discount_percentage?: number
           email_body_html?: string | null
           email_body_text?: string | null
@@ -2002,10 +2014,16 @@ export type Database = {
           integration_id?: string | null
           integration_name: string
           is_active?: boolean
+          max_cart_percent?: number | null
           max_discount_value?: number | null
           message_template?: string | null
+          min_credit_value?: number
+          min_order_mode?: string
+          min_order_value?: number | null
           min_purchase_value?: number | null
           name?: string
+          personal_coupon?: boolean
+          release_delay_days?: number
           reminder_1_days_before?: number | null
           reminder_1_enabled?: boolean | null
           reminder_1_message?: string | null
@@ -2021,8 +2039,11 @@ export type Database = {
           whatsapp_integration_id?: string | null
         }
         Update: {
+          base_excludes_shipping?: boolean
+          cancel_on_refund?: boolean
           coupon_duration_days?: number
           created_at?: string
+          cumulative?: boolean
           discount_percentage?: number
           email_body_html?: string | null
           email_body_text?: string | null
@@ -2032,10 +2053,16 @@ export type Database = {
           integration_id?: string | null
           integration_name?: string
           is_active?: boolean
+          max_cart_percent?: number | null
           max_discount_value?: number | null
           message_template?: string | null
+          min_credit_value?: number
+          min_order_mode?: string
+          min_order_value?: number | null
           min_purchase_value?: number | null
           name?: string
+          personal_coupon?: boolean
+          release_delay_days?: number
           reminder_1_days_before?: number | null
           reminder_1_enabled?: boolean | null
           reminder_1_message?: string | null
@@ -2077,6 +2104,150 @@ export type Database = {
             columns: ["whatsapp_integration_id"]
             isOneToOne: false
             referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cashback_credits: {
+        Row: {
+          attempts: number
+          base_amount: number
+          config_id: string | null
+          coupon_id: string | null
+          created_at: string
+          credit_amount: number
+          customer_cpf: string | null
+          customer_email: string | null
+          customer_key: string | null
+          customer_name: string | null
+          customer_phone: string | null
+          id: string
+          integration_id: string | null
+          last_error: string | null
+          li_customer_id: string | null
+          order_number: string
+          order_ref: string | null
+          release_at: string
+          released_at: string | null
+          skip_reason: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          base_amount?: number
+          config_id?: string | null
+          coupon_id?: string | null
+          created_at?: string
+          credit_amount?: number
+          customer_cpf?: string | null
+          customer_email?: string | null
+          customer_key?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          integration_id?: string | null
+          last_error?: string | null
+          li_customer_id?: string | null
+          order_number: string
+          order_ref?: string | null
+          release_at?: string
+          released_at?: string | null
+          skip_reason?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          base_amount?: number
+          config_id?: string | null
+          coupon_id?: string | null
+          created_at?: string
+          credit_amount?: number
+          customer_cpf?: string | null
+          customer_email?: string | null
+          customer_key?: string | null
+          customer_name?: string | null
+          customer_phone?: string | null
+          id?: string
+          integration_id?: string | null
+          last_error?: string | null
+          li_customer_id?: string | null
+          order_number?: string
+          order_ref?: string | null
+          release_at?: string
+          released_at?: string | null
+          skip_reason?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cashback_credits_config_id_fkey"
+            columns: ["config_id"]
+            isOneToOne: false
+            referencedRelation: "cashback_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cashback_credits_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "generated_coupons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cashback_credits_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cashback_exclusions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          customer_key: string
+          email: string | null
+          id: string
+          name: string | null
+          phone: string | null
+          reason: string | null
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          customer_key: string
+          email?: string | null
+          id?: string
+          name?: string | null
+          phone?: string | null
+          reason?: string | null
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          customer_key?: string
+          email?: string | null
+          id?: string
+          name?: string | null
+          phone?: string | null
+          reason?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cashback_exclusions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
@@ -13506,6 +13677,39 @@ export type Database = {
           open_count: number
         }[]
       }
+      get_cashback_statement: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_search?: string
+          p_status?: string
+        }
+        Returns: {
+          base_amount: number
+          coupon_code: string
+          created_at: string
+          credit_amount: number
+          customer_email: string
+          customer_name: string
+          customer_phone: string
+          display_status: string
+          expires_at: string
+          id: string
+          order_number: string
+          release_at: string
+          skip_reason: string
+          used_at: string
+          used_order_value: number
+        }[]
+      }
+      get_cashback_totals: {
+        Args: never
+        Returns: {
+          amount: number
+          credits: number
+          display_status: string
+        }[]
+      }
       get_catalog_summary: { Args: never; Returns: Json }
       get_contact_blockers: {
         Args: {
@@ -13780,6 +13984,7 @@ export type Database = {
           subscribers: number
         }[]
       }
+      google_ads_copy_facts: { Args: { p_account: string }; Returns: Json }
       google_ads_crm_economics: {
         Args: { p_account: string; p_months?: number }
         Returns: Json

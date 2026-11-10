@@ -22,6 +22,10 @@ export interface CouponSpec {
   descricao?: string;
   /** ids dos grupos de clientes que podem usar (vazio = todos os clientes) */
   grupos?: number[];
+  /** ids de clientes da loja que podem usar (cupom pessoal; vale mais que grupos) */
+  clientes?: number[];
+  /** teto do desconto em R$ para cupom percentual (campo limite_desconto da loja, fora da documentação oficial) */
+  limiteDesconto?: number | null;
 }
 
 export function buildLiCouponPayload(s: CouponSpec): Record<string, unknown> {
@@ -42,6 +46,13 @@ export function buildLiCouponPayload(s: CouponSpec): Record<string, unknown> {
     payload.condicao_cliente = "grupos_selecionados";
     payload.grupos = s.grupos.map(String);
   }
+  const clientes = (s.clientes ?? []).filter((c) => Number.isFinite(c));
+  if (clientes.length) {
+    payload.condicao_cliente = "clientes_selecionados";
+    payload.clientes = clientes.map(String);
+    delete payload.grupos;
+  }
+  if (s.limiteDesconto && s.limiteDesconto > 0 && s.tipo === "porcentagem") payload.limite_desconto = s.limiteDesconto.toFixed(2);
   if (s.validade) payload.validade = s.validade;
   if (s.valorMinimo && s.valorMinimo > 0) payload.valor_minimo = s.valorMinimo.toFixed(2);
   return payload;
@@ -88,6 +99,8 @@ export interface LiCoupon {
   quantidade?: number | null; quantidade_usada?: number | null; quantidade_por_cliente?: number | null;
   validade?: string | null; valor_minimo?: string | number | null; ativo?: boolean; cumulativo?: boolean;
   data_criacao?: string | null; data_modificacao?: string | null;
+  /** teto do desconto (cupom percentual) */
+  limite_desconto?: string | number | null;
 }
 
 const num = (v: unknown): number | null => {
@@ -116,7 +129,7 @@ export function liCouponToRow(c: LiCoupon, ctx: { tenantId: string; integrationI
     coupon_type: c.tipo,
     coupon_description: c.descricao || null,
     discount_percentage: c.tipo === "porcentagem" ? valor ?? 0 : 0,
-    coupon_value: c.tipo === "fixo" ? valor : null,
+    coupon_value: c.tipo === "fixo" ? valor : num(c.limite_desconto), // percentual com teto: guarda o teto (no cashback, o crédito)
     // data de criação na loja: alimenta o filtro de período do retorno por origem (sem ela valeria a data da sincronização)
     li_data_inicio: brDate(c.data_criacao),
     issue_status: "issued", // a loja já tem o cupom: confirma reservas que ficaram pendentes
@@ -132,4 +145,23 @@ export function liCouponToRow(c: LiCoupon, ctx: { tenantId: string; integrationI
     source: prev?.source && prev.source !== "imported" ? prev.source : isAutoCoupon(c) ? "cashback" : /^E-mail: /.test(c.descricao ?? "") ? "email" : "imported",
     used_at: prev?.used_at ?? (usadas > 0 ? brDate(c.data_modificacao) ?? new Date().toISOString() : null),
   };
+}
+
+// ---- desativação ----
+// campos que a API não aceita de volta no PUT
+const PUT_READ_ONLY = ["id", "resource_uri", "data_criacao", "data_modificacao", "quantidade_usada"];
+
+/** Desativa um cupom na loja. A API exige o cupom inteiro no PUT: lê o atual, muda só `ativo` e devolve, omitindo os campos vazios que ela recusa. */
+export async function deactivateLiCoupon(authHeader: string, liCouponId: number): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
+  const url = `${LI_API_BASE}/cupom/${liCouponId}`;
+  const cur = await fetch(url, { headers: { Authorization: authHeader }, signal: AbortSignal.timeout(20_000) });
+  if (!cur.ok) return { ok: false, status: cur.status, error: `não consegui ler o cupom (${cur.status})` };
+  const next = { ...(await cur.json() as Record<string, unknown>) };
+  for (const k of PUT_READ_ONLY) delete next[k];
+  if (next.valor_minimo === "" || next.valor_minimo == null) delete next.valor_minimo;
+  if (next.limite_desconto == null) delete next.limite_desconto;
+  next.ativo = false;
+  const put = await fetch(url, { method: "PUT", headers: { Authorization: authHeader, "Content-Type": "application/json" }, body: JSON.stringify(next), signal: AbortSignal.timeout(20_000) });
+  if (!put.ok) return { ok: false, status: put.status, error: (await put.text()).slice(0, 200) };
+  return { ok: true };
 }

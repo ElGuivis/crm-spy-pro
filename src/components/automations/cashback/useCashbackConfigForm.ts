@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { rowToConfig, configToRow } from "./cashback-config-mapper";
 import {
   CashbackConfig,
   Integration,
@@ -43,39 +44,14 @@ export function useCashbackConfigForm({ open, editingId, initialConfig, onSave, 
     try {
       const { data, error } = await supabase
         .from('cashback_configs')
-        .select('id, name, discount_percentage, coupon_duration_days, integration_name, integration_id, min_purchase_value, max_discount_value, trigger_statuses, whatsapp_integration_id, is_active, send_via_whatsapp, message_template, send_via_email, email_integration_id, email_subject, email_body_text, email_body_html, reminder_1_enabled, reminder_1_days_before, reminder_1_message, reminder_2_enabled, reminder_2_days_before, reminder_2_message')
+        .select('*')
         .eq('id', id)
         .single();
 
       if (error) throw error;
 
       if (data) {
-        setConfig({
-          id: data.id,
-          name: data.name || '',
-          discountPercent: data.discount_percentage,
-          durationDays: data.coupon_duration_days,
-          integration: data.integration_name || '',
-          integrationId: data.integration_id || null,
-          minPurchaseValue: data.min_purchase_value,
-          maxDiscountValue: data.max_discount_value,
-          triggerStatuses: data.trigger_statuses || [],
-          whatsappIntegrationId: data.whatsapp_integration_id,
-          isActive: data.is_active,
-          sendViaWhatsapp: data.send_via_whatsapp ?? true,
-          messageTemplate: data.message_template || DEFAULT_MESSAGE_TEMPLATE,
-          sendViaEmail: data.send_via_email ?? false,
-          emailIntegrationId: data.email_integration_id,
-          emailSubject: data.email_subject || DEFAULT_EMAIL_SUBJECT,
-          emailBodyText: data.email_body_text || DEFAULT_EMAIL_BODY,
-          emailBodyHtml: data.email_body_html || '',
-          reminder1Enabled: data.reminder_1_enabled ?? false,
-          reminder1DaysBefore: data.reminder_1_days_before ?? 7,
-          reminder1Message: data.reminder_1_message || DEFAULT_REMINDER_1,
-          reminder2Enabled: data.reminder_2_enabled ?? false,
-          reminder2DaysBefore: data.reminder_2_days_before ?? 3,
-          reminder2Message: data.reminder_2_message || DEFAULT_REMINDER_2,
-        });
+        setConfig(rowToConfig(data));
         setEmailEditMode(data.email_body_html ? 'html' : 'simple');
       }
     } catch (error) {
@@ -233,6 +209,14 @@ export function useCashbackConfigForm({ open, editingId, initialConfig, onSave, 
       toast({ title: "Erro de validação", description: "A duração deve ser maior que 0 dias", variant: "destructive" });
       return;
     }
+    if (config.maxCartPercent != null && (config.maxCartPercent <= 0 || config.maxCartPercent > 100)) {
+      toast({ title: "Erro de validação", description: "O desconto máximo do carrinho deve estar entre 1 e 100%", variant: "destructive" });
+      return;
+    }
+    if (config.minOrderMode !== 'none' && !(config.minOrderValue && config.minOrderValue > 0)) {
+      toast({ title: "Erro de validação", description: "Informe o valor do pedido mínimo (ou escolha 'Sem mínimo')", variant: "destructive" });
+      return;
+    }
     if (config.triggerStatuses.length === 0) {
       toast({ title: "Erro de validação", description: "Selecione pelo menos um status de gatilho", variant: "destructive" });
       return;
@@ -244,32 +228,7 @@ export function useCashbackConfigForm({ open, editingId, initialConfig, onSave, 
 
     setIsSaving(true);
     try {
-      const configData = {
-        name: config.name || 'Cashback',
-        discount_percentage: config.discountPercent,
-        coupon_duration_days: config.durationDays,
-        integration_name: config.integration,
-        integration_id: config.integrationId || null,
-        min_purchase_value: config.minPurchaseValue,
-        max_discount_value: config.maxDiscountValue,
-        trigger_statuses: config.triggerStatuses,
-        whatsapp_integration_id: config.whatsappIntegrationId || null,
-        is_active: config.isActive,
-        send_via_whatsapp: config.sendViaWhatsapp,
-        message_template: config.messageTemplate || DEFAULT_MESSAGE_TEMPLATE,
-        send_via_email: config.sendViaEmail,
-        email_integration_id: config.emailIntegrationId || null,
-        email_subject: config.emailSubject || null,
-        email_body_text: config.emailBodyText || null,
-        email_body_html: config.emailBodyHtml || null,
-        reminder_1_enabled: config.reminder1Enabled,
-        reminder_1_days_before: config.reminder1DaysBefore,
-        reminder_1_message: config.reminder1Message,
-        reminder_2_enabled: config.reminder2Enabled,
-        reminder_2_days_before: config.reminder2DaysBefore,
-        reminder_2_message: config.reminder2Message,
-        updated_at: new Date().toISOString(),
-      };
+      const configData = configToRow(config);
 
       if (editingId) {
         const { error } = await supabase.from('cashback_configs').update(configData).eq('id', editingId);

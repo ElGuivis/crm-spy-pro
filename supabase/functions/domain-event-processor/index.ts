@@ -2,7 +2,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { requireInternalAuth } from "../_shared/auth-guard.ts";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
-import { attributionConsumer, cashbackConsumer, recoveryConsumer, type DomainEvent } from "./consumers.ts";
+import { attributionConsumer, loadOrder, recoveryConsumer, type DomainEvent } from "./consumers.ts";
+import { cashbackConsumer } from "./cashback-consumer.ts";
 
 const BATCH = 50;
 const MAX_ATTEMPTS = 5;
@@ -39,7 +40,7 @@ Deno.serve(async (req) => {
     for (const ev of events) {
       if (ev.event_type !== "order_ingested" || done.has(`${ev.id}:cashback`)) continue;
       try {
-        const out = await cashbackConsumer(supabase, ev);
+        const out = await cashbackConsumer(supabase, ev, await loadOrder(supabase, ev));
         await record(ev.id, "cashback", out.status, out.detail);
       } catch (e) {
         failures.set(ev.id, `cashback: ${(e as Error).message}`);

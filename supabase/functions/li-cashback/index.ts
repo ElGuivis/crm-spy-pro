@@ -12,6 +12,9 @@ import { ensureAutomationConversation } from "../_shared/automation-conversation
 import { sendWhatsAppMessage as sharedSendWhatsApp, type WhatsAppConfig } from "../_shared/whatsapp-sender.ts";
 import { sendEmail as sharedSendEmail, getEmailConfig } from "../_shared/email-sender.ts";
 import type { CashbackPayload } from "./types.ts";
+import { BRT_TZ, brtDate, brtDateAfter } from "../_shared/brt.ts";
+import { buildCashbackSpec, creditFor, extraTemplateVars, isReversedStatus } from "../_shared/cashback-rules.ts";
+import { claimCredit, isExcluded, markFinal, markReleased, markRetry, type CashbackCredit } from "../_shared/cashback-credit.ts";
 
 let log: Logger = createLogger("li-cashback", "init");
 
@@ -24,6 +27,9 @@ Deno.serve(async (req) => {
 
   const cid = getCorrelationId(req);
   log = createLogger("li-cashback", cid);
+  const reply = (body: Record<string, unknown>, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  let claimed: CashbackCredit | null = null; // crédito em liberação (modo credit_id)
+  let released = false;
 
   try {
     requireInternalAuth(req);
@@ -37,6 +43,18 @@ Deno.serve(async (req) => {
     const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
 
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Modo liberação: o pedido já virou um crédito (cashback_credits); aqui ele é conferido de novo, vira cupom e o cliente é avisado.
+    if (payload.credit_id) {
+      claimed = await claimCredit(supabase, payload.credit_id);
+      if (!claimed) return reply({ success: false, skipped: true, error: 'Crédito já processado ou não está pendente' });
+      Object.assign(payload, {
+        order_id: claimed.order_ref ?? claimed.order_number, order_number: claimed.order_number,
+        customer_name: claimed.customer_name || 'Cliente', customer_email: claimed.customer_email || '',
+        customer_phone: claimed.customer_phone || '', customer_cpf: claimed.customer_cpf || '',
+        order_total: claimed.base_amount, tenant_id: claimed.tenant_id, integration_id: claimed.integration_id ?? undefined,
+      });
+    }
 
     // Get active cashback config with WhatsApp integration
     // FIX: Use tenant_id AND integration_id from payload for proper multi-tenant/multi-store isolation
@@ -76,6 +94,7 @@ Deno.serve(async (req) => {
 
     if (configError || !config) {
       log.info('No active cashback config found');
+      if (claimed) await markFinal(supabase, claimed.id, 'skipped', 'Cashback desligado ou sem configuração');
       return new Response(JSON.stringify({ 
         success: false, 
         error: 'No active cashback configuration' 
@@ -96,6 +115,7 @@ Deno.serve(async (req) => {
 
       if (!hasTokens) {
         log.info('Tenant does not have enough tokens');
+        if (claimed) await markRetry(supabase, claimed, 'Tokens insuficientes');
         return new Response(JSON.stringify({ 
           success: false, 
           error: 'Tokens insuficientes para executar automação de cashback' 
@@ -108,7 +128,7 @@ Deno.serve(async (req) => {
     log.info('Active cashback config:', config);
 
     // Check minimum purchase value
-    if (config.min_purchase_value && payload.order_total < config.min_purchase_value) {
+    if (!claimed && config.min_purchase_value && payload.order_total < config.min_purchase_value) {
       log.info(`Order total ${payload.order_total} is below minimum ${config.min_purchase_value}`);
       return new Response(JSON.stringify({ 
         success: false, 
@@ -116,6 +136,22 @@ Deno.serve(async (req) => {
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+
+    // Na liberação o pedido pode ter mudado desde a compra: cancelado/devolvido e cliente excluído não ganham.
+    if (claimed) {
+      const { data: ord } = await supabase.from('li_orders').select('status_name').eq('tenant_id', claimed.tenant_id).eq('order_number', claimed.order_number).maybeSingle();
+      if (!ord || isReversedStatus(ord.status_name)) {
+        const why = `Pedido com status "${ord?.status_name ?? 'não encontrado'}" na liberação`;
+        await markFinal(supabase, claimed.id, 'cancelled', why);
+        released = true;
+        return reply({ success: false, skipped: true, error: why });
+      }
+      if (await isExcluded(supabase, claimed.tenant_id, claimed.customer_email, claimed.customer_phone)) {
+        await markFinal(supabase, claimed.id, 'skipped', 'Cliente na lista de exclusão');
+        released = true;
+        return reply({ success: false, skipped: true, error: 'Cliente na lista de exclusão' });
+      }
     }
 
     // Get API key from integration - FIX: Use integration_id from config or payload
@@ -143,12 +179,11 @@ Deno.serve(async (req) => {
     const authHeader = liAuthHeader(integration.api_key);
 
     // Calculate cashback amount
-    let cashbackAmount = (payload.order_total * config.discount_percentage) / 100;
+    const cashbackAmount = claimed ? Number(claimed.credit_amount) : creditFor(payload.order_total, config);
     const cashbackPercentage = config.discount_percentage;
-
-    if (config.max_discount_value && cashbackAmount > config.max_discount_value) {
-      log.info(`Cashback ${cashbackAmount} exceeds max ${config.max_discount_value}, capping`);
-      cashbackAmount = config.max_discount_value;
+    if (!(cashbackAmount > 0)) {
+      if (claimed) { await markFinal(supabase, claimed.id, 'skipped', 'Crédito zerado ou abaixo do mínimo'); released = true; }
+      return reply({ success: false, skipped: true, error: 'Crédito zerado ou abaixo do mínimo' });
     }
 
     // Código de 5 caracteres (formato do cashback); a unicidade e as novas tentativas ficam por conta do emissor único
@@ -167,8 +202,8 @@ Deno.serve(async (req) => {
     const issued = await issueCoupon(supabase, {
       tenantId, integrationId: integration.id, auth: authHeader,
       origin: { type: 'cashback', id: config.id, ref: String(payload.order_number) },
-      spec: { tipo: 'fixo', valor: cashbackAmount, validade: expiresAt.toISOString().split('T')[0], quantidade: 1, quantidadePorCliente: 1, descricao: `Cashback do pedido #${payload.order_number}` },
-      codeFactory: generateCode, percentageForRecord: cashbackPercentage, orderRef: payload.order_number, cashbackConfigId: config.id,
+      spec: buildCashbackSpec(config, cashbackAmount, { validade: brtDate(expiresAt), descricao: `Cashback do pedido #${payload.order_number}`, liCustomerId: claimed?.li_customer_id }),
+      codeFactory: generateCode, percentageForRecord: cashbackPercentage, valueForRecord: cashbackAmount, orderRef: payload.order_number, cashbackConfigId: config.id,
       recipient: { name: payload.customer_name, email: payload.customer_email, phone: payload.customer_phone, cpf: payload.customer_cpf || null },
     });
 
@@ -189,6 +224,12 @@ Deno.serve(async (req) => {
     const couponCode = issued.code;
     const savedCoupon = { id: issued.ledgerId };
     log.info('Coupon created and recorded:', couponCode);
+    if (claimed) { await markReleased(supabase, claimed.id, issued.ledgerId); released = true; }
+
+    // textos: {{percentual_max}} e {{pedido_minimo}} além das variáveis de sempre
+    const extra = extraTemplateVars(config, cashbackAmount);
+    const fillExtra = (s?: string | null) => (s ? s.replace(/{{percentual_max}}/g, extra.percentual_max).replace(/{{pedido_minimo}}/g, extra.pedido_minimo) : s);
+    for (const k of ['message_template', 'email_subject', 'email_body_text', 'email_body_html', 'reminder_1_message', 'reminder_2_message']) config[k] = fillExtra(config[k]);
 
     // Deduct tokens from tenant
     if (tenantId) {
@@ -225,15 +266,14 @@ Deno.serve(async (req) => {
 
     // Prepare message data
     const customerFirstName = payload.customer_name.split(' ')[0];
-    const formattedValidade = expiresAt.toLocaleDateString('pt-BR');
+    const formattedValidade = expiresAt.toLocaleDateString('pt-BR', { timeZone: BRT_TZ });
     const formattedValorCupom = `R$ ${cashbackAmount.toFixed(2).replace('.', ',')}`;
 
     // Schedule reminders if enabled
     const remindersToInsert = [];
     
     if (config.reminder_1_enabled && savedCoupon) {
-      const reminder1Date = new Date(expiresAt);
-      reminder1Date.setDate(reminder1Date.getDate() - (config.reminder_1_days_before || 7));
+      const reminder1Date = brtDateAfter(-(config.reminder_1_days_before || 7), expiresAt);
       
       const reminder1Message = (config.reminder_1_message || '')
         .replace(/\{\{cliente_nome\}\}/g, payload.customer_name)
@@ -248,15 +288,14 @@ Deno.serve(async (req) => {
         config_id: config.id,
         tenant_id: tenantId,
         reminder_number: 1,
-        scheduled_date: reminder1Date.toISOString().split('T')[0],
+        scheduled_date: reminder1Date,
         status: 'pending',
         message: reminder1Message,
       });
     }
     
     if (config.reminder_2_enabled && savedCoupon) {
-      const reminder2Date = new Date(expiresAt);
-      reminder2Date.setDate(reminder2Date.getDate() - (config.reminder_2_days_before || 3));
+      const reminder2Date = brtDateAfter(-(config.reminder_2_days_before || 3), expiresAt);
       
       const reminder2Message = (config.reminder_2_message || '')
         .replace(/\{\{cliente_nome\}\}/g, payload.customer_name)
@@ -271,7 +310,7 @@ Deno.serve(async (req) => {
         config_id: config.id,
         tenant_id: tenantId,
         reminder_number: 2,
-        scheduled_date: reminder2Date.toISOString().split('T')[0],
+        scheduled_date: reminder2Date,
         status: 'pending',
         message: reminder2Message,
       });
@@ -483,6 +522,9 @@ Deno.serve(async (req) => {
     if (error instanceof Response) return error;
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     log.error('Cashback error:', errorMessage);
+    if (claimed && !released) { // falhou no meio: devolve o crédito para a fila (nova tentativa em 30 min, no máximo 5)
+      await markRetry(createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!), claimed, errorMessage).catch(() => {});
+    }
     return new Response(JSON.stringify({ 
       success: false, 
       error: errorMessage 

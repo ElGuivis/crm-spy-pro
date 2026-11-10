@@ -16,6 +16,7 @@ import { CashbackStoreSection } from "./cashback/CashbackStoreSection";
 import { CashbackWhatsAppSection } from "./cashback/CashbackWhatsAppSection";
 import { CashbackEmailSection } from "./cashback/CashbackEmailSection";
 import { CashbackRemindersSection } from "./cashback/CashbackRemindersSection";
+import { CashbackRulesSection } from "./cashback/CashbackRulesSection";
 
 export function CashbackConfigDialog({
   open,
@@ -107,7 +108,7 @@ export function CashbackConfigDialog({
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
               <Percent className="h-4 w-4 text-muted-foreground" />
-              Porcentagem de Desconto
+              Porcentagem de cashback
             </Label>
             <div className="relative">
               <Input
@@ -121,7 +122,7 @@ export function CashbackConfigDialog({
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              Porcentagem de desconto que será aplicada no cupom gerado
+              Percentual do valor pago (produtos) que vira crédito para a próxima compra
             </p>
           </div>
 
@@ -129,7 +130,7 @@ export function CashbackConfigDialog({
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-muted-foreground" />
-              Validade do Cupom
+              Validade do crédito (depois de liberado)
             </Label>
             <div className="relative">
               <Input
@@ -142,14 +143,14 @@ export function CashbackConfigDialog({
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">dias</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              Quantos dias o cupom ficará válido após a geração
+              Quantos dias o cliente tem para usar o cupom depois que o crédito é liberado
             </p>
           </div>
 
           {/* Min/Max values */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Compra mínima (R$)</Label>
+              <Label>Compra mínima para ganhar (R$)</Label>
               <Input
                 type="number"
                 min={0}
@@ -160,7 +161,7 @@ export function CashbackConfigDialog({
               <p className="text-xs text-muted-foreground">Deixe vazio para sem mínimo</p>
             </div>
             <div className="space-y-2">
-              <Label>Desconto máximo (R$)</Label>
+              <Label>Crédito máximo por pedido (R$)</Label>
               <Input
                 type="number"
                 min={0}
@@ -171,6 +172,9 @@ export function CashbackConfigDialog({
               <p className="text-xs text-muted-foreground">Deixe vazio para sem limite</p>
             </div>
           </div>
+
+          {/* Regras de liberação e uso */}
+          <CashbackRulesSection config={config} setConfig={setConfig} />
 
           {/* WhatsApp */}
           <CashbackWhatsAppSection

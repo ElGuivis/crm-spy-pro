@@ -162,6 +162,7 @@ These are called by pg_cron or other edge functions, never directly by users.
 | bot-engine | Called by whatsapp-webhook |
 | bulk-status-update-li | Cron: update LI statuses |
 | cashback-reminder-processor | Cron: cashback reminders |
+| cashback-release | Cron (15 min): libera créditos de cashback vencidos e desativa cupons de pedidos cancelados/devolvidos |
 | conversation-inactivity-processor | Cron: inactivity timeouts |
 | flow-runner | Called only by `whatsapp-webhook` (service_role) via `_shared/wa-webhook-flow-handler.ts`; no frontend caller, no CORS |
 | instagram-experimental-trigger | Internal testing |

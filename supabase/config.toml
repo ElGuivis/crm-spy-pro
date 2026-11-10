@@ -267,6 +267,9 @@ verify_jwt = false
 [functions.cashback-reminder-processor]
 verify_jwt = false
 
+[functions.cashback-release]
+verify_jwt = false
+
 [functions.message-queue-processor]
 verify_jwt = false
 

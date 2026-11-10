@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Gift, Settings2, Trash2, Send, MoreVertical, Loader2 } from 'lucide-react';
+import { Gift, Settings2, Trash2, Send, MoreVertical, Loader2, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { AutomationSubCard } from './AutomationSubCard';
+import { CashbackStatementDialog } from './cashback/CashbackStatementDialog';
 import type { CashbackConfigData } from '@/hooks/useAutomationsData';
 
 interface CashbackSubCardProps {
@@ -21,6 +22,7 @@ interface CashbackSubCardProps {
 export function CashbackSubCard({ config, couponsCount, onEdit, onDelete }: CashbackSubCardProps) {
   const { toast } = useToast();
   const [isTesting, setIsTesting] = useState(false);
+  const [statementOpen, setStatementOpen] = useState(false);
 
   const handleMenuClick = (e: React.MouseEvent) => e.stopPropagation();
 
@@ -54,6 +56,7 @@ export function CashbackSubCard({ config, couponsCount, onEdit, onDelete }: Cash
   };
 
   return (
+    <>
     <AutomationSubCard
       icon={<Gift className="h-5 w-5" />}
       activeIcon={
@@ -88,6 +91,9 @@ export function CashbackSubCard({ config, couponsCount, onEdit, onDelete }: Cash
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onEdit(); }}>
                 <Settings2 className="h-4 w-4 mr-2" /> Editar
               </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setStatementOpen(true); }}>
+                <Wallet className="h-4 w-4 mr-2" /> Extrato e exclusões
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(); }} className="text-destructive focus:text-destructive">
                 <Trash2 className="h-4 w-4 mr-2" /> Excluir
               </DropdownMenuItem>
@@ -96,5 +102,7 @@ export function CashbackSubCard({ config, couponsCount, onEdit, onDelete }: Cash
         </div>
       }
     />
+    <CashbackStatementDialog open={statementOpen} onOpenChange={setStatementOpen} />
+    </>
   );
 }

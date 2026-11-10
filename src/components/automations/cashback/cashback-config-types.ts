@@ -23,7 +23,19 @@ export interface CashbackConfig {
   reminder2Enabled: boolean;
   reminder2DaysBefore: number;
   reminder2Message: string;
+  // regras de liberação e uso
+  releaseDelayDays: number;
+  maxCartPercent: number | null;
+  minOrderMode: MinOrderMode;
+  minOrderValue: number | null;
+  minCreditValue: number;
+  baseExcludesShipping: boolean;
+  personalCoupon: boolean;
+  cumulative: boolean;
+  cancelOnRefund: boolean;
 }
+
+export type MinOrderMode = 'none' | 'fixed' | 'multiple';
 
 export interface CashbackConfigDialogProps {
   open: boolean;
@@ -54,6 +66,8 @@ export const MESSAGE_PLACEHOLDERS = [
   { key: '{{valor_cupom}}', label: 'Valor do Desconto', description: 'Valor do desconto em reais (ex: R$ 15,00)' },
   { key: '{{cupom}}', label: 'Código do Cupom', description: 'O código do cupom gerado' },
   { key: '{{validade}}', label: 'Validade', description: 'Data de validade do cupom' },
+  { key: '{{percentual_max}}', label: 'Desconto máximo (%)', description: 'Máximo do carrinho que o cupom abate (ex: 30%)' },
+  { key: '{{pedido_minimo}}', label: 'Pedido mínimo', description: 'Valor mínimo da compra para usar o cupom (ex: R$ 300,00)' },
 ];
 
 export const REMINDER_PLACEHOLDERS = [
@@ -63,7 +77,7 @@ export const REMINDER_PLACEHOLDERS = [
 
 export const DEFAULT_REMINDER_1 = 'Olá {{cliente_nome}}! ⏰ Seu cupom {{cupom}} de {{valor_cupom}} de desconto expira em {{dias_restantes}} dias! Não perca essa oportunidade. Válido até {{validade}}.';
 export const DEFAULT_REMINDER_2 = 'Olá {{cliente_nome}}! 🚨 Última chance! Seu cupom {{cupom}} expira em {{dias_restantes}} dias. Use agora e garanta {{valor_cupom}} de desconto!';
-export const DEFAULT_MESSAGE_TEMPLATE = 'Olá {{cliente_nome}}! 🎉 Obrigado pela sua compra! Use o cupom {{cupom}} e ganhe {{valor_cupom}} de desconto na próxima compra. Válido até {{validade}}.';
+export const DEFAULT_MESSAGE_TEMPLATE = 'Olá {{cliente_nome}}! 🎉 Obrigado pela sua compra! Use o cupom {{cupom}} e ganhe até {{valor_cupom}} de desconto na próxima compra (máximo de {{percentual_max}} do carrinho, pedido mínimo {{pedido_minimo}}). Válido até {{validade}}.';
 export const DEFAULT_EMAIL_SUBJECT = 'Seu cupom de desconto chegou! 🎁';
 export const DEFAULT_EMAIL_BODY = `Olá {{cliente_nome}}!
 
@@ -99,6 +113,15 @@ export const defaultConfig: CashbackConfig = {
   reminder2Enabled: false,
   reminder2DaysBefore: 3,
   reminder2Message: DEFAULT_REMINDER_2,
+  releaseDelayDays: 7,
+  maxCartPercent: 30,
+  minOrderMode: 'multiple',
+  minOrderValue: 10,
+  minCreditValue: 0,
+  baseExcludesShipping: true,
+  personalCoupon: true,
+  cumulative: true,
+  cancelOnRefund: true,
 };
 
 export const STORE_TYPES = ['loja_integrada', 'nuvemshop', 'shopify', 'woocommerce'];
@@ -131,5 +154,7 @@ export const previewMessage = (template: string, discountPercent: number, durati
     .replace(/\{\{valor_cupom\}\}/g, `R$ ${((100 * discountPercent) / 100).toFixed(2).replace('.', ',')}`)
     .replace(/\{\{cupom\}\}/g, 'AB12C')
     .replace(/\{\{validade\}\}/g, new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toLocaleDateString('pt-BR'))
-    .replace(/\{\{dias_restantes\}\}/g, '3');
+    .replace(/\{\{dias_restantes\}\}/g, '3')
+    .replace(/\{\{percentual_max\}\}/g, '30%')
+    .replace(/\{\{pedido_minimo\}\}/g, 'R$ 300,00');
 };

@@ -1,5 +1,7 @@
 /** Corpo da chamada do li-cashback (um pedido da loja). */
+/** Com `credit_id` (modo liberação) os demais campos vêm de cashback_credits; sem ele (chamada direta) todos são obrigatórios. */
 export interface CashbackPayload {
+  credit_id?: string;
   order_id: number;
   order_number: string;
   customer_name: string;
