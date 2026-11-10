@@ -13,6 +13,7 @@ import { EconomicsCard } from "@/components/google-ads/EconomicsCard";
 import { DiscoveriesCard } from "@/components/google-ads/DiscoveriesCard";
 import { InsightTables } from "@/components/google-ads/InsightTables";
 import { BuildCards } from "@/components/google-ads/BuildCards";
+import { OutcomesCard } from "@/components/google-ads/OutcomesCard";
 import { ConversionsCard } from "@/components/google-ads/ConversionsCard";
 import { HistoryCard } from "@/components/google-ads/HistoryCard";
 import { StrategyCard } from "@/components/google-ads/StrategyCard";
@@ -133,6 +134,7 @@ const GoogleAds = () => {
             </TabsContent>
 
             <TabsContent value="activity">
+              <OutcomesCard accountId={account.id} />
               <ActivityCard
                 rows={activity.data ?? []} campaigns={data.campaigns} canEdit={canEdit}
                 reverting={planActions.revert.isPending} onRevert={(id) => planActions.revert.mutate(id)}

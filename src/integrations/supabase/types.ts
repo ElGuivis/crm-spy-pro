@@ -4669,6 +4669,79 @@ export type Database = {
           },
         ]
       }
+      google_ads_action_outcomes: {
+        Row: {
+          account_id: string
+          action_kind: string
+          after_metrics: Json
+          applied_at: string
+          audit_id: string
+          before_metrics: Json
+          campaign_id: number | null
+          entity: string
+          evaluated_at: string
+          horizon_days: number
+          id: string
+          note: string | null
+          tenant_id: string
+          verdict: string
+        }
+        Insert: {
+          account_id: string
+          action_kind: string
+          after_metrics: Json
+          applied_at: string
+          audit_id: string
+          before_metrics: Json
+          campaign_id?: number | null
+          entity: string
+          evaluated_at?: string
+          horizon_days: number
+          id?: string
+          note?: string | null
+          tenant_id: string
+          verdict: string
+        }
+        Update: {
+          account_id?: string
+          action_kind?: string
+          after_metrics?: Json
+          applied_at?: string
+          audit_id?: string
+          before_metrics?: Json
+          campaign_id?: number | null
+          entity?: string
+          evaluated_at?: string
+          horizon_days?: number
+          id?: string
+          note?: string | null
+          tenant_id?: string
+          verdict?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_ads_action_outcomes_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "google_ads_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_ads_action_outcomes_audit_id_fkey"
+            columns: ["audit_id"]
+            isOneToOne: false
+            referencedRelation: "google_ads_audit_log"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_ads_action_outcomes_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       google_ads_ad_groups: {
         Row: {
           account_id: string
