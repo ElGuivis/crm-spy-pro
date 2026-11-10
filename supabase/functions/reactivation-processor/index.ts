@@ -9,7 +9,10 @@ import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { ensureAutomationConversation } from "../_shared/automation-conversation.ts";
 import { fetchAllRows, formatPhoneNumber, generateCouponCode } from "./helpers.ts";
 import { findInactiveCustomers } from "./inactive-customers.ts";
-import { brtDateAfter } from "../_shared/brt.ts";
+import { brtDateAfter, brtDayStartIso, inSendWindow } from "../_shared/brt.ts";
+import { paceQuota, pauseBetweenSends } from "../_shared/send-pacing.ts";
+
+const RUN_BUDGET_MS = 110_000; // o runtime derruba a chamada perto de 150 s
 
 const REACTIVATION_TOKEN_COST = 5;
 
@@ -58,6 +61,12 @@ Deno.serve(async (req) => {
 
     log.info(`[REACTIVATION] Found ${configs.length} active config(s)`);
 
+    // mensagem ao cliente só entre 08h e 21h de Brasília; o cron roda de hora em hora e cada execução envia só a sua parte do dia
+    if (!inSendWindow()) {
+      return new Response(JSON.stringify({ success: true, message: 'Fora da janela de envio', processed: 0 }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    const runStartedAt = Date.now();
+    const dayStart = new Date(brtDayStartIso());
     const now = new Date();
     let totalProcessed = 0;
 
@@ -151,7 +160,18 @@ Deno.serve(async (req) => {
         const apiKey = config.store_integration?.api_key;
         const authHeader = apiKey ? liAuthHeader(apiKey) : null;
 
+        // ritmo: divide quem ainda não foi contactado hoje pelas execuções que restam na janela
+        const pending = inactiveCustomers.filter((c) => {
+          const k = (c.phone ? formatPhoneNumber(c.phone) : null) || c.email || '';
+          const e = execMap.get(k);
+          return !!k && (!e || e.lastExecDate < dayStart);
+        });
+        const quota = paceQuota(pending.length);
+        log.info(`[REACTIVATION] ${pending.length} pendente(s); cota desta execução: ${quota}`);
+        let attempted = 0;
+
         for (const customer of inactiveCustomers) {
+          if (attempted >= quota || Date.now() - runStartedAt > RUN_BUDGET_MS) break;
           const phone = customer.phone ? formatPhoneNumber(customer.phone) : null;
           const customerKey = phone || customer.email || '';
           if (!customerKey) continue;
@@ -217,6 +237,7 @@ Deno.serve(async (req) => {
 
             // Cupom: loja integrada pelo emissor único (livro-razão, nova tentativa em 429, código sem colisão);
             // outras lojas seguem só com o código sorteado, como antes.
+            attempted++;
             let couponCode = generateCouponCode();
             if (storeType === 'loja_integrada' && authHeader && config.store_integration?.id) {
               const expiresDate = brtDateAfter(stepDuration);
@@ -327,6 +348,7 @@ Deno.serve(async (req) => {
             });
 
             totalProcessed++;
+            if (attempted < quota) await pauseBetweenSends();
           } catch (custError: unknown) {
             const msg = custError instanceof Error ? custError.message : 'Unknown error';
             log.error(`[REACTIVATION] Error processing ${customer.name}:`, msg);

@@ -11,6 +11,9 @@ import { sendWhatsAppMessage as sharedSendWhatsApp, type WhatsAppConfig } from "
 import { canContact, recordTouches } from "../_shared/contact-policy.ts";
 import { unsubscribeFor } from "../_shared/email-unsubscribe-link.ts";
 import { brtDate, inSendWindow } from "../_shared/brt.ts";
+import { paceQuota, pauseBetweenSends } from "../_shared/send-pacing.ts";
+
+const RUN_BUDGET_MS = 110_000; // o runtime derruba a chamada perto de 150 s
 
 // Module-level logger (overridden per-request with correlation ID)
 let log = createLogger("cashback-reminder-processor", "init");
@@ -96,8 +99,13 @@ Deno.serve(async (req) => {
 
     log.info(`Found ${pendingReminders.length} pending reminders`);
     let processedCount = 0, successCount = 0, failedCount = 0;
+    // ritmo: divide os lembretes do dia pelas execuções que restam na janela (não sai tudo de uma vez)
+    const quota = paceQuota(pendingReminders.length);
+    const runStartedAt = Date.now();
+    log.info(`Cota desta execução: ${quota} de ${pendingReminders.length}`);
 
     for (const reminder of pendingReminders) {
+      if (processedCount >= quota || Date.now() - runStartedAt > RUN_BUDGET_MS) break;
       // reivindica o lembrete de forma atômica: duas rodadas ao mesmo tempo nunca enviam o mesmo
       const { data: mine } = await supabase.from('cashback_reminders').update({ status: 'sending' }).eq('id', reminder.id).eq('status', 'pending').select('id').maybeSingle();
       if (!mine) continue;
@@ -219,6 +227,7 @@ Deno.serve(async (req) => {
           await supabase.from('cashback_reminders').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', reminder.id);
           await supabase.from('cashback_executions').insert({ config_id: reminder.config_id, coupon_id: reminder.coupon_id, reminder_id: reminder.id, coupon_code: reminder.coupon?.coupon_code, action_type: 'reminder_sent', status: (whatsappSent || emailSent) ? 'success' : 'queued', tokens_used: (whatsappSent || emailSent) ? 5 : 0, tenant_id: tenantId, metadata: { reminder_number: reminder.reminder_number, whatsapp_sent: whatsappSent, email_sent: emailSent } });
           successCount++;
+          if (processedCount < quota) await pauseBetweenSends();
         } else {
           throw new Error('No channels configured');
         }
