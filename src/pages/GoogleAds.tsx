@@ -7,6 +7,9 @@ import { ActivityCard } from "@/components/google-ads/ActivityCard";
 import { AlertsCard } from "@/components/google-ads/AlertsCard";
 import { BudgetCapCard } from "@/components/google-ads/BudgetCapCard";
 import { CampaignsTable } from "@/components/google-ads/CampaignsTable";
+import { DataBrowser } from "@/components/google-ads/DataBrowser";
+import { DiscoveriesCard } from "@/components/google-ads/DiscoveriesCard";
+import { InsightTables } from "@/components/google-ads/InsightTables";
 import { ConversionsCard } from "@/components/google-ads/ConversionsCard";
 import { HistoryCard } from "@/components/google-ads/HistoryCard";
 import { StrategyCard } from "@/components/google-ads/StrategyCard";
@@ -15,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGoogleAdsAccount, useGoogleAdsActions, useGoogleAdsData } from "@/hooks/useGoogleAds";
 import { useGoogleAdsActivity, useGoogleAdsHistory, useGoogleAdsStrategy } from "@/hooks/useGoogleAdsInsights";
+import { useGoogleAdsDiscoveries, useGoogleAdsDiscoveryActions } from "@/hooks/useGoogleAdsDiscoveries";
 import { useGoogleAdsPlanActions } from "@/hooks/useGoogleAdsPlan";
 
 /** Sistema → Google Ads: saldo, alertas, estratégia recomendada (com histórico completo), teto de gastos e campanhas. */
@@ -29,6 +33,8 @@ const GoogleAds = () => {
   const activity = useGoogleAdsActivity(accountId);
   const { syncNow, saveMonthlyCap } = useGoogleAdsActions(accountId);
   const planActions = useGoogleAdsPlanActions(accountId);
+  const discoveries = useGoogleAdsDiscoveries(accountId);
+  const discoveryActions = useGoogleAdsDiscoveryActions(accountId);
   const error = accountError ?? dataError ?? history.error ?? strategy.error;
 
   return (
@@ -51,8 +57,10 @@ const GoogleAds = () => {
           <Tabs defaultValue="overview" className="space-y-4">
             <TabsList className="flex-wrap">
               <TabsTrigger value="overview">Visão geral</TabsTrigger>
+              <TabsTrigger value="discoveries">Descobertas</TabsTrigger>
               <TabsTrigger value="history">Histórico e campanhas</TabsTrigger>
               <TabsTrigger value="conversions">Conversões</TabsTrigger>
+              <TabsTrigger value="data">Dados do Google</TabsTrigger>
               <TabsTrigger value="activity">Atividade</TabsTrigger>
             </TabsList>
 
@@ -70,6 +78,11 @@ const GoogleAds = () => {
               />
             </TabsContent>
 
+            <TabsContent value="discoveries" className="space-y-6">
+              <DiscoveriesCard account={account} report={discoveries.data ?? null} canEdit={canEdit} actions={discoveryActions} />
+              {discoveries.data && <InsightTables r={discoveries.data} />}
+            </TabsContent>
+
             <TabsContent value="history" className="space-y-6">
               {history.isLoading ? <Skeleton className="h-72 w-full" /> : (
                 <>
@@ -84,6 +97,10 @@ const GoogleAds = () => {
 
             <TabsContent value="conversions">
               <ConversionsCard actions={history.data?.actions ?? []} lifetime={history.data?.conversions ?? []} />
+            </TabsContent>
+
+            <TabsContent value="data">
+              <DataBrowser accountId={account.id} />
             </TabsContent>
 
             <TabsContent value="activity">

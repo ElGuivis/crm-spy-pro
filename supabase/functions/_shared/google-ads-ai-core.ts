@@ -6,6 +6,7 @@
  * Privacidade (Politica de Dados de Usuario das APIs do Google): vai so o resumo agregado da conta (numeros e nomes
  * de campanha); nenhum dado de cliente. A IA fica DESLIGADA ate o administrador ligar na tela.
  */
+import type { InsightsReport } from "./google-ads-insights-rules.ts";
 import type { StrategyReport } from "./google-ads-strategy-rules.ts";
 
 export interface AiProviderInfo { label: string; models: Array<{ id: string; label: string }>; }
@@ -59,8 +60,10 @@ REGRAS OBRIGATORIAS:
 5. "Marca" e "Marca #2" sao campanhas DIFERENTES; cite sempre o nome completo.
 6. Resultados de campanha parada ha mais de 1 ano valem menos: o mercado mudou.
 7. Mudancas bruscas de orcamento reiniciam o aprendizado dos lances; sugira etapas.
-8. Textos de anuncio: use so o que aparece nos nomes das campanhas; onde faltar a oferta, escreva [preencher oferta]. Titulos ate 30 caracteres, descricoes ate 90.
+8. Textos de anuncio: use so o que aparece nos nomes das campanhas e dos produtos fornecidos. PROIBIDO inventar: frete, prazo, desconto, promocao, "estoque limitado", garantia, colecao, ano ou temporada. Onde faltar a oferta, escreva [preencher oferta]. Titulos ate 30 caracteres, descricoes ate 90.
+8b. Em "Por que (com numeros)", se existirem DESCOBERTAS sobre dependencia de marca, limite de alcance por ranking ou campanhas ligadas que nao veiculam, cite-as com seus numeros: sao os fatos mais importantes da conta.
 9. Nao prometa resultado.
+10. DESCOBERTAS DOS DADOS sao fatos calculados do historico completo. Use-as: se a dependencia de marca for alta, avise que o ROAS tende a superestimar o efeito dos anuncios e que crescer exige alcance fora da marca; se o limite de alcance for ranking e nao orcamento, nao sugira simplesmente aumentar verba.
 
 FORMATO (exatamente estes titulos, maximo ~400 palavras):
 ## Decisao
@@ -107,10 +110,36 @@ export function buildDigest(report: StrategyReport, last12: MonthPoint[]): strin
   return lines.join("\n");
 }
 
-export function buildAdvisorMessages(report: StrategyReport, last12: MonthPoint[], question: string | null): Array<{ role: "system" | "user"; content: string }> {
+/** Resumo compacto das descobertas (~400 tokens). */
+export function buildInsightsDigest(i: InsightsReport): string {
+  const L: string[] = [];
+  if (i.brand) {
+    L.push(`BUSCAS - MARCA (${i.brand_terms.join("/")}): gasto ${brl(i.brand.cost)} (${Math.round((i.brand.share_of_cost ?? 0) * 100)}% do gasto em buscas), receita ${brl(i.brand.revenue)} (${Math.round((i.brand.share_of_revenue ?? 0) * 100)}% da receita), ROAS ${i.brand.roas ?? "n/d"}x. FORA DA MARCA: gasto ${brl(i.brand.non_brand_cost)}, ROAS ${i.brand.non_brand_roas ?? "n/d"}x.`);
+  }
+  if (i.waste.terms > 0) L.push(`TERMOS SEM CONVERSAO: ${i.waste.terms} termos, ${brl(i.waste.cost)} gastos. Maiores: ${i.waste.top.slice(0, 4).map((t) => `"${t.term}" ${brl(t.cost)}`).join("; ")}.`);
+  const is = i.impression_share.slice(0, 4).map((r) => `${r.campaign.slice(0, 40)}: share ${r.share ?? "n/d"}, perde ${Math.round((r.lost_rank ?? 0) * 100)}% por ranking e ${Math.round((r.lost_budget ?? 0) * 100)}% por orcamento`);
+  if (is.length) L.push("PARTICIPACAO DE IMPRESSOES (6 meses ativos): " + is.join(" | "));
+  if (i.devices.length) L.push("DISPOSITIVO: " + i.devices.map((d) => `${d.device} ROAS ${d.roas ?? "n/d"}x (gasto ${brl(d.cost)})`).join("; "));
+  if (i.weekdays.length) L.push(`DIA DA SEMANA (ROAS): melhor ${i.weekdays[0].day} ${i.weekdays[0].roas ?? "n/d"}x, pior ${i.weekdays[i.weekdays.length - 1].day} ${i.weekdays[i.weekdays.length - 1].roas ?? "n/d"}x.`);
+  if (i.regions.length) L.push("REGIOES: " + i.regions.slice(0, 4).map((r) => `${r.region} ROAS ${r.roas ?? "n/d"}x`).join("; "));
+  if (i.products.top.length) L.push("PRODUTOS QUE MAIS VENDERAM NO SHOPPING: " + i.products.top.slice(0, 3).map((p) => `${p.title.slice(0, 40)} (receita ${brl(p.revenue)})`).join("; "));
+  if (i.ads.total) L.push(`ANUNCIOS LIGADOS: ${i.ads.total} (${i.ads.weak} com forca fraca/media, ${i.ads.not_approved} nao aprovados).`);
+  return L.join("\n");
+}
+
+export function buildAdvisorMessages(
+  report: StrategyReport, last12: MonthPoint[], question: string | null, insights: InsightsReport | null = null,
+): Array<{ role: "system" | "user"; content: string }> {
   const q = (question ?? "").trim().slice(0, MAX_QUESTION_CHARS) || "Devo pausar tudo e criar campanhas novas, ou retomar as que ja existem? Qual o proximo passo?";
+  const extra = insights ? `
+
+DESCOBERTAS DOS DADOS (historico completo do Google Ads):
+${buildInsightsDigest(insights)}` : "";
   return [
     { role: "system", content: SYSTEM_PROMPT },
-    { role: "user", content: `RESUMO DA CONTA (gerado por regras a partir do historico completo):\n${buildDigest(report, last12)}\n\nPERGUNTA DO DONO: ${q}` },
+    { role: "user", content: `RESUMO DA CONTA (gerado por regras a partir do historico completo):
+${buildDigest(report, last12)}${extra}
+
+PERGUNTA DO DONO: ${q}` },
   ];
 }

@@ -4,6 +4,7 @@
  * Nada aqui escreve no Google Ads.
  */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { unreadyReasons, type Structure } from "./google-ads-readiness.ts";
 import { buildStrategy, type PlanLine, type StrategyReport } from "./google-ads-strategy-rules.ts";
 
 export const STRATEGY_AGENT = "strategy_consultant";
@@ -32,19 +33,28 @@ export async function runStrategy(supabase: SupabaseClient, accountId: string, a
     if (!account) throw new Error("conta nao encontrada");
     const g = account.guardrails ?? {};
 
-    const [campaigns, lifetime, monthly, actions, existing] = await Promise.all([
+    const [campaigns, lifetime, monthly, actions, existing, adGroups, ads, kws, assetGroups] = await Promise.all([
       supabase.from("google_ads_campaigns").select("campaign_id, name, status, channel_type, daily_budget_micros").eq("account_id", accountId),
       supabase.from("google_ads_campaign_lifetime").select("campaign_id, cost_micros, conversions_value, first_spend_date, last_spend_date").eq("account_id", accountId),
       supabase.from("google_ads_campaign_monthly").select("campaign_id, month, cost_micros, conversions_value, days_with_spend").eq("account_id", accountId).limit(5000),
       supabase.from("google_ads_conversion_actions").select("name, status, category, primary_for_goal, include_in_conversions_metric").eq("account_id", accountId),
       supabase.from("google_ads_recommendations").select("id, dedupe_key, status").eq("account_id", accountId).eq("agent", STRATEGY_AGENT).not("dedupe_key", "is", null),
+      supabase.from("google_ads_ad_groups").select("campaign_id, ad_group_id, status").eq("account_id", accountId).limit(1000),
+      supabase.from("google_ads_ads").select("campaign_id, ad_group_id, status, approval_status").eq("account_id", accountId).limit(1000),
+      supabase.from("google_ads_keywords").select("campaign_id, ad_group_id, status, negative").eq("account_id", accountId).limit(1000),
+      supabase.from("google_ads_asset_groups").select("campaign_id, status").eq("account_id", accountId).limit(1000),
     ]);
+    const structure = {
+      adGroups: must(adGroups, "grupos"), ads: must(ads, "anuncios"), keywords: must(kws, "palavras"), assetGroups: must(assetGroups, "ativos"),
+    } as unknown as Structure;
+    const campaignRows = must(campaigns, "campanhas") as unknown as Array<{ campaign_id: number; channel_type: string | null }>;
 
     const report = buildStrategy({
       now,
       monthlyCapMicros: typeof g.monthly_budget_cap_micros === "number" ? g.monthly_budget_cap_micros : null,
       minRoas: typeof g.min_roas === "number" ? g.min_roas : null,
-      campaigns: must(campaigns, "campanhas") as never,
+      campaigns: campaignRows as never,
+      unready: unreadyReasons(campaignRows, structure),
       lifetime: must(lifetime, "historico") as never,
       monthly: must(monthly, "meses") as never,
       conversionActions: must(actions, "conversoes") as never,

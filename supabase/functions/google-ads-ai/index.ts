@@ -7,6 +7,7 @@ import { callAIWithFallback } from "../_shared/ai-chat-providers.ts";
 import {
   ADVICE_MAX_TOKENS, AI_PROVIDERS, buildAdvisorMessages, MAX_QUESTION_CHARS, readAiSettings, type MonthPoint,
 } from "../_shared/google-ads-ai-core.ts";
+import { runInsights } from "../_shared/google-ads-insights-runner.ts";
 import { runStrategy } from "../_shared/google-ads-strategy-runner.ts";
 
 /**
@@ -82,7 +83,8 @@ serve(async (req) => {
       month: String(m.month).slice(0, 7), cost: Number(m.cost_micros) / 1e6, revenue: Number(m.conversions_value),
     }));
 
-    const messages = buildAdvisorMessages(strategy.report, last12, typeof body.question === "string" ? body.question : null);
+    const insights = await runInsights(supabase, accountId, `user:${userId}`);
+    const messages = buildAdvisorMessages(strategy.report, last12, typeof body.question === "string" ? body.question : null, insights.ok ? insights.report ?? null : null);
     const result = await callAIWithFallback(supabase, tenantId, messages, model, 0.3, ADVICE_MAX_TOKENS, undefined, undefined, ai.ai_provider);
     if (!result.success) return json({ error: `A IA nao respondeu: ${String(result.error).slice(0, 300)}` }, 502);
 

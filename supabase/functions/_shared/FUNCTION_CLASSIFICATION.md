@@ -83,6 +83,8 @@ Internal callers use `Authorization: Bearer <service_role_key>` or `x-cron-secre
 | bulk-campaign-processor | `BulkCampaigns.tsx` | `schedule_bulk_campaigns()` Postgres fn (cron #33) |
 | google-ads-diagnose | tela Google Ads (usuario: 1 conta do proprio tenant) | cron `google-ads-diagnose` (service_role: todas as contas) |
 | google-ads-strategist | tela Google Ads (admin: 1 conta do proprio tenant) | — (so sob demanda; interno via service_role) |
+| google-ads-insights | tela Google Ads (admin: 1 conta do proprio tenant) | cron `google-ads-insights` (service_role: todas as contas) |
+| google-ads-sync-deep | tela Google Ads (usuario: 1 conta do proprio tenant) | crons `google-ads-sync-deep-*` (service_role: todas as contas) |
 | google-ads-sync | tela Google Ads (usuario: 1 conta do proprio tenant) | cron `google-ads-sync` (service_role: todas as contas) |
 | email-campaign-send | `ConfirmSendDialog.tsx` | `schedule_email_campaigns()` Postgres fn (cron #34) |
 | instagram-healthcheck | `InstagramChannelContext`, `useInstagramChannel` | cron monitoring (service_role) |

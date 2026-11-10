@@ -10,6 +10,7 @@
  */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { gaqlSearch, mutateResource, type GoogleAdsCredentials } from "./google-ads-api.ts";
+import { campaignReadiness, type Structure } from "./google-ads-readiness.ts";
 
 export const GUARD = {
   daysPerMonth: 30.4,
@@ -123,6 +124,26 @@ export async function applyChange(
     .select("campaign_id, daily_budget_micros").eq("account_id", args.accountId).eq("status", "ENABLED");
   const others = (enabled ?? []).filter((c: { campaign_id: number }) => Number(c.campaign_id) !== args.campaignId)
     .reduce((s: number, c: { daily_budget_micros: number | null }) => s + Number(c.daily_budget_micros ?? 0), 0);
+
+  // Ligar campanha que sabidamente nao consegue veicular (sem anuncio/palavra-chave) so queima a vez: recusa.
+  if (args.kind === "enable_campaign") {
+    const cid = args.campaignId;
+    const [camp, ag, ads, kws, ass] = await Promise.all([
+      supabase.from("google_ads_campaigns").select("campaign_id, channel_type").eq("account_id", args.accountId).eq("campaign_id", cid).maybeSingle(),
+      supabase.from("google_ads_ad_groups").select("campaign_id, ad_group_id, status").eq("account_id", args.accountId).eq("campaign_id", cid),
+      supabase.from("google_ads_ads").select("campaign_id, ad_group_id, status, approval_status").eq("account_id", args.accountId).eq("campaign_id", cid),
+      supabase.from("google_ads_keywords").select("campaign_id, ad_group_id, status, negative").eq("account_id", args.accountId).eq("campaign_id", cid),
+      supabase.from("google_ads_asset_groups").select("campaign_id, status").eq("account_id", args.accountId).eq("campaign_id", cid),
+    ]);
+    if (camp.data) {
+      const r = campaignReadiness(camp.data as { campaign_id: number; channel_type: string | null }, {
+        adGroups: ag.data ?? [], ads: ads.data ?? [], keywords: kws.data ?? [], assetGroups: ass.data ?? [],
+      } as unknown as Structure);
+      if (r.ready === false) {
+        return { ok: false, error: `Esta campanha nao consegue veicular hoje (${r.reasons.join("; ")}). Corrija no Google Ads, sincronize e tente de novo.` };
+      }
+    }
+  }
 
   const cap = (account.guardrails as Record<string, unknown> | null)?.monthly_budget_cap_micros;
   const verdict = checkGuardrails({

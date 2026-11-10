@@ -433,6 +433,14 @@ verify_jwt = false
 # HYBRID — usuario (JWT, uma conta do proprio tenant) ou cron (todas) via requireUserOrInternalAuth
 verify_jwt = false
 
+[functions.google-ads-insights]
+# HYBRID — usuario admin (JWT, uma conta do proprio tenant) ou cron via requireUserOrInternalAuth
+verify_jwt = false
+
+[functions.google-ads-sync-deep]
+# HYBRID — usuario (JWT, uma conta do proprio tenant) ou cron (todas) via requireUserOrInternalAuth
+verify_jwt = false
+
 [functions.google-ads-ai]
 # AUTHENTICATED (admin do tenant) — parecer com IA; auth via requireUserAuth
 verify_jwt = false

@@ -172,6 +172,7 @@ Deno.test("mapDailyRow: converte micros e numeros em texto", () => {
   assertEquals(mapped, {
     tenant_id: "t1", account_id: "a1", campaign_id: 7, date: "2026-11-08",
     impressions: 1200, clicks: 30, cost_micros: 45500000, conversions: 2.5, conversions_value: 310.4,
+    all_conversions: 0, all_conversions_value: 0, view_through_conversions: 0, interactions: 0,
     synced_at: mapped.synced_at,
   });
 });

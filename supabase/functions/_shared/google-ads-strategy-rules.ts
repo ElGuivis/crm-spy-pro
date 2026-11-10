@@ -105,6 +105,8 @@ export interface StrategyInput {
   lifetime: LifetimeRow[];
   monthly: MonthlyRow[];
   conversionActions: ConversionActionInfo[];
+  /** campanha -> motivos de NAO veicular hoje (so as que sabemos que nao veiculam). */
+  unready?: Map<number, string[]>;
 }
 
 const brl = (micros: number) => Math.round(micros / 10_000) / 100;
@@ -202,8 +204,12 @@ export function buildStrategy(input: StrategyInput): StrategyReport {
   // Plano de verba: so campanhas que a regra aprova, no maximo N, pesos pelo ROAS recente.
   const plan: PlanLine[] = [];
   if (dailyTargetMicros) {
+    const unready = input.unready ?? new Map<number, string[]>();
+    for (const a of analyses.filter((x) => (x.verdict === "running" || x.verdict === "reactivate") && unready.has(x.campaign_id))) {
+      warnings.push(`"${a.name}" passou na regra de retorno, mas hoje nao consegue veicular (${unready.get(a.campaign_id)!.join("; ")}). Corrija no Google Ads antes de contar com ela; a verba foi para as campanhas que veiculam.`);
+    }
     const candidates = analyses
-      .filter((a) => a.verdict === "running" || a.verdict === "reactivate")
+      .filter((a) => (a.verdict === "running" || a.verdict === "reactivate") && !unready.has(a.campaign_id))
       .sort((a, b) => priorityScore(b) - priorityScore(a))
       .slice(0, STRATEGY.maxActiveCampaigns);
     const weightSum = candidates.reduce((s, a) => s + Math.max(priorityScore(a), 0.1), 0);
@@ -244,7 +250,9 @@ export function buildStrategy(input: StrategyInput): StrategyReport {
     for (const c of input.campaigns.filter((c) => c.status === "ENABLED" && !picked.has(c.campaign_id))) {
       plan.push({
         campaign_id: c.campaign_id, name: c.name, action: "pause", daily_budget_micros: null,
-        why: "Fora do foco da verba atual: manter ligada estouraria o teto mensal.",
+        why: unready.has(c.campaign_id)
+          ? `Ligada, mas nao consegue veicular (${unready.get(c.campaign_id)!.join("; ")}): gasta zero e ocupa verba do plano.`
+          : "Fora do foco da verba atual: manter ligada estouraria o teto mensal.",
       });
     }
     const planned = plan.reduce((s, p) => s + (p.daily_budget_micros ?? 0), 0);

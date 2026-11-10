@@ -105,6 +105,10 @@ export function mapDailyRow(row: GaqlRow, tenantId: string, accountId: string) {
     cost_micros: num(m.costMicros),
     conversions: num(m.conversions),
     conversions_value: num(m.conversionsValue),
+    all_conversions: num(m.allConversions),
+    all_conversions_value: num(m.allConversionsValue),
+    view_through_conversions: num(m.viewThroughConversions),
+    interactions: num(m.interactions),
     synced_at: new Date().toISOString(),
   };
 }
@@ -126,7 +130,8 @@ const CAMPAIGN_QUERY = `
 
 const dailyQuery = (start: string, end: string) => `
   SELECT campaign.id, segments.date, metrics.impressions, metrics.clicks, metrics.cost_micros,
-         metrics.conversions, metrics.conversions_value
+         metrics.conversions, metrics.conversions_value, metrics.all_conversions, metrics.all_conversions_value,
+         metrics.view_through_conversions, metrics.interactions
   FROM campaign
   WHERE segments.date BETWEEN '${start}' AND '${end}'`;
 

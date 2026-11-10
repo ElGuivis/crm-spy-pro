@@ -9,7 +9,7 @@ import { parseMonthlyCap, MAX_MONTHLY_CAP_BRL } from "../_shared/google-ads-sett
 
 /**
  * google-ads-settings — AUTHENTICATED, somente administradores do tenant.
- * Acoes: `set_ai` (liga/desliga a IA e escolhe provedor/modelo entre os integrados), `set_monthly_cap`, `set_mode` (read_only | approval) e `set_min_roas` (ROAS minimo = 1 / margem; null remove).
+ * Acoes: `set_brand_terms` (termos da marca, usados para separar buscas de marca x demais), `set_ai` (liga/desliga a IA e escolhe provedor/modelo entre os integrados), `set_monthly_cap`, `set_mode` (read_only | approval) e `set_min_roas` (ROAS minimo = 1 / margem; null remove).
  * `auto` NAO e aceito: o modo automatico so entra depois de semanas de historico com aprovacao.
  * Acao `set_monthly_cap`: define (ou remove, com null) o teto de gastos por mes da conta, em reais.
  * O teto vira google_ads_accounts.guardrails.monthly_budget_cap_micros e e usado pelo diagnostico (regra R7) e,
@@ -30,7 +30,7 @@ serve(async (req) => {
     const { userId, tenantId } = await requireUserAuth(req);
     const body = await req.json().catch(() => ({}));
     const action = body.action;
-    if (action !== "set_monthly_cap" && action !== "set_mode" && action !== "set_min_roas" && action !== "set_ai") return json({ error: "Acao desconhecida" }, 400);
+    if (action !== "set_monthly_cap" && action !== "set_mode" && action !== "set_min_roas" && action !== "set_ai" && action !== "set_brand_terms") return json({ error: "Acao desconhecida" }, 400);
 
     const accountId = typeof body.account_id === "string" ? body.account_id : "";
     if (!UUID_RE.test(accountId)) return json({ error: "account_id invalido" }, 400);
@@ -41,6 +41,15 @@ serve(async (req) => {
     }
     const aiCheck = action === "set_ai" ? validateAiSettings({ enabled: body.ai_enabled, provider: body.ai_provider, model: body.ai_model }) : null;
     if (aiCheck && !aiCheck.ok) return json({ error: aiCheck.error }, 400);
+    let brandTerms: string[] = [];
+    if (action === "set_brand_terms") {
+      const raw = body.brand_terms;
+      if (!Array.isArray(raw) || raw.length > 10 || raw.some((t: unknown) => typeof t !== "string")) {
+        return json({ error: "brand_terms deve ser uma lista de ate 10 textos" }, 400);
+      }
+      brandTerms = [...new Set((raw as string[]).map((t) => t.trim().toLowerCase()).filter((t) => t.length > 0))];
+      if (brandTerms.some((t) => t.length < 2 || t.length > 40)) return json({ error: "Cada termo deve ter de 2 a 40 caracteres" }, 400);
+    }
     let minRoas: number | null = null;
     if (action === "set_min_roas") {
       if (body.min_roas === null) minRoas = null;
@@ -73,6 +82,9 @@ serve(async (req) => {
       entity = "min_roas";
       if (minRoas === null) delete after.min_roas;
       else after.min_roas = minRoas;
+    } else if (action === "set_brand_terms") {
+      entity = "brand_terms";
+      after.brand_terms = brandTerms;
     } else if (action === "set_ai" && aiCheck?.ok) {
       entity = "ai";
       Object.assign(after, aiCheck.value);
