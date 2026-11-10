@@ -7,6 +7,8 @@ import { loadCredentials } from "../_shared/google-ads-api.ts";
 import { APPLY_KINDS, applyChange, orderPlan, type ApplyKind } from "../_shared/google-ads-apply-core.ts";
 import { applyConversionGoal, applyNegatives, applyRebuild, revertBuild } from "../_shared/google-ads-build-apply.ts";
 import { diagnoseAccount } from "../_shared/google-ads-diagnosis-runner.ts";
+import { proposeNegatives } from "../_shared/google-ads-build-runner.ts";
+import { runInsights } from "../_shared/google-ads-insights-runner.ts";
 import { parseQuickAction, sanitizeDraftPatch } from "../_shared/google-ads-build-draft.ts";
 
 /**
@@ -141,6 +143,10 @@ serve(async (req) => {
     }
     // Reavalia os alertas com o novo estado (ex.: orcamentos acima do teto somem).
     const diagnosis = await diagnoseAccount(supabase, accountId, actor);
+    // Negativas/metas mudam as listas de descobertas e propostas: recalcula agora para o item implementado sumir da tela.
+    if (results.some((x) => x.ok) && buildRecs.some((r) => r.kind === "add_negative_keywords")) {
+      try { await runInsights(supabase, accountId, actor); await proposeNegatives(supabase, accountId); } catch (e) { log.error("recalculo pos-negativas falhou", e); }
+    }
     return json({ results, diagnosis }, results.every((x) => x.ok) ? 200 : 422);
   } catch (err) {
     if (err instanceof Response) return err;

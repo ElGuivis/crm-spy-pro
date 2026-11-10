@@ -56,10 +56,20 @@ export async function applyNegatives(
   if (!camp) return { ok: false, error: "Campanha nao encontrada no Google Ads" };
   if (camp.campaign?.status === "REMOVED") return { ok: false, error: "Campanha removida" };
 
-  const existing = new Set((await q(ctx, `SELECT campaign_criterion.keyword.text FROM campaign_criterion WHERE campaign.id = ${Math.trunc(a.campaignId)} AND campaign_criterion.negative = TRUE AND campaign_criterion.type = 'KEYWORD'`))
-    .map((r) => norm(String(r.campaignCriterion?.keyword?.text ?? ""))));
+  const NEG_Q = `SELECT campaign.id, campaign_criterion.criterion_id, campaign_criterion.keyword.text, campaign_criterion.keyword.match_type FROM campaign_criterion WHERE campaign.id = ${Math.trunc(a.campaignId)} AND campaign_criterion.negative = TRUE AND campaign_criterion.type = 'KEYWORD'`;
+  // Espelha as negativas reais da campanha na tabela local: o termo sai das listas na hora, sem esperar a sincronizacao.
+  const mirror = async (rows: Row[]) => {
+    const recs = rows.map((r) => ({
+      tenant_id: a.tenantId, account_id: a.accountId, source: "campaign", ref_id: `${r.campaign?.id}~${r.campaignCriterion?.criterionId}`, campaign_id: Math.trunc(a.campaignId),
+      text: r.campaignCriterion?.keyword?.text ?? null, match_type: r.campaignCriterion?.keyword?.matchType ?? null, type: "KEYWORD", synced_at: new Date().toISOString(),
+    }));
+    if (recs.length) await supabase.from("google_ads_negatives").upsert(recs, { onConflict: "account_id,source,ref_id" });
+  };
+  const current = await q(ctx, NEG_Q);
+  const existing = new Set(current.map((r) => norm(String(r.campaignCriterion?.keyword?.text ?? ""))));
   const toAdd = [...new Map(clean.filter((t) => !existing.has(norm(t))).map((t) => [norm(t), t])).values()];
-  if (!toAdd.length) return { ok: false, error: "Todos esses termos ja sao negativos nesta campanha" };
+  // Ja estavam negativados (ex.: pelo Google Ads): o objetivo ja foi atingido, entao conta como resolvido e a proposta sai da lista.
+  if (!toAdd.length) { await mirror(current); return { ok: true, detail: { terms: [], count: 0, alreadyNegative: true } }; }
 
   let created: string[];
   try {
@@ -68,8 +78,9 @@ export async function applyNegatives(
     }))));
   } catch (e) { return { ok: false, error: `O Google Ads recusou: ${(e as Error).message}` }; }
 
-  const after = new Set((await q(ctx, `SELECT campaign_criterion.keyword.text FROM campaign_criterion WHERE campaign.id = ${Math.trunc(a.campaignId)} AND campaign_criterion.negative = TRUE AND campaign_criterion.type = 'KEYWORD'`))
-    .map((r) => norm(String(r.campaignCriterion?.keyword?.text ?? ""))));
+  const afterRows = await q(ctx, NEG_Q);
+  await mirror(afterRows);
+  const after = new Set(afterRows.map((r) => norm(String(r.campaignCriterion?.keyword?.text ?? ""))));
   const confirmed = toAdd.every((t) => after.has(norm(t)));
   await audit(ctx, `negatives:${a.campaignId}`, { added: [] }, { terms: toAdd, resources: created, confirmed });
   if (!confirmed) return { ok: false, error: "O Google respondeu, mas nao consegui confirmar todos os termos. Confira a campanha.", detail: { terms: toAdd } };

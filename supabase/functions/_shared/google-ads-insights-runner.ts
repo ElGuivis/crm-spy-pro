@@ -37,7 +37,7 @@ export async function runInsights(supabase: SupabaseClient, accountId: string, a
     const brandTerms = resolveBrandTerms(g, acc.descriptive_name);
     const minRoas = typeof g.min_roas === "number" && g.min_roas > 0 ? g.min_roas : 3;
 
-    const [split, zero, impr, dev, hours, geo, prodValue, prodCost, kws, ads, camps, existing, adGroups, assetGroups] = await Promise.all([
+    const [split, zero, impr, dev, hours, geo, prodValue, prodCost, kws, ads, camps, existing, adGroups, assetGroups, negs] = await Promise.all([
       brandTerms.length ? supabase.rpc("google_ads_term_split", { p_account: accountId, p_brand_terms: brandTerms }) : supabase.rpc("google_ads_term_split", { p_account: accountId, p_brand_terms: [] }),
       supabase.rpc("google_ads_term_zero", { p_account: accountId, p_min_cost_micros: INSIGHTS.wasteMinCost * 1_000_000, p_limit: 30 }),
       supabase.from("google_ads_impression_share").select("campaign_id, month, impressions, search_impression_share, search_budget_lost_share, search_rank_lost_share").eq("account_id", accountId).limit(1000),
@@ -52,7 +52,10 @@ export async function runInsights(supabase: SupabaseClient, accountId: string, a
       supabase.from("google_ads_recommendations").select("id").eq("account_id", accountId).eq("agent", INSIGHTS_AGENT).eq("dedupe_key", KEY).maybeSingle(),
       supabase.from("google_ads_ad_groups").select("campaign_id, ad_group_id, status").eq("account_id", accountId).limit(1000),
       supabase.from("google_ads_asset_groups").select("campaign_id, status").eq("account_id", accountId).limit(1000),
+      supabase.from("google_ads_negatives").select("text").eq("account_id", accountId).eq("source", "campaign").limit(1000),
     ]);
+    // Termo que ja virou palavra negativa em alguma campanha nao e mais "desperdicio a negativar".
+    const negated = new Set((must(negs, "negativas") as Array<{ text: string | null }>).map((x) => String(x.text ?? "").toLowerCase().trim()).filter(Boolean));
 
     const products = new Map<string, Record<string, unknown>>();
     for (const p of [...must(prodValue, "produtos"), ...must(prodCost, "produtos")] as Array<Record<string, unknown>>) products.set(String(p.item_id), p);
@@ -63,7 +66,7 @@ export async function runInsights(supabase: SupabaseClient, accountId: string, a
         total_cost: n(r.total_cost), total_value: n(r.total_value), total_conversions: n(r.total_conversions), brand_cost: n(r.brand_cost), brand_value: n(r.brand_value),
         brand_conversions: n(r.brand_conversions), zero_conv_cost: n(r.zero_conv_cost), zero_conv_terms: n(r.zero_conv_terms),
       }))[0] ?? null,
-      zeroTerms: (must(zero, "negativaveis") as Array<Record<string, unknown>>).map((r) => ({ search_term: String(r.search_term), cost_micros: n(r.cost_micros), clicks: n(r.clicks), impressions: n(r.impressions) })),
+      zeroTerms: (must(zero, "negativaveis") as Array<Record<string, unknown>>).filter((r) => !negated.has(String(r.search_term).toLowerCase().trim())).map((r) => ({ search_term: String(r.search_term), cost_micros: n(r.cost_micros), clicks: n(r.clicks), impressions: n(r.impressions) })),
       imprShare: (must(impr, "impressoes") as Array<Record<string, unknown>>).map((r) => ({
         campaign_id: n(r.campaign_id), month: String(r.month), impressions: n(r.impressions),
         search_impression_share: r.search_impression_share == null ? null : n(r.search_impression_share),
