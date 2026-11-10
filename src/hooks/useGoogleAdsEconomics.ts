@@ -12,11 +12,11 @@ async function call(accountId: string, body: Record<string, unknown>): Promise<E
   return view;
 }
 
-/** Economia real da loja (medida nos pedidos do CRM) + ponto de equilíbrio do ROAS. Recalcula ao abrir. */
-export function useGoogleAdsEconomics(accountId: string | undefined) {
+/** Economia real da loja (medida nos pedidos do CRM) + ponto de equilíbrio do ROAS. OPCIONAL: só carrega quando a aba é aberta. */
+export function useGoogleAdsEconomics(accountId: string | undefined, enabled = true) {
   const qc = useQueryClient();
   const view = useQuery({
-    queryKey: [...KEY, accountId], enabled: !!accountId, staleTime: 5 * 60_000,
+    queryKey: [...KEY, accountId], enabled: !!accountId && enabled, staleTime: 5 * 60_000,
     queryFn: () => call(accountId!, { action: "refresh" }),
   });
   const save = useMutation({

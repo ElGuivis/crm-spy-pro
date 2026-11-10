@@ -121,7 +121,7 @@ function RebuildCard({ p, c, aiOn }: { p: RebuildProposal; c: Common; aiOn: bool
 
         <div className="space-y-2 rounded-md border p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="text-sm font-medium">Anúncio novo {pl.needs_copy ? "(obrigatório)" : "(opcional)"} {pl.ai_generated && <Badge variant="secondary">rascunho da IA</Badge>}</div>
+            <div className="text-sm font-medium">Anúncio novo {pl.needs_copy ? "(obrigatório)" : "(opcional)"} {pl.ai_generated && <Badge variant="secondary">rascunho da IA</Badge>} {pl.ad_quality && <Badge variant={pl.ad_quality.score >= 70 ? "default" : "outline"} title="Estimativa interna (palavras-chave nos títulos, variedade, tamanho, chamadas para ação). A nota final é do Google.">nota estimada {pl.ad_quality.score}/100 · {pl.ad_quality.label}</Badge>}</div>
             <Button size="sm" variant="outline" disabled={!c.canApply || !aiOn || busy} onClick={() => c.actions.generateCopy.mutate(p.id)} title={aiOn ? "" : "Ligue a IA no card Consultor com IA"}>
               <Sparkles className="mr-1 h-4 w-4" /> {c.actions.generateCopy.isPending ? "Escrevendo…" : "Gerar texto com IA"}
             </Button>
@@ -131,6 +131,7 @@ function RebuildCard({ p, c, aiOn }: { p: RebuildProposal; c: Common; aiOn: bool
             <div className="space-y-1"><Label>Descrições (uma por linha, até 90 caracteres)</Label><Textarea rows={6} value={descs} onChange={(e) => setDescs(e.target.value)} disabled={!c.canApply} /></div>
           </div>
           <div className="space-y-1"><Label>Página de destino (URL final)</Label><Input value={url} onChange={(e) => setUrl(e.target.value)} disabled={!c.canApply} /></div>
+          {pl.ad_quality && pl.ad_quality.issues.length > 0 && <ul className="list-disc pl-5 text-xs text-muted-foreground">{pl.ad_quality.issues.slice(0, 4).map((i) => <li key={i}>{i}</li>)}</ul>}
           {problems.length > 0 && <p className="text-xs text-destructive">Para aplicar: {problems.join("; ")}.</p>}
           <p className="text-xs text-muted-foreground">Confira o texto: a IA não conhece ofertas, preços nem prazos da loja, então nada disso foi incluído.</p>
         </div>

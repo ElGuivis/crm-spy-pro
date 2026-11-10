@@ -13,7 +13,7 @@ export interface RsaDraft { headlines: string[]; descriptions: string[]; final_u
 export interface RebuildProposal {
   id: string; status: string; title: string; rationale: string; error: string | null;
   payload: {
-    campaign_id: number; ad_group_id: number; needs_copy: boolean; final_url: string | null; ai_generated?: boolean;
+    campaign_id: number; ad_group_id: number; needs_copy: boolean; final_url: string | null; ai_generated?: boolean; ad_quality?: { score: number; label: string; issues: string[] };
     keywords: Array<{ text: string; match_type: "EXACT" | "PHRASE" | "BROAD"; source: string; value: number }>;
     enable_ad_ids: number[]; new_ad: RsaDraft | null;
   };
@@ -53,7 +53,7 @@ export function useGoogleAdsBuildActions(accountId: string | undefined) {
     mutationFn: async (id: string) => invoke("google-ads-ai", { action: "draft_ad_copy", account_id: need(), recommendation_id: id }),
     onSuccess: (res) => {
       refresh();
-      toast.success(res?.dropped?.length ? `Texto gerado (a IA propôs ${res.dropped.length} item(ns) que foram descartados por regra)` : "Texto do anúncio gerado: revise antes de aplicar");
+      toast.success(res?.quality ? `Texto gerado: nota estimada ${res.quality.score}/100 (${res.quality.label}). Revise antes de aplicar.` : "Texto do anúncio gerado: revise antes de aplicar");
     },
     onError: (e: Error) => toast.error(e.message),
   });

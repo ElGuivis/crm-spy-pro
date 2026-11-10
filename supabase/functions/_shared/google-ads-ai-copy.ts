@@ -37,7 +37,10 @@ export function buildCopyMessages(i: CopyInput): Array<{ role: "system" | "user"
 }
 
 /** Palavras que indicam oferta inventada; se aparecerem sem estar nos dados fornecidos, o texto e descartado. */
-const CLAIMS = ["420", "maconha", "cannabis", "erva", "baseado", "frete", "desconto", "promocao", "promo", "cupom", "garantia", "estoque", "colecao", "oferta", "gratis", "gratuito", "liquidacao", "black friday", "% off", "sem juros", "parcel"];
+/** NUNCA permitido, nem que apareca nos dados da conta (politica do Google sobre drogas). */
+const HARD_BAN = /\b(420|maconha|cannabis|baseado|erva|drogas?)\b/i;
+
+const CLAIMS = ["maconha", "cannabis", "baseado", "oficial", "original", "autentic", "exclusiv", "frete", "desconto", "promocao", "promo", "cupom", "garantia", "estoque", "colecao", "oferta", "gratis", "gratuito", "liquidacao", "black friday", "% off", "sem juros", "parcel"];
 
 export function parseCopy(raw: string, allowedText: string): { ok: true; headlines: string[]; descriptions: string[]; dropped: string[] } | { ok: false; error: string } {
   const cleaned = raw.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
@@ -59,6 +62,7 @@ export function parseCopy(raw: string, allowedText: string): { ok: true; headlin
       if (!t || seen.has(k)) continue;
       if (t.length > max) { dropped.push(`${t} (passa de ${max})`); continue; }
       if (/\[[^\]]*\]/.test(t)) { dropped.push(`${t} (trecho entre colchetes)`); continue; }
+      if (HARD_BAN.test(t)) { dropped.push(`${t} (termo proibido pela politica do Google)`); continue; }
       const claim = CLAIMS.find((c) => k.includes(c) && !allowed.includes(c));
       if (claim) { dropped.push(`${t} (afirmacao nao sustentada: "${claim}")`); continue; }
       seen.add(k); out.push(t);

@@ -222,7 +222,9 @@ export async function callAIWithFallback(
   maxTokens: number,
   agentId?: string,
   conversationId?: string,
-  preferredProvider?: string | null
+  preferredProvider?: string | null,
+  /** Campos extras do corpo (ex.: reasoning_effort). So sao enviados para GPT-OSS na Groq; outros provedores/modelos ignoram. */
+  extraBody?: Record<string, unknown>
 ): Promise<AICallResult> {
   let configs = await getAllAIConfigs(supabase, tenantId);
 
@@ -258,6 +260,7 @@ export async function callAIWithFallback(
           messages,
           max_tokens: maxTokens,
           temperature,
+          ...(extraBody && config.provider === 'groq' && mappedModel.startsWith('openai/gpt-oss') ? extraBody : {}),
         }),
       });
 

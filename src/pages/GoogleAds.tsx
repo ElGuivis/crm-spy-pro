@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Target } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { PageTransition } from "@/components/common/PageTransition";
@@ -50,7 +51,8 @@ const GoogleAds = () => {
     canApply: canEdit && account?.mode === "approval",
     blockedReason: !canEdit ? "Somente administradores implementam." : account?.mode !== "approval" ? "Ative o modo “com aprovação” na Estratégia recomendada para poder implementar." : null,
   };
-  const economics = useGoogleAdsEconomics(accountId);
+  const [tab, setTab] = useState("overview");
+  const economics = useGoogleAdsEconomics(accountId, tab === "economics"); // aba opcional: so carrega quando aberta
   const discoveries = useGoogleAdsDiscoveries(accountId);
   const discoveryActions = useGoogleAdsDiscoveryActions(accountId);
   const error = accountError ?? dataError ?? history.error ?? strategy.error;
@@ -72,15 +74,15 @@ const GoogleAds = () => {
         )}
 
         {account && data && (
-          <Tabs defaultValue="overview" className="space-y-4">
+          <Tabs value={tab} onValueChange={setTab} className="space-y-4">
             <TabsList className="flex-wrap">
               <TabsTrigger value="overview">Visão geral</TabsTrigger>
               <TabsTrigger value="discoveries">Descobertas</TabsTrigger>
               <TabsTrigger value="history">Histórico e campanhas</TabsTrigger>
-              <TabsTrigger value="economics">Economia</TabsTrigger>
               <TabsTrigger value="conversions">Conversões</TabsTrigger>
               <TabsTrigger value="data">Dados do Google</TabsTrigger>
               <TabsTrigger value="activity">Atividade</TabsTrigger>
+              <TabsTrigger value="economics">Economia (opcional)</TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6">

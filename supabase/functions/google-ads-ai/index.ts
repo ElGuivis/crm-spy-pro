@@ -7,7 +7,8 @@ import { callAIWithFallback } from "../_shared/ai-chat-providers.ts";
 import {
   ADVICE_MAX_TOKENS, AI_PROVIDERS, buildAdvisorMessages, MAX_QUESTION_CHARS, readAiSettings, type MonthPoint,
 } from "../_shared/google-ads-ai-core.ts";
-import { buildCopyMessages, parseCopy } from "../_shared/google-ads-ai-copy.ts";
+import { draftBestCopy } from "../_shared/google-ads-copy-agent.ts";
+import { loadCopyContext } from "../_shared/google-ads-copy-context.ts";
 import { resolveBrandTerms, runInsights } from "../_shared/google-ads-insights-runner.ts";
 import { runStrategy } from "../_shared/google-ads-strategy-runner.ts";
 
@@ -68,22 +69,24 @@ serve(async (req) => {
       if (!rec || rec.kind !== "rebuild_search_structure" || !["pending", "failed"].includes(rec.status)) return json({ error: "Proposta nao encontrada" }, 404);
       const payload = rec.payload as { campaign_id: number; keywords?: Array<{ text: string }>; final_url?: string | null; enable_ad_ids?: number[]; new_ad?: unknown };
       const { data: camp } = await supabase.from("google_ads_campaigns").select("name").eq("account_id", accId).eq("campaign_id", payload.campaign_id).maybeSingle();
-      const { data: prods } = await supabase.from("google_ads_products").select("title").eq("account_id", accId).order("conversions_value", { ascending: false }).limit(5);
       const keywords = (payload.keywords ?? []).map((k) => k.text);
       const brand = resolveBrandTerms(acc.guardrails, acc.descriptive_name)[0] ?? (acc.descriptive_name ?? "");
-      const products = (prods ?? []).map((p) => String(p.title ?? "")).filter(Boolean);
       const finalUrl = payload.final_url ?? "";
-      const messages = buildCopyMessages({ brand, campaignName: camp?.name ?? "", keywords, products, finalUrl });
+      const ctx = await loadCopyContext(supabase, { accountId: accId, campaignId: payload.campaign_id, brand, campaignName: camp?.name ?? "", finalUrl, keywords });
       const model = settings.ai_model ?? AI_PROVIDERS[settings.ai_provider].models[0].id;
-      const result = await callAIWithFallback(supabase, tenantId, messages, model, 0.5, 4000, undefined, undefined, settings.ai_provider);
-      if (!result.success) return json({ error: `A IA nao respondeu: ${String(result.error).slice(0, 300)}` }, 502);
-      const parsed = parseCopy(result.data?.choices?.[0]?.message?.content ?? "", [brand, camp?.name ?? "", ...keywords, ...products].join(" "));
+      let usedProvider = "", usedModel = "";
+      const parsed = await draftBestCopy(ctx, async (msgs) => {
+        const result = await callAIWithFallback(supabase, tenantId, msgs, model, 0.7, 5000, undefined, undefined, settings.ai_provider, { reasoning_effort: "low" });
+        if (!result.success) return { ok: false as const, error: `A IA nao respondeu: ${String(result.error).slice(0, 300)}` };
+        usedProvider = result.provider ?? ""; usedModel = result.model ?? "";
+        return { ok: true as const, text: result.data?.choices?.[0]?.message?.content ?? "" };
+      });
       if (!parsed.ok) return json({ error: parsed.error }, 422);
-      const next = { ...payload, new_ad: { headlines: parsed.headlines, descriptions: parsed.descriptions, final_url: finalUrl }, needs_copy: false, ai_generated: true };
+      const next = { ...payload, new_ad: { headlines: parsed.headlines, descriptions: parsed.descriptions, final_url: finalUrl }, needs_copy: false, ai_generated: true, ad_quality: parsed.quality };
       const { error: upErr } = await supabase.from("google_ads_recommendations").update({ payload: next }).eq("id", recId);
       if (upErr) throw new Error(upErr.message);
-      await supabase.from("google_ads_audit_log").insert({ tenant_id: tenantId, account_id: accId, actor: `user:${userId}`, action: "ai_advice", entity: `draft_ad:${payload.campaign_id}`, after_state: { provider: result.provider, model: result.model, dropped: parsed.dropped } });
-      return json({ ok: true, new_ad: next.new_ad, dropped: parsed.dropped, provider: result.provider, model: result.model });
+      await supabase.from("google_ads_audit_log").insert({ tenant_id: tenantId, account_id: accId, actor: `user:${userId}`, action: "ai_advice", entity: `draft_ad:${payload.campaign_id}`, after_state: { provider: usedProvider, model: usedModel, dropped: parsed.dropped, quality: parsed.quality, attempts: parsed.attempts } });
+      return json({ ok: true, new_ad: next.new_ad, dropped: parsed.dropped, quality: parsed.quality, provider: usedProvider, model: usedModel });
     }
 
     const accountId = typeof body.account_id === "string" ? body.account_id : "";

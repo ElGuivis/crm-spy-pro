@@ -50,6 +50,7 @@ export function EconomicsCard({ eco, canEdit }: { eco: ReturnType<typeof useGoog
       <Card>
         <CardHeader className="pb-3"><CardTitle className="flex items-center gap-2 text-lg"><Calculator className="h-5 w-5" /> Economia real da loja (últimos 24 meses)</CardTitle></CardHeader>
         <CardContent className="space-y-5">
+          <p className="rounded-md bg-muted p-3 text-sm text-muted-foreground">Esta aba é opcional. O sistema funciona normalmente sem você mexer aqui: ela só mostra, com os pedidos do seu CRM, a partir de que ROAS o anúncio dá lucro, e deixa você ajustar imposto, taxas e metas.</p>
           <div className="grid gap-4 sm:grid-cols-4">
             <Stat label="Ticket médio" value={reais(m.avg_ticket)} hint={`${m.avg_units ?? "—"} peças por pedido`} />
             <Stat label="Margem do produto" value={pct(m.product_margin_pct)} hint={`custo médio ${reais(m.avg_cogs)}`} />
