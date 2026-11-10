@@ -14,6 +14,7 @@ import { DiscoveriesCard } from "@/components/google-ads/DiscoveriesCard";
 import { InsightTables } from "@/components/google-ads/InsightTables";
 import { BuildCards } from "@/components/google-ads/BuildCards";
 import { OutcomesCard } from "@/components/google-ads/OutcomesCard";
+import { CampaignTargetsCard } from "@/components/google-ads/CampaignTargetsCard";
 import { ConversionsCard } from "@/components/google-ads/ConversionsCard";
 import { HistoryCard } from "@/components/google-ads/HistoryCard";
 import { StrategyCard } from "@/components/google-ads/StrategyCard";
@@ -121,8 +122,9 @@ const GoogleAds = () => {
               )}
             </TabsContent>
 
-            <TabsContent value="economics">
+            <TabsContent value="economics" className="space-y-6">
               <EconomicsCard eco={economics} canEdit={canEdit} />
+              <CampaignTargetsCard accountId={account.id} campaigns={data.campaigns} canEdit={canEdit} accountMinRoas={economics.view.data?.targets.min_roas ?? 4} />
             </TabsContent>
 
             <TabsContent value="conversions">

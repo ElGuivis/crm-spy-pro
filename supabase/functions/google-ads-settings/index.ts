@@ -30,7 +30,7 @@ serve(async (req) => {
     const { userId, tenantId } = await requireUserAuth(req);
     const body = await req.json().catch(() => ({}));
     const action = body.action;
-    if (action !== "set_monthly_cap" && action !== "set_mode" && action !== "set_min_roas" && action !== "set_ai" && action !== "set_brand_terms") return json({ error: "Acao desconhecida" }, 400);
+    if (action !== "set_monthly_cap" && action !== "set_mode" && action !== "set_min_roas" && action !== "set_ai" && action !== "set_brand_terms" && action !== "set_campaign_target") return json({ error: "Acao desconhecida" }, 400);
 
     const accountId = typeof body.account_id === "string" ? body.account_id : "";
     if (!UUID_RE.test(accountId)) return json({ error: "account_id invalido" }, 400);
@@ -70,6 +70,32 @@ serve(async (req) => {
       .select("id, tenant_id, guardrails, mode").eq("id", accountId).eq("tenant_id", tenantId).maybeSingle();
     if (accErr) throw new Error(accErr.message);
     if (!account) return json({ error: "Conta nao encontrada" }, 404);
+
+    if (action === "set_campaign_target") {
+      // ROAS minimo proprio de uma campanha (null remove e volta a valer o minimo da conta).
+      const campaignId = Number(body.campaign_id);
+      const roas = body.roas_min;
+      if (!Number.isInteger(campaignId) || campaignId <= 0) return json({ error: "campaign_id invalido" }, 400);
+      if (roas !== null && !(typeof roas === "number" && Number.isFinite(roas) && roas >= 0.5 && roas <= 50)) return json({ error: "ROAS minimo deve estar entre 0,5 e 50 (ou null para remover)" }, 400);
+      const { data: camp } = await supabase.from("google_ads_campaigns").select("campaign_id").eq("account_id", accountId).eq("campaign_id", campaignId).maybeSingle();
+      if (!camp) return json({ error: "Campanha nao encontrada nesta conta" }, 404);
+      const { data: prev } = await supabase.from("google_ads_campaign_targets").select("target_value").eq("account_id", accountId).eq("campaign_id", campaignId).maybeSingle();
+      if (roas === null) {
+        const { error: delErr } = await supabase.from("google_ads_campaign_targets").delete().eq("account_id", accountId).eq("campaign_id", campaignId);
+        if (delErr) throw new Error(delErr.message);
+      } else {
+        const { error: upErr } = await supabase.from("google_ads_campaign_targets").upsert({
+          tenant_id: tenantId, account_id: accountId, campaign_id: campaignId, target_type: "roas_min", target_value: Math.round(roas * 100) / 100,
+          updated_by: userId, updated_at: new Date().toISOString(),
+        }, { onConflict: "account_id,campaign_id" });
+        if (upErr) throw new Error(upErr.message);
+      }
+      await supabase.from("google_ads_audit_log").insert({
+        tenant_id: tenantId, account_id: accountId, actor: `user:${userId}`, action: "guardrails_change", entity: `campaign_target:${campaignId}`,
+        before_state: { roas_min: prev?.target_value ?? null }, after_state: { roas_min: roas },
+      });
+      return json({ ok: true, campaign_id: campaignId, roas_min: roas });
+    }
 
     const before = (account.guardrails ?? {}) as Record<string, unknown>;
     const after: Record<string, unknown> = { ...before };

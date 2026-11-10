@@ -107,6 +107,8 @@ export interface StrategyInput {
   conversionActions: ConversionActionInfo[];
   /** campanha -> motivos de NAO veicular hoje (so as que sabemos que nao veiculam). */
   unready?: Map<number, string[]>;
+  /** ROAS minimo proprio de uma campanha (tem prioridade sobre o minimo da conta). */
+  campaignMinRoas?: Map<number, number>;
 }
 
 const brl = (micros: number) => Math.round(micros / 10_000) / 100;
@@ -174,7 +176,7 @@ export function buildStrategy(input: StrategyInput): StrategyReport {
 
   const analyses = input.campaigns
     .filter((c) => (lifeBy.get(c.campaign_id)?.cost_micros ?? 0) > 0 || c.status === "ENABLED")
-    .map((c) => analyzeCampaign(c, lifeBy.get(c.campaign_id), monthsBy.get(c.campaign_id) ?? [], minRoas, now))
+    .map((c) => analyzeCampaign(c, lifeBy.get(c.campaign_id), monthsBy.get(c.campaign_id) ?? [], input.campaignMinRoas?.get(c.campaign_id) ?? minRoas, now))
     .sort((a, b) => b.lifetime.cost - a.lifetime.cost);
 
   // Historico por ano (conta toda).

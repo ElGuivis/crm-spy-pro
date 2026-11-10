@@ -110,3 +110,13 @@ Deno.test("buildStrategy: campanha ja ligada com o orcamento do plano nao gera l
   const second = buildStrategy({ ...input, campaigns: already });
   assertEquals(second.plan.some((p) => p.campaign_id === line.campaign_id), false);
 });
+
+Deno.test("meta propria da campanha (campaignMinRoas) vale mais que o minimo da conta", () => {
+  const camp = { campaign_id: 7, name: "Marca", channel_type: "SEARCH", status: "ENABLED", daily_budget_micros: 30e6 };
+  const life = { campaign_id: 7, cost_micros: 1000e6, conversions_value: 3500, first_spend_date: "2025-01-01", last_spend_date: "2026-11-01" };
+  const months = [{ campaign_id: 7, month: "2026-10-01", cost_micros: 300e6, conversions_value: 1050, days_with_spend: 20 }];
+  const run = (m?: Map<number, number>) => buildStrategy({ now: new Date("2026-11-10T12:00:00Z"), monthlyCapMicros: 2000e6, minRoas: 4, campaigns: [camp] as never, lifetime: [life] as never, monthly: months as never, conversionActions: [], campaignMinRoas: m })
+    .campaigns.find((c) => c.campaign_id === 7)!.verdict;
+  assertEquals(run(), "keep_off");                         // 3,5x < 4
+  assertEquals(run(new Map([[7, 3]])), "running");         // meta propria 3 -> passa
+});

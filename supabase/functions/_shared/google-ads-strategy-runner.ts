@@ -33,7 +33,7 @@ export async function runStrategy(supabase: SupabaseClient, accountId: string, a
     if (!account) throw new Error("conta nao encontrada");
     const g = account.guardrails ?? {};
 
-    const [campaigns, lifetime, monthly, actions, existing, adGroups, ads, kws, assetGroups] = await Promise.all([
+    const [campaigns, lifetime, monthly, actions, existing, adGroups, ads, kws, assetGroups, targets] = await Promise.all([
       supabase.from("google_ads_campaigns").select("campaign_id, name, status, channel_type, daily_budget_micros").eq("account_id", accountId),
       supabase.from("google_ads_campaign_lifetime").select("campaign_id, cost_micros, conversions_value, first_spend_date, last_spend_date").eq("account_id", accountId),
       supabase.from("google_ads_campaign_monthly").select("campaign_id, month, cost_micros, conversions_value, days_with_spend").eq("account_id", accountId).limit(5000),
@@ -43,6 +43,7 @@ export async function runStrategy(supabase: SupabaseClient, accountId: string, a
       supabase.from("google_ads_ads").select("campaign_id, ad_group_id, status, approval_status").eq("account_id", accountId).limit(1000),
       supabase.from("google_ads_keywords").select("campaign_id, ad_group_id, status, negative").eq("account_id", accountId).limit(1000),
       supabase.from("google_ads_asset_groups").select("campaign_id, status").eq("account_id", accountId).limit(1000),
+      supabase.from("google_ads_campaign_targets").select("campaign_id, target_value").eq("account_id", accountId).eq("target_type", "roas_min"),
     ]);
     const structure = {
       adGroups: must(adGroups, "grupos"), ads: must(ads, "anuncios"), keywords: must(kws, "palavras"), assetGroups: must(assetGroups, "ativos"),
@@ -55,6 +56,7 @@ export async function runStrategy(supabase: SupabaseClient, accountId: string, a
       minRoas: typeof g.min_roas === "number" ? g.min_roas : null,
       campaigns: campaignRows as never,
       unready: unreadyReasons(campaignRows, structure),
+      campaignMinRoas: new Map((must(targets, "metas") as Array<{ campaign_id: number; target_value: number }>).map((t) => [Number(t.campaign_id), Number(t.target_value)])),
       lifetime: must(lifetime, "historico") as never,
       monthly: must(monthly, "meses") as never,
       conversionActions: must(actions, "conversoes") as never,
