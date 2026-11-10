@@ -3,6 +3,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { format, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseDay } from "@/lib/brt";
 
 interface SalesData {
   date: string;
@@ -29,7 +30,7 @@ export function SalesChart({ data, isLoading, title = "Vendas", period = '7d' }:
 
   const formatDate = (dateStr: string) => {
     try {
-      const date = new Date(dateStr);
+      const date = parseDay(dateStr);
       return format(date, period === '7d' ? 'EEE' : 'dd/MM', { locale: ptBR });
     } catch {
       return dateStr;
@@ -100,7 +101,7 @@ export function SalesChart({ data, isLoading, title = "Vendas", period = '7d' }:
                 formatter={(value: number) => [formatCurrency(value), 'Receita']}
                 labelFormatter={(label) => {
                   try {
-                    return format(new Date(label), "dd 'de' MMMM", { locale: ptBR });
+                    return format(parseDay(label), "dd 'de' MMMM", { locale: ptBR });
                   } catch {
                     return label;
                   }

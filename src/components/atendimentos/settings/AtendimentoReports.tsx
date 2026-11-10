@@ -14,6 +14,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useExport } from "@/hooks/useExport";
+import { parseDay } from "@/lib/brt";
 
 function formatMinutes(min: number | null): string {
   if (min === null) return "—";
@@ -202,14 +203,14 @@ export function AtendimentoReports() {
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis
                   dataKey="date"
-                  tickFormatter={(d) => { try { return format(new Date(d), period === '7d' ? "EEE" : "dd/MM", { locale: ptBR }); } catch { return d; } }}
+                  tickFormatter={(d) => { try { return format(parseDay(d), period === '7d' ? "EEE" : "dd/MM", { locale: ptBR }); } catch { return d; } }}
                   tick={{ fontSize: 11 }}
                   interval={period === '90d' ? 6 : undefined}
                 />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip
                   contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
-                  labelFormatter={(l) => { try { return format(new Date(l), "dd/MM", { locale: ptBR }); } catch { return l; } }}
+                  labelFormatter={(l) => { try { return format(parseDay(l), "dd/MM", { locale: ptBR }); } catch { return l; } }}
                 />
                 <Bar dataKey="opened" name="Abertas" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="closed" name="Fechadas" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />

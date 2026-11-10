@@ -8,6 +8,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useAttendanceStats } from "@/hooks/useAttendanceStats";
 import { useExport } from "@/hooks/useExport";
+import { parseDay } from "@/lib/brt";
 
 const STATUS_COLORS = [
   "hsl(var(--primary))",
@@ -176,13 +177,13 @@ export function AttendanceDashboard() {
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis
                   dataKey="date"
-                  tickFormatter={(d) => { try { return format(new Date(d), "EEE", { locale: ptBR }); } catch { return d; } }}
+                  tickFormatter={(d) => { try { return format(parseDay(d), "EEE", { locale: ptBR }); } catch { return d; } }}
                   tick={{ fontSize: 11 }}
                 />
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip
                   contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }}
-                  labelFormatter={(l) => { try { return format(new Date(l), "dd/MM", { locale: ptBR }); } catch { return l; } }}
+                  labelFormatter={(l) => { try { return format(parseDay(l), "dd/MM", { locale: ptBR }); } catch { return l; } }}
                 />
                 <Bar dataKey="opened" name="Abertas" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="closed" name="Resolvidas" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />

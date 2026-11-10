@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { parseDay } from "@/lib/brt";
 
 const segmentLineColors: Record<string, string> = {
   'Campeões': '#eab308',
@@ -53,14 +54,14 @@ export function RFMSegmentEvolution({ history, segments }: RFMSegmentEvolutionPr
             <XAxis
               dataKey="reference_date"
               tickFormatter={(val) => {
-                try { return format(new Date(val), 'dd/MM', { locale: ptBR }); } catch { return val; }
+                try { return format(parseDay(val), 'dd/MM', { locale: ptBR }); } catch { return val; }
               }}
               className="text-xs"
             />
             <YAxis className="text-xs" />
             <Tooltip
               labelFormatter={(val) => {
-                try { return format(new Date(val as string), 'dd/MM/yyyy', { locale: ptBR }); } catch { return String(val); }
+                try { return format(parseDay(val as string), 'dd/MM/yyyy', { locale: ptBR }); } catch { return String(val); }
               }}
             />
             <Legend />

@@ -4,6 +4,7 @@ import { DollarSign, ShoppingBag, TrendingUp, BarChart3 } from "lucide-react";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { format } from "date-fns";
 import { useSalesAnalytics } from "@/hooks/useSalesAnalytics";
+import { parseDay } from "@/lib/brt";
 
 const CHANNEL_COLORS = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))"];
 
@@ -107,7 +108,7 @@ export function SalesAnalyticsDashboard() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis dataKey="date" tickFormatter={(d) => { try { return format(new Date(d), "dd/MM"); } catch { return d; } }} tick={{ fontSize: 10 }} />
+                <XAxis dataKey="date" tickFormatter={(d) => { try { return format(parseDay(d), "dd/MM"); } catch { return d; } }} tick={{ fontSize: 10 }} />
                 <YAxis tickFormatter={(v) => formatCurrency(v)} tick={{ fontSize: 10 }} width={70} />
                 <Tooltip formatter={(v: number) => [formatCurrency(v), "Ticket"]} contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px" }} />
                 <Area type="monotone" dataKey="ticket" stroke="hsl(var(--chart-2))" fill="url(#colorTicket)" strokeWidth={2} />
