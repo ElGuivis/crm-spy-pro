@@ -76,7 +76,9 @@ Deno.serve(async (req) => {
     const today = brtDate(); // dia em Brasília
     log.info(`Processing reminders for date: ${today}`);
 
-    await supabase.from('cashback_reminders').update({ status: 'failed', error_message: 'Interrompido durante o envio (conferir se chegou)' }).eq('status', 'sending');
+    // só o que está "sending" há mais de 10 min foi interrompido; o que outra rodada está enviando agora não é tocado
+    const stuckBefore = new Date(Date.now() - 10 * 60_000).toISOString();
+    await supabase.from('cashback_reminders').update({ status: 'failed', error_message: 'Interrompido durante o envio (conferir se chegou)' }).eq('status', 'sending').lt('updated_at', stuckBefore);
 
     const { data: pendingReminders, error: fetchError } = await supabase
       .from('cashback_reminders')
