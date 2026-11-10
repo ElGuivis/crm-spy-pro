@@ -5,7 +5,7 @@ import { cleanTerms, cleanVoice, factsToSentences } from "../_shared/google-ads-
 const CTX: CopyContext = {
   brand: "Chronic", campaignName: "[PESQUISA] - CAMISETAS CHRONIC", finalUrl: "https://www.usechronic.com.br/camisetas",
   keywords: ["camiseta chronic", "camisa chronic", "chronic camisetas"], topTerms: ["chronic camiseta", "camisa chronic", "camiseta chronic", "chronic camisetas"],
-  voice: ["Muito rua pra ser streetwear"], productTypes: ["Camiseta", "Bone"], facts: ["Entrega para todo o Brasil", "Parcele no cartao", "Pague com Pix"],
+  voice: ["Muito rua pra ser streetwear"], productTypes: ["Camiseta", "Bone"], facts: ["Entrega para todo o Brasil", "Parcele no cartao", "Pague com Pix"], colors: ["Preto", "Branco"],
 };
 
 const GOOD = {
@@ -142,7 +142,17 @@ Deno.test("polish: marca com a grafia certa e inicial maiuscula", () => {
 });
 
 Deno.test("prazo e numero inventados saem; o que esta nos dados fica", () => {
-  const a = stripWeak(["Receba em ate 48h", "Chega em 3 dias", "Camiseta Chronic Preta", "Edicao limitada Chronic"], "Chronic Camiseta");
+  const a = stripWeak(["Receba em ate 48h", "Chega em 3 dias", "Camiseta Chronic Preta", "Edicao limitada Chronic"], "Chronic Camiseta preto");
   assertEquals(a.kept, ["Camiseta Chronic Preta"]);
   assertEquals(stripWeak(["Receba em ate 48h"], "ate 48h").kept.length, 1);
+});
+
+Deno.test("cor so entra se a loja vende (preto ok, rosa descartada) e titulo so-nome-de-produto perde nota", () => {
+  const a = stripWeak(["Camiseta Chronic Preta", "Camiseta Chronic Rosa", "Camisa Chronic Branca"], "Chronic Camiseta preto branco");
+  assertEquals(a.kept, ["Camiseta Chronic Preta", "Camisa Chronic Branca"]);
+  assert(a.dropped[0].includes("rosa"));
+  const bareH = ["Camiseta Chronic", "Camisa Chronic", "Chronic Camisetas", "Camiseta Chronic Preta", "Camisas Chronic", "Chronic Camiseta Masculina", ...GOOD.headlines.slice(6)];
+  const q = scoreRsa(bareH, GOOD.descriptions, { ...CTX, colors: ["Preto"] });
+  assert(q.issues.some((i) => i.includes("so o nome do produto")), q.issues.join("|"));
+  assert(buildAgentMessages({ ...CTX, colors: ["Preto", "Branco"] })[1].content.includes("CORES QUE A LOJA VENDE"));
 });

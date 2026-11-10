@@ -6,7 +6,7 @@ import type { CopyContext } from "./google-ads-copy-agent.ts";
 /** Trechos com estes sinais nao entram como "tom da marca" nem como busca: sao oferta, droga ou promocao que podem nao valer mais. */
 const RISKY = ["420", "maconha", "droga", "frete", "desconto", "promo", "cupom", "gratis", "off", "black", "sem juros", "parcel", "garantia", "estoque", "%", "oficial", "original", "imediato", "24h", "ate "];
 
-export interface CopyFacts { delivered_orders: number; states_delivered: number; pix_orders_12m: number; card_installment_pct: number | null; product_types: string[] }
+export interface CopyFacts { delivered_orders: number; states_delivered: number; pix_orders_12m: number; card_installment_pct: number | null; product_types: string[]; colors?: string[] }
 
 /** Fatos em frases prontas. So entram os que os dados sustentam. */
 export function factsToSentences(f: CopyFacts): string[] {
@@ -55,6 +55,7 @@ export async function loadCopyContext(
     topTerms: cleanTerms(((terms.data ?? []) as Array<{ search_term: string }>).map((t) => t.search_term), campaignWords),
     voice: cleanVoice(voiceRaw).slice(0, 12),
     productTypes: (f.product_types ?? []).map(String),
+    colors: (f.colors ?? []).map((x) => String(x)),
     facts: factsToSentences({
       delivered_orders: Number(f.delivered_orders ?? 0), states_delivered: Number(f.states_delivered ?? 0), pix_orders_12m: Number(f.pix_orders_12m ?? 0),
       card_installment_pct: f.card_installment_pct == null ? null : Number(f.card_installment_pct), product_types: [],

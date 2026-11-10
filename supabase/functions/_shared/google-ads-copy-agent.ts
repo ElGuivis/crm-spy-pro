@@ -18,6 +18,7 @@ export interface CopyContext {
   voice: string[];                          // trechos de anuncios antigos que venderam (jeito de falar da marca)
   productTypes: string[];                   // tipos de peca vendidos (ex.: Camiseta, Bone)
   facts: string[];                          // fatos verificados no CRM, em frases que podem ser usadas
+  colors?: string[];                        // cores realmente vendidas (lidas do SKU dos pedidos entregues), ex.: preto, branco
 }
 
 export interface CopyQuality { score: number; label: "Excelente" | "Boa" | "Media" | "Fraca"; issues: string[] }
@@ -29,6 +30,9 @@ const GENERIC = ["melhor preco", "o melhor", "as melhores", "alta qualidade", "m
 const UNSUPPORTED = ["rapid", "premium", "confortav", "conforto", "qualidade", "melhor", "incrivel", "perfeit", "pronta entrega", "imediat", "unico", "garantid", "sinta a diferenca", "estiloso", "exclusiv", "limitad", "edicao", "satisfeit", "domine", "asfalto", " top", "real "];
 /** Promessas de prazo/numero que os dados nao trazem: "em ate 48h", "ate 3 dias", "5 dias". */
 const PROMISE = /\b(ate|em ate)\s*\d+|\b\d+\s*(h|horas?|dias?|min)\b/;
+/** Cores: so podem aparecer no texto se a loja realmente vende (stem sem genero: pret = preto/preta). */
+const COLOR_STEMS = ["pret", "branc", "verd", "marrom", "vermelh", "beg", "rox", "cinz", "azul", "amarel", "vinh", "ros", "laranj"];
+const colorStem = (c: string) => COLOR_STEMS.find((s) => norm(c).startsWith(s));
 const CTA = ["compre", "garanta", "confira", "veja", "escolha", "descubra", "peca", "monte", "vista", "use", "entre", "conheca", "leve"];
 const STOP = new Set(["de", "da", "do", "e", "a", "o", "em", "para", "com", "no", "na", "os", "as", "um", "uma", "por"]);
 
@@ -88,6 +92,14 @@ export function scoreRsa(headlines: string[], descriptions: string[], ctx: CopyC
   score += Math.min(spec / 3, 1) * 5;
   if (spec < 3) issues.push("Cite tipos de peca reais (" + ctx.productTypes.slice(0, 3).join(", ") + ") ou um fato verificado em pelo menos 3 titulos.");
 
+  const bare = headlines.filter((h) => {
+    const w = words(h);
+    const known = new Set([...words(ctx.brand), ...kws.flatMap(words), ...ctx.productTypes.flatMap(words), ...(ctx.colors ?? []).flatMap((c) => [norm(c), norm(c).replace(/o$/, "a")]), "streetwear", "masculina", "masculino", "feminina", "estampa", "estampada", "camisas", "camisetas", "camisa", "camiseta"]);
+    return w.length > 0 && w.every((x) => known.has(x)) && !CTA.some((c) => w.includes(c));
+  });
+  score -= Math.min(Math.max(0, bare.length - 4) * 3, 12);
+  if (bare.length > 4) issues.push(`${bare.length} titulos sao so o nome do produto (ex.: "${bare[0]}"). Deixe no maximo 4 assim; nos outros junte o produto a uma acao (Compre, Veja, Garanta) ou a um fato verificado.`);
+
   const generic = [...headlines, ...descriptions].filter((t) => GENERIC.some((g) => norm(t).includes(g)));
   score -= Math.min(generic.length * 5, 20);
   if (generic.length) issues.push(`Frases genericas: ${generic.slice(0, 3).map((g) => `"${g}"`).join(", ")}. Troque por algo especifico da marca.`);
@@ -103,6 +115,8 @@ OBJETIVO: maximizar relevancia (nota "Excelente" do Google) e cliques de verdade
 COMO ESCREVER:
 - Gere exatamente 15 titulos (ate 30 caracteres cada) e 4 descricoes (entre 75 e 90 caracteres).
 - Distribua os 15 titulos assim: 6 titulos construidos em volta das BUSCAS REAIS fornecidas (use a expressao que a pessoa digita, em formas diferentes: singular/plural, com a marca, com o tipo de peca); 3 titulos de identidade, na voz da marca; 3 titulos de produto especifico (tipo de peca real); 2 titulos de chamada para acao (Compre, Veja, Garanta...); 1 titulo com um FATO VERIFICADO.
+- Os 6 titulos de busca NAO podem ser so o nome do produto: no maximo 3 assim ("Camiseta Chronic Streetwear"); os outros juntam a busca a uma acao ou a um fato verificado ("Compre Camiseta Chronic Online", "Camisetas Chronic: Pague com Pix").
+- Cores: so cite cor se estiver em CORES QUE A LOJA VENDE. Nunca invente cor.
 - Descricoes: cada uma junta beneficio concreto + produto + chamada para acao. Nenhuma pode repetir a outra.
 - Cada titulo diz uma coisa DIFERENTE. Nada de variar so uma palavra.
 - Fale como a marca fala: curto, direto, com atitude. Use o jeito de falar dos "TEXTOS QUE JA VENDERAM" como referencia de tom, mas NAO copie frases deles.
@@ -127,6 +141,7 @@ export function buildAgentMessages(c: CopyContext, feedback?: { previous: { head
     c.topTerms.length ? `BUSCAS REAIS QUE JA GERARAM VENDA (use no SEO, da mais valiosa para a menos): ${c.topTerms.slice(0, 10).join("; ")}` : "",
     c.keywords.length ? `PALAVRAS-CHAVE DA CAMPANHA: ${c.keywords.slice(0, 15).join("; ")}` : "",
     c.productTypes.length ? `TIPOS DE PECA REAIS DA LOJA: ${c.productTypes.join("; ")}` : "",
+    c.colors?.length ? `CORES QUE A LOJA VENDE (unicas que pode citar): ${c.colors.join("; ")}` : "CORES: nao cite nenhuma cor.",
     c.facts.length ? `FATOS VERIFICADOS (pode usar): ${c.facts.join(" | ")}` : "FATOS VERIFICADOS: nenhum. Nao cite frete, parcelamento, prazo nem numeros.",
     c.voice.length ? `TEXTOS QUE JA VENDERAM (so para pegar o tom, nao copie):\n- ${c.voice.slice(0, 10).join("\n- ")}` : "",
   ].filter(Boolean).join("\n");
@@ -145,8 +160,10 @@ export function stripWeak(list: string[], allowed: string): { kept: string[]; dr
   for (const t of list) {
     const k = norm(t);
     const g = GENERIC.find((x) => k.includes(x));
+    const col = words(t).map((w) => (COLOR_STEMS.some((s) => w.startsWith(s)) ? w : "")).find((w) => w && !a.split(/[^a-z]+/).some((x) => x.startsWith(COLOR_STEMS.find((s) => w.startsWith(s))!)));
     const u = UNSUPPORTED.find((x) => k.includes(x) && !a.includes(x));
     if (g) dropped.push(`${t} (generico: "${g}")`);
+    else if (col) dropped.push(`${t} (cor "${col}" nao consta nas vendas da loja)`);
     else if (PROMISE.test(k) && !PROMISE.test(a)) dropped.push(`${t} (prazo/numero sem base nos dados)`);
     else if (u) dropped.push(`${t} (promessa sem base nos dados: "${u}")`);
     else kept.push(t);
@@ -170,7 +187,7 @@ export async function draftBestCopy(
   ctx: CopyContext, callModel: (msgs: ReturnType<typeof buildAgentMessages>) => Promise<{ ok: true; text: string } | { ok: false; error: string }>,
   targetScore = 80,
 ): Promise<DraftResult | { ok: false; error: string }> {
-  const allowed = [ctx.brand, ctx.campaignName, ...ctx.keywords, ...ctx.topTerms, ...ctx.productTypes, ...ctx.facts].join(" ");
+  const allowed = [ctx.brand, ctx.campaignName, ...ctx.keywords, ...ctx.topTerms, ...ctx.productTypes, ...ctx.facts, ...(ctx.colors ?? [])].join(" ");
   let best: DraftResult | null = null;
   let lastError = "A IA nao respondeu";
   let feedback: Parameters<typeof buildAgentMessages>[1];
