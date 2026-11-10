@@ -41,7 +41,7 @@ export interface IssueRequest {
 
 export type IssueResult =
   | { ok: true; code: string; liId: number; ledgerId: string; expires: string }
-  | { ok: false; status: number; error: string; authError?: boolean };
+  | { ok: false; status: number; error: string; authError?: boolean; duplicate?: boolean };
 
 const MAX_CODE_TRIES = 6;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -83,6 +83,9 @@ export async function issueCoupon(supabase: Supabase, req: IssueRequest): Promis
     }).select("id").single();
 
     if (reserveError) {
+      if (reserveError.code === "23505" && /cashback_order_unique/.test(reserveError.message ?? "")) {
+        return { ok: false, status: 409, error: "Já existe cupom de cashback para este pedido.", duplicate: true }; // trava do banco: 1 cupom de cashback por pedido
+      }
       if (reserveError.code === "23505") { // código já existe no livro-razão
         if (fixed) return { ok: false, status: 409, error: "Esse código de cupom já existe." };
         lastError = "colisão de código"; continue;

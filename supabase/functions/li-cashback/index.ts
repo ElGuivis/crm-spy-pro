@@ -12,9 +12,9 @@ import { ensureAutomationConversation } from "../_shared/automation-conversation
 import { sendWhatsAppMessage as sharedSendWhatsApp, type WhatsAppConfig } from "../_shared/whatsapp-sender.ts";
 import { sendEmail as sharedSendEmail, getEmailConfig } from "../_shared/email-sender.ts";
 import type { CashbackPayload } from "./types.ts";
-import { BRT_TZ, brtDate, brtDateAfter } from "../_shared/brt.ts";
+import { BRT_TZ, brtDate, brtDateAfter, inSendWindow, nextSendWindowStart } from "../_shared/brt.ts";
 import { buildCashbackSpec, creditFor, extraTemplateVars, isReversedStatus } from "../_shared/cashback-rules.ts";
-import { claimCredit, isExcluded, markFinal, markReleased, markRetry, type CashbackCredit } from "../_shared/cashback-credit.ts";
+import { claimCredit, deferCredit, isExcluded, markFinal, markReleased, markRetry, type CashbackCredit } from "../_shared/cashback-credit.ts";
 
 let log: Logger = createLogger("li-cashback", "init");
 
@@ -48,6 +48,11 @@ Deno.serve(async (req) => {
     if (payload.credit_id) {
       claimed = await claimCredit(supabase, payload.credit_id);
       if (!claimed) return reply({ success: false, skipped: true, error: 'Crédito já processado ou não está pendente' });
+      if (!inSendWindow()) { // mensagem ao cliente só entre 08h e 21h de Brasília
+        await deferCredit(supabase, claimed.id, nextSendWindowStart());
+        released = true;
+        return reply({ success: false, skipped: true, deferred: true, error: 'Fora da janela de envio; liberação adiada' });
+      }
       Object.assign(payload, {
         order_id: claimed.order_ref ?? claimed.order_number, order_number: claimed.order_number,
         customer_name: claimed.customer_name || 'Cliente', customer_email: claimed.customer_email || '',
@@ -66,6 +71,7 @@ Deno.serve(async (req) => {
       `)
       .eq('is_active', true);
     
+    if (claimed?.config_id) configQuery = configQuery.eq('id', claimed.config_id);
     if (payload.tenant_id) {
       configQuery = configQuery.eq('tenant_id', payload.tenant_id);
       log.info(`[CASHBACK] Using tenant_id from payload: ${payload.tenant_id}`);
@@ -154,6 +160,15 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Idempotência: se já existe cupom de cashback deste pedido (ex.: queda do servidor entre criar o cupom e marcar o crédito), não cria outro.
+    {
+      const { data: dup } = await supabase.from('generated_coupons').select('id').eq('tenant_id', config.tenant_id).eq('order_id', String(payload.order_number)).eq('origin_type', 'cashback').limit(1).maybeSingle();
+      if (dup) {
+        if (claimed) { await markReleased(supabase, claimed.id, dup.id as string); released = true; }
+        return reply({ success: false, skipped: true, error: 'Já existe cupom de cashback para este pedido' });
+      }
+    }
+
     // Get API key from integration - FIX: Use integration_id from config or payload
     const integrationIdToUse = config.integration_id || payload.integration_id;
     
@@ -207,6 +222,10 @@ Deno.serve(async (req) => {
       recipient: { name: payload.customer_name, email: payload.customer_email, phone: payload.customer_phone, cpf: payload.customer_cpf || null },
     });
 
+    if (!issued.ok && issued.duplicate) {
+      if (claimed) { await markFinal(supabase, claimed.id, 'skipped', 'Já existe cupom de cashback para o pedido'); released = true; }
+      return reply({ success: false, skipped: true, error: issued.error });
+    }
     if (!issued.ok) {
       log.error('Failed to create coupon:', issued.status, issued.error);
       await supabase.from('cashback_executions').insert({
@@ -272,8 +291,9 @@ Deno.serve(async (req) => {
     // Schedule reminders if enabled
     const remindersToInsert = [];
     
-    if (config.reminder_1_enabled && savedCoupon) {
-      const reminder1Date = brtDateAfter(-(config.reminder_1_days_before || 7), expiresAt);
+    const reminder1Date = brtDateAfter(-(config.reminder_1_days_before || 7), expiresAt);
+    const reminder2Date = brtDateAfter(-(config.reminder_2_days_before || 3), expiresAt);
+    if (config.reminder_1_enabled && savedCoupon && reminder1Date > brtDate()) { // só agenda se a data ainda estiver no futuro
       
       const reminder1Message = (config.reminder_1_message || '')
         .replace(/\{\{cliente_nome\}\}/g, payload.customer_name)
@@ -294,8 +314,7 @@ Deno.serve(async (req) => {
       });
     }
     
-    if (config.reminder_2_enabled && savedCoupon) {
-      const reminder2Date = brtDateAfter(-(config.reminder_2_days_before || 3), expiresAt);
+    if (config.reminder_2_enabled && savedCoupon && reminder2Date > brtDate()) {
       
       const reminder2Message = (config.reminder_2_message || '')
         .replace(/\{\{cliente_nome\}\}/g, payload.customer_name)

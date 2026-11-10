@@ -10,7 +10,7 @@ import { ensureAutomationConversation } from "../_shared/automation-conversation
 import { sendWhatsAppMessage as sharedSendWhatsApp, type WhatsAppConfig } from "../_shared/whatsapp-sender.ts";
 import { canContact, recordTouches } from "../_shared/contact-policy.ts";
 import { unsubscribeFor } from "../_shared/email-unsubscribe-link.ts";
-import { brtDate } from "../_shared/brt.ts";
+import { brtDate, inSendWindow } from "../_shared/brt.ts";
 
 // Module-level logger (overridden per-request with correlation ID)
 let log = createLogger("cashback-reminder-processor", "init");
@@ -62,6 +62,10 @@ Deno.serve(async (req) => {
   try {
     requireInternalAuth(req);
 
+    if (!inSendWindow()) { // lembrete ao cliente só entre 08h e 21h de Brasília; o cron de cada hora tenta de novo
+      return new Response(JSON.stringify({ success: true, message: 'Fora da janela de envio', processed: 0 }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
@@ -72,9 +76,11 @@ Deno.serve(async (req) => {
     const today = brtDate(); // dia em Brasília
     log.info(`Processing reminders for date: ${today}`);
 
+    await supabase.from('cashback_reminders').update({ status: 'failed', error_message: 'Interrompido durante o envio (conferir se chegou)' }).eq('status', 'sending');
+
     const { data: pendingReminders, error: fetchError } = await supabase
       .from('cashback_reminders')
-      .select(`*, coupon:generated_coupons(id, coupon_code, customer_name, customer_email, customer_phone, expires_at, used_at), config:cashback_configs(*, whatsapp_integration:integrations!cashback_configs_whatsapp_integration_id_fkey(id, metadata))`)
+      .select(`*, coupon:generated_coupons(id, coupon_code, customer_name, customer_email, customer_phone, expires_at, used_at, li_ativo), config:cashback_configs(*, whatsapp_integration:integrations!cashback_configs_whatsapp_integration_id_fkey(id, metadata))`)
       .eq('status', 'pending')
       .lte('scheduled_date', today)
       .limit(50);
@@ -90,8 +96,16 @@ Deno.serve(async (req) => {
     let processedCount = 0, successCount = 0, failedCount = 0;
 
     for (const reminder of pendingReminders) {
+      // reivindica o lembrete de forma atômica: duas rodadas ao mesmo tempo nunca enviam o mesmo
+      const { data: mine } = await supabase.from('cashback_reminders').update({ status: 'sending' }).eq('id', reminder.id).eq('status', 'pending').select('id').maybeSingle();
+      if (!mine) continue;
       processedCount++;
-      
+
+      if (reminder.coupon?.li_ativo === false) {
+        await supabase.from('cashback_reminders').update({ status: 'skipped', error_message: 'Cupom desativado' }).eq('id', reminder.id);
+        continue;
+      }
+
       if (reminder.coupon?.used_at) {
         await supabase.from('cashback_reminders').update({ status: 'skipped', error_message: 'Coupon already used' }).eq('id', reminder.id);
         continue;
@@ -119,7 +133,7 @@ Deno.serve(async (req) => {
         const emRule = reminder.coupon?.customer_email ? await canContact(supabase, reminder.tenant_id, { email: reminder.coupon.customer_email }, 'cashback_reminder') : { ok: true as const };
 
         // Send WhatsApp directly
-        if (reminder.coupon?.customer_phone && waRule.ok && evolutionUrl && evolutionApiKey && config?.whatsapp_integration?.metadata) {
+        if (config?.send_via_whatsapp !== false && reminder.coupon?.customer_phone && waRule.ok && evolutionUrl && evolutionApiKey && config?.whatsapp_integration?.metadata) {
           const metadata = config.whatsapp_integration.metadata as Record<string, unknown>;
           const instanceName = (metadata.instanceName || metadata.instance_name) as string;
           if (instanceName && reminder.message) {
@@ -163,7 +177,7 @@ Deno.serve(async (req) => {
         ]);
 
         // Queue failed messages for retry
-        if (!whatsappSent && waRule.ok && reminder.coupon?.customer_phone && config?.whatsapp_integration_id) {
+        if (!whatsappSent && waRule.ok && config?.send_via_whatsapp !== false && reminder.coupon?.customer_phone && config?.whatsapp_integration_id) {
           await supabase.from('message_queue').insert({
             tenant_id: tenantId,
             channel: 'whatsapp',
@@ -193,7 +207,7 @@ Deno.serve(async (req) => {
         }
 
         // Mark as sent if at least one channel delivered or queued for retry
-        const anyQueued = (!whatsappSent && reminder.coupon?.customer_phone && config?.whatsapp_integration_id) || (!emailSent && reminder.coupon?.customer_email && config?.send_via_email);
+        const anyQueued = (!whatsappSent && config?.send_via_whatsapp !== false && reminder.coupon?.customer_phone && config?.whatsapp_integration_id) || (!emailSent && reminder.coupon?.customer_email && config?.send_via_email);
         
         if (whatsappSent || emailSent || anyQueued) {
           // Only deduct tokens if at least one channel actually delivered

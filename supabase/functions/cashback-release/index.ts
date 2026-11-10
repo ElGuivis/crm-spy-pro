@@ -68,6 +68,7 @@ Deno.serve(async (req) => {
         const r = await deactivateLiCoupon(auth, c.coupon.li_coupon_id!);
         if (!r.ok) { log.error(`[RELEASE] não desativou ${c.coupon.coupon_code}: ${r.status} ${r.error}`); continue; }
         await supabase.from("generated_coupons").update({ li_ativo: false }).eq("id", c.coupon.id);
+        await supabase.from("cashback_reminders").update({ status: "skipped", error_message: "Cupom desativado (pedido cancelado/devolvido)" }).eq("coupon_id", c.coupon.id).eq("status", "pending");
         await supabase.from("cashback_credits").update({ status: "cancelled", skip_reason: `Pedido com status "${st}" depois da liberação: cupom desativado` }).eq("id", c.id);
         deactivated++;
       }

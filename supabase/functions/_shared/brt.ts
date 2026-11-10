@@ -50,3 +50,21 @@ export function birthMonthDay(value: string | null | undefined): { month: number
 export function brtDayStartIso(d: Date = new Date()): string {
   return new Date(`${brtDate(d)}T00:00:00-03:00`).toISOString();
 }
+
+// Janela de envio de mensagens automáticas ao cliente (cashback e lembretes): 08:00 às 20:59 de Brasília.
+export const SEND_WINDOW_START_HOUR = 8;
+export const SEND_WINDOW_END_HOUR = 21;
+
+export function inSendWindow(d: Date = new Date()): boolean {
+  const h = brtParts(d).hour;
+  return h >= SEND_WINDOW_START_HOUR && h < SEND_WINDOW_END_HOUR;
+}
+
+/** Próximo instante em que a janela de envio abre (hoje às 08:00 se ainda não abriu, senão amanhã às 08:00 de Brasília). */
+export function nextSendWindowStart(d: Date = new Date()): Date {
+  const p = brtParts(d);
+  const hh = String(SEND_WINDOW_START_HOUR).padStart(2, "0");
+  const today = new Date(`${brtDate(d)}T${hh}:00:00-03:00`);
+  if (p.hour < SEND_WINDOW_START_HOUR) return today;
+  return new Date(`${brtDateAfter(1, d)}T${hh}:00:00-03:00`);
+}

@@ -26,6 +26,11 @@ export async function markReleased(supabase: Supabase, id: string, couponLedgerI
   await supabase.from("cashback_credits").update({ status: "released", released_at: new Date().toISOString(), coupon_id: couponLedgerId, last_error: null }).eq("id", id);
 }
 
+/** Fora da janela de envio: devolve o crédito à fila para abrir de novo na hora indicada (não conta como tentativa). */
+export async function deferCredit(supabase: Supabase, id: string, until: Date): Promise<void> {
+  await supabase.from("cashback_credits").update({ status: "pending", release_at: until.toISOString() }).eq("id", id);
+}
+
 /** Terminou sem cupom por regra (pedido revertido, cliente excluído...): não tenta de novo. */
 export async function markFinal(supabase: Supabase, id: string, status: "cancelled" | "skipped", reason: string): Promise<void> {
   await supabase.from("cashback_credits").update({ status, skip_reason: reason }).eq("id", id);

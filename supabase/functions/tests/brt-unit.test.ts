@@ -27,3 +27,13 @@ Deno.test("birthMonthDay: lê o dia sem converter fuso", () => {
   assertEquals(birthMonthDay(null), null);
   assertEquals(birthMonthDay("12/05/1990"), null);
 });
+
+Deno.test("janela de envio: 08h às 21h de Brasília", async () => {
+  const { inSendWindow, nextSendWindowStart } = await import("../_shared/brt.ts");
+  assertEquals(inSendWindow(new Date("2026-11-10T10:59:00Z")), false); // 07:59 em Brasília
+  assertEquals(inSendWindow(new Date("2026-11-10T11:00:00Z")), true);  // 08:00
+  assertEquals(inSendWindow(new Date("2026-11-11T00:00:00Z")), false); // 21:00 BRT ja fechou
+  assertEquals(inSendWindow(new Date("2026-11-10T23:59:00Z")), true);  // 20:59 BRT
+  assertEquals(nextSendWindowStart(new Date("2026-11-10T05:00:00Z")).toISOString(), "2026-11-10T11:00:00.000Z"); // 02:00 -> hoje 08:00
+  assertEquals(nextSendWindowStart(new Date("2026-11-11T00:30:00Z")).toISOString(), "2026-11-11T11:00:00.000Z"); // 21:30 -> amanha 08:00
+});
