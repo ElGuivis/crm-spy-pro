@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { invokeGoogleAds as invoke } from "@/lib/googleAdsInvoke";
+import { brtDateAfter } from "@/lib/brt";
 
 export type GoogleAdsAccount = Tables<"google_ads_accounts">;
 export type GoogleAdsCampaign = Tables<"google_ads_campaigns">;
@@ -42,7 +43,7 @@ export function useGoogleAdsData(accountId: string | undefined) {
     queryKey: [KEY, "data", accountId],
     enabled: !!accountId,
     queryFn: async () => {
-      const since = new Date(Date.now() - SPEND_WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10);
+      const since = brtDateAfter(-SPEND_WINDOW_DAYS);
       const [budget, campaigns, daily, recs] = await Promise.all([
         supabase.from("google_ads_account_budget").select("*").eq("account_id", accountId!),
         supabase.from("google_ads_campaigns").select("*").eq("account_id", accountId!),

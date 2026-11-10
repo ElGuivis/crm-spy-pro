@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { resolveInstagramAccessToken } from "../_shared/ig-token-resolver.ts";
 import { createLogger } from "../_shared/correlation.ts";
+import { brtDate } from "../_shared/brt.ts";
 
 type Supabase = ReturnType<typeof createClient>;
 type Log = ReturnType<typeof createLogger>;
@@ -180,7 +181,7 @@ export async function handleWatchlistAutoDm(supabase: Supabase, channel: IgChann
   const rule = rules[0];
   const replyText = rule.reply_public_variants?.[0];
   if (!replyText) { console.log("[watchlist-auto-dm] no replyText"); return; }
-  const today = new Date().toISOString().substring(0, 10);
+  const today = brtDate();
   const dedupKey = `${mediaType}:${contactId}:${today}`;
   if (rule.first_comment_only) {
     const { data: existing, error: dedupErr } = await supabase.from("instagram_comment_replies_log").select("id").eq("comment_id", dedupKey).eq("reply_type", mediaType).maybeSingle();

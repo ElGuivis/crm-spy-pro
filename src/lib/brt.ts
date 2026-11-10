@@ -1,0 +1,30 @@
+// Horário de Brasília (America/Sao_Paulo) em toda a interface, independente do fuso do aparelho.
+export const BRT_TZ = "America/Sao_Paulo";
+
+const dateFmt = new Intl.DateTimeFormat("en-CA", { timeZone: BRT_TZ, year: "numeric", month: "2-digit", day: "2-digit" });
+
+/** AAAA-MM-DD do dia em Brasília (use no lugar de toISOString().split('T')[0]). */
+export function brtDate(d: Date | string | number = new Date()): string {
+  return dateFmt.format(new Date(d));
+}
+
+/** Dia (AAAA-MM-DD, Brasília) de `days` dias antes/depois de agora. */
+export function brtDateAfter(days: number, from: Date = new Date()): string {
+  return brtDate(new Date(from.getTime() + days * 86_400_000));
+}
+
+type LocaleFn = (this: Date, locales?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions) => string;
+
+/** Faz toLocaleString/Date/TimeString usarem Brasília quando o código não escolhe um fuso. Chamar uma vez na entrada do app. */
+export function installBrtDefaults(): void {
+  const proto = Date.prototype as unknown as Record<string, LocaleFn & { __brt?: true }>;
+  for (const name of ["toLocaleString", "toLocaleDateString", "toLocaleTimeString"]) {
+    const original = proto[name];
+    if (original.__brt) continue;
+    const patched: LocaleFn & { __brt?: true } = function (this: Date, locales, options) {
+      return original.call(this, locales, { timeZone: BRT_TZ, ...options });
+    };
+    patched.__brt = true;
+    proto[name] = patched;
+  }
+}

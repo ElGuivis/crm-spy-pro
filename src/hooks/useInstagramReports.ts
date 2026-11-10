@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { brtDateAfter } from "@/lib/brt";
 
 interface MetricDaily {
   id: string;
@@ -67,7 +68,7 @@ export function useInstagramReports(channelId: string | null) {
     if (!channelId) return;
     setIsLoading(true);
 
-    const since = new Date(Date.now() - dateRange * 86400000).toISOString().split("T")[0];
+    const since = brtDateAfter(-dateRange);
 
     const [metricsRes, channelRes, mediaRes] = await Promise.all([
       supabase

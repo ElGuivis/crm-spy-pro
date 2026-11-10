@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useMarketingSettings, useWaitlistPanel, type WaitlistRow } from "@/hooks/useLiMarketing";
+import { brtDate } from "@/lib/brt";
 
 const stockOf = (r: WaitlistRow) => r.current_stock ?? r.snapshot_stock ?? 0;
 
@@ -14,7 +15,7 @@ function exportCsv(rows: WaitlistRow[]) {
   const lines = [["Produto", "SKU", "Esperando", "Variação 7 dias", "Estoque", "Situação"].join(";"),
     ...rows.map((r) => [r.name, r.sku, r.subscribers, r.delta_7d, stockOf(r), r.restocked ? "Voltou ao estoque" : stockOf(r) > 0 ? "Em estoque" : "Esgotado"].map(esc).join(";"))];
   const url = URL.createObjectURL(new Blob(["﻿" + lines.join("\n")], { type: "text/csv;charset=utf-8" }));
-  const a = document.createElement("a"); a.href = url; a.download = `lista-de-espera-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
+  const a = document.createElement("a"); a.href = url; a.download = `lista-de-espera-${brtDate()}.csv`; a.click(); URL.revokeObjectURL(url);
 }
 
 /** Lista de espera da loja ("avise-me"): o que repor primeiro. A loja avisa os inscritos quando o produto volta; aqui você prioriza. */

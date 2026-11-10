@@ -4,6 +4,7 @@ import { resolveInstagramAccessToken } from "../_shared/ig-token-resolver.ts";
 import { requireInternalAuth } from "../_shared/auth-guard.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
+import { brtDate } from "../_shared/brt.ts";
 
 interface IgChannel {
   id: string;
@@ -299,7 +300,7 @@ async function sendAutoDmIfConfigured(
       contact_id: contactId,
       thread_id: threadId,
       text: replyText,
-      idempotency_key: `msg_req_dm_auto_reply_${contactId}_${rule.id}_${new Date().toISOString().substring(0, 10)}`,
+      idempotency_key: `msg_req_dm_auto_reply_${contactId}_${rule.id}_${brtDate()}`,
     }),
   }).catch((e: unknown) => { log.error("[poller] fetch send-message error:", e); return null; });
 

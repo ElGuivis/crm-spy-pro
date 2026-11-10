@@ -7,6 +7,7 @@ import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { scoreRecency, scoreFrequency, scoreMonetary, determineSegment, determineChurnRisk, predictRepurchase } from './rfm-scoring.ts'
 import { runRfmBackground } from './rfm-background.ts'
 import type { CustomerMetrics } from './rfm-background.ts'
+import { brtDate } from "../_shared/brt.ts"
 
 declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void } | undefined
 
@@ -48,7 +49,7 @@ Deno.serve(async (req) => {
     }
 
     const now = new Date()
-    const referenceDate = now.toISOString().split('T')[0]
+    const referenceDate = brtDate(now)
 
     async function fetchAllRows<T = Record<string, unknown>>(
       table: string,

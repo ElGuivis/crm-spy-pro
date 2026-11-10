@@ -4,6 +4,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 import { createLogger } from '@/lib/logger';
+import { brtDate } from "@/lib/brt";
 const log = createLogger('useExport');
 
 interface ExportOptions {
@@ -142,5 +143,5 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 function formatDate() {
-  return new Date().toISOString().split('T')[0];
+  return brtDate();
 }

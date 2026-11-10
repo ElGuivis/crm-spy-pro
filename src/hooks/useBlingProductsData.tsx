@@ -8,6 +8,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Tables } from "@/integrations/supabase/types";
 import { BLING_PRODUCT_SELECT } from "@/components/products/product-select-columns";
+import { brtDate } from "@/lib/brt";
 
 type BlingProduct = Tables<"bling_products">;
 type SortOption = "name_asc" | "name_desc" | "price_asc" | "price_desc" | "stock_asc" | "stock_desc";
@@ -185,7 +186,7 @@ export function useBlingProductsData(integrationId: string) {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `produtos-bling-${new Date().toISOString().split("T")[0]}.csv`;
+      link.download = `produtos-bling-${brtDate()}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

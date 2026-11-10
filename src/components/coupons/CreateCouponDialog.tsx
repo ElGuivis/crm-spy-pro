@@ -34,6 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLiGroups } from "@/hooks/useLiGroups";
 
 import { createLogger } from '@/lib/logger';
+import { brtDate } from "@/lib/brt";
 const log = createLogger('CreateCouponDialog');
 
 const couponSchema = z.object({
@@ -88,7 +89,7 @@ export const CreateCouponDialog = ({
       codigo: "",
       tipo: "porcentagem",
       valor: 10,
-      dataInicio: new Date().toISOString().split('T')[0],
+      dataInicio: brtDate(),
       dataFim: "",
       quantidadeUsoMaximo: null,
       valorMinimo: null,

@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { requireInternalAuth } from "../_shared/auth-guard.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
+import { brtParts, brtHHMM } from "../_shared/brt.ts";
 
 Deno.serve(async (req) => {
   const cid = getCorrelationId(req);
@@ -129,11 +130,11 @@ Deno.serve(async (req) => {
       // Time filter
       if (rule.time_filter) {
         const tf = rule.time_filter as { days?: number[]; start_time?: string; end_time?: string };
-        const nowLocal = new Date();
-        const day = nowLocal.getDay();
+        const nowBrt = brtParts(); // regra de horário vale em Brasília, não em UTC
+        const day = nowBrt.weekday;
         if (tf.days && !tf.days.includes(day)) continue;
         if (tf.start_time && tf.end_time) {
-          const hhmm = `${String(nowLocal.getHours()).padStart(2, "0")}:${String(nowLocal.getMinutes()).padStart(2, "0")}`;
+          const hhmm = brtHHMM();
           if (hhmm < tf.start_time || hhmm > tf.end_time) continue;
         }
       }

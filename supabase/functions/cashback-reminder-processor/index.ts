@@ -10,6 +10,7 @@ import { ensureAutomationConversation } from "../_shared/automation-conversation
 import { sendWhatsAppMessage as sharedSendWhatsApp, type WhatsAppConfig } from "../_shared/whatsapp-sender.ts";
 import { canContact, recordTouches } from "../_shared/contact-policy.ts";
 import { unsubscribeFor } from "../_shared/email-unsubscribe-link.ts";
+import { brtDate } from "../_shared/brt.ts";
 
 // Module-level logger (overridden per-request with correlation ID)
 let log = createLogger("cashback-reminder-processor", "init");
@@ -68,7 +69,7 @@ Deno.serve(async (req) => {
     const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const today = new Date().toISOString().split('T')[0];
+    const today = brtDate(); // dia em Brasília
     log.info(`Processing reminders for date: ${today}`);
 
     const { data: pendingReminders, error: fetchError } = await supabase

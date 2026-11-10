@@ -9,6 +9,7 @@ import { unsubscribeFor } from "../_shared/email-unsubscribe-link.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { ensureAutomationConversation } from "../_shared/automation-conversation.ts";
+import { brtParts, brtDateAfter, brtDayStartIso, birthMonthDay } from "../_shared/brt.ts";
 
 const BIRTHDAY_TOKEN_COST = 3;
 const PAGE_SIZE = 1000;
@@ -96,9 +97,8 @@ Deno.serve(async (req) => {
 
     log.info(`[BIRTHDAY] Found ${configs.length} active config(s)`);
 
-    const today = new Date();
-    const todayMonth = today.getMonth() + 1; // 1-12
-    const todayDay = today.getDate();
+    // Dia de hoje em Brasília (o runtime roda em UTC: antes disparava às 21h do dia anterior).
+    const { month: todayMonth, day: todayDay } = brtParts();
     let totalProcessed = 0;
 
     for (const config of configs) {
@@ -137,8 +137,8 @@ Deno.serve(async (req) => {
             }
 
             if (birthDate) {
-              const bd = new Date(birthDate);
-              if (bd.getMonth() + 1 === todayMonth && bd.getDate() === todayDay) {
+              const bd = birthMonthDay(birthDate);
+              if (bd && bd.month === todayMonth && bd.day === todayDay) {
                 birthdayCustomers.push({
                   name: c.name || 'Cliente',
                   phone: c.phone,
@@ -159,8 +159,8 @@ Deno.serve(async (req) => {
 
           for (const c of customers) {
             if (c.data_nascimento) {
-              const bd = new Date(c.data_nascimento);
-              if (bd.getMonth() + 1 === todayMonth && bd.getDate() === todayDay) {
+              const bd = birthMonthDay(c.data_nascimento);
+              if (bd && bd.month === todayMonth && bd.day === todayDay) {
                 birthdayCustomers.push({
                   name: c.nome || 'Cliente',
                   phone: c.celular || c.telefone,
@@ -177,7 +177,7 @@ Deno.serve(async (req) => {
         if (birthdayCustomers.length === 0) continue;
 
         // Check which customers were already processed today
-        const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
+        const todayStart = brtDayStartIso(); // 00:00 de Brasília
         const { data: alreadyProcessed } = await supabase
           .from('birthday_executions')
           .select('customer_phone, customer_email')
@@ -236,12 +236,11 @@ Deno.serve(async (req) => {
             // outras lojas seguem só com o código sorteado, como antes.
             let couponCode = generateCouponCode();
             if (storeType === 'loja_integrada' && authHeader && config.store_integration?.id) {
-              const expiresAt = new Date();
-              expiresAt.setDate(expiresAt.getDate() + config.coupon_duration_days);
+              const expiresDate = brtDateAfter(config.coupon_duration_days);
               const issued = await issueCoupon(supabase, {
                 tenantId, integrationId: config.store_integration.id, auth: authHeader,
                 origin: { type: 'birthday', id: config.id },
-                spec: { tipo: 'porcentagem', valor: config.coupon_discount_percent, validade: expiresAt.toISOString().split('T')[0], quantidade: 1, quantidadePorCliente: 1, descricao: `Aniversário - ${customer.name}` },
+                spec: { tipo: 'porcentagem', valor: config.coupon_discount_percent, validade: expiresDate, quantidade: 1, quantidadePorCliente: 1, descricao: `Aniversário - ${customer.name}` },
                 codeFactory: generateCouponCode, recipient: { name: customer.name, email: customer.email, phone: customer.phone },
               });
               if (!issued.ok) {

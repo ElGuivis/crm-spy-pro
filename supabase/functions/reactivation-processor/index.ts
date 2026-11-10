@@ -9,6 +9,7 @@ import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { ensureAutomationConversation } from "../_shared/automation-conversation.ts";
 import { fetchAllRows, formatPhoneNumber, generateCouponCode } from "./helpers.ts";
 import { findInactiveCustomers } from "./inactive-customers.ts";
+import { brtDateAfter } from "../_shared/brt.ts";
 
 const REACTIVATION_TOKEN_COST = 5;
 
@@ -218,12 +219,11 @@ Deno.serve(async (req) => {
             // outras lojas seguem só com o código sorteado, como antes.
             let couponCode = generateCouponCode();
             if (storeType === 'loja_integrada' && authHeader && config.store_integration?.id) {
-              const expiresAt = new Date();
-              expiresAt.setDate(expiresAt.getDate() + stepDuration);
+              const expiresDate = brtDateAfter(stepDuration);
               const issued = await issueCoupon(supabase, {
                 tenantId, integrationId: config.store_integration.id, auth: authHeader,
                 origin: { type: 'reactivation', id: config.id, ref: `ciclo ${currentStep.step_number}` },
-                spec: { tipo: 'porcentagem', valor: stepDiscount, validade: expiresAt.toISOString().split('T')[0], quantidade: 1, quantidadePorCliente: 1, descricao: `Reativação - ${customer.name} - Ciclo ${currentStep.step_number}` },
+                spec: { tipo: 'porcentagem', valor: stepDiscount, validade: expiresDate, quantidade: 1, quantidadePorCliente: 1, descricao: `Reativação - ${customer.name} - Ciclo ${currentStep.step_number}` },
                 codeFactory: generateCouponCode, recipient: { name: customer.name, email: customer.email, phone: customer.phone },
               });
               if (!issued.ok) {

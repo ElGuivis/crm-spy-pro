@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
 import { createLogger } from '@/lib/logger';
+import { brtDate } from "@/lib/brt";
 const log = createLogger('useExportCSV');
 
 interface ExportOptions {
@@ -38,7 +39,7 @@ export function useExportCSV() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${filename}-${new Date().toISOString().split('T')[0]}.csv`;
+      link.download = `${filename}-${brtDate()}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { brtDate } from "@/lib/brt";
 
 export type StatsPeriod = '7d' | '30d' | '90d';
 
@@ -71,7 +72,7 @@ export function useAtendimentoStats(period: StatsPeriod = '7d') {
 
       const dailyData: Record<string, { opened: number; closed: number }> = {};
       (periodConvs || []).forEach((c) => {
-        const day = new Date(c.created_at).toISOString().split('T')[0];
+        const day = brtDate(c.created_at);
         if (!dailyData[day]) dailyData[day] = { opened: 0, closed: 0 };
         dailyData[day].opened++;
         if (c.status === 'closed') dailyData[day].closed++;
