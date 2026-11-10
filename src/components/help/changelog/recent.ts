@@ -3,6 +3,40 @@ import type { ChangelogEntry } from './types';
 /** De maio a outubro de 2026. Mais recente primeiro. */
 export const RECENT_CHANGELOG: ChangelogEntry[] = [
   {
+    version: '4.4.0',
+    date: '07 Out 2026',
+    items: [
+      { type: 'feature', text: 'IA do atendimento por loja: perfil da loja (tom de voz, políticas de frete, troca, pagamento e atendimento) e base de conhecimento com FAQ e guias, que a IA consulta para responder; nada fica fixo no sistema e cada loja tem o seu' },
+      { type: 'feature', text: 'A IA agora consulta o catálogo real: só oferece produto ativo com estoque, entende a pergunta sem acento e diz com clareza quando nada está à venda. Dados do cliente que a IA enxerga foram reduzidos ao mínimo (nome e cidade)' },
+      { type: 'feature', text: 'Menu do WhatsApp com a opção "Tirar dúvidas sobre produtos", que passa a conversa para a IA e volta ao menu quando o cliente digitar menu' },
+      { type: 'improvement', text: 'A IA espera e tenta de novo quando o provedor atinge o limite de uso e, se ainda assim não der, avisa o cliente em vez de ficar muda; modelos do provedor atualizados' },
+      { type: 'feature', text: 'Alerta de repasse para humano: aviso na tela, som e contador no título da aba quando uma conversa precisa de atendente' },
+      { type: 'feature', text: 'Cartão "Saúde do atendimento" em Canais: fila parada, repasses pendentes, falhas e suspeitas de duplicidade nas últimas 24 horas' },
+      { type: 'improvement', text: 'Busca de conversas feita no servidor (acha qualquer conversa, não só as carregadas) e número do canal exibido em cada conversa' },
+      { type: 'fix', text: 'Mensagens do WhatsApp e do Instagram não são mais enviadas em duplicidade nem se perdem quando duas chegam ao mesmo tempo; número sem WhatsApp deixa de contar como falha do canal' },
+      { type: 'fix', text: 'Mídia enviada pelo cliente (foto, áudio, vídeo) agora é guardada com segurança e continua abrindo na conversa' },
+      { type: 'fix', text: 'Token da automação é devolvido quando o envio falha, e conversa inativa fecha sem mandar aviso duplicado' },
+      { type: 'improvement', text: 'Auditoria automática toda semana do atendimento (19 cenários) para pegar duplicidade e mensagens presas antes do cliente' },
+    ],
+  },
+  {
+    version: '4.3.0',
+    date: '06 Out 2026',
+    items: [
+      { type: 'feature', text: 'Catálogo no WhatsApp com até 3 fotos por produto, juntas numa imagem só com nome e preço na legenda (ou uma mensagem por foto, à sua escolha); o custo continua 1 token por produto' },
+      { type: 'feature', text: 'Janela de progresso do envio do catálogo: acompanhe, minimize, interrompa e reenvie só o que falhou; o envio continua mesmo se você trocar de tela' },
+      { type: 'feature', text: 'Cupons: revisão completa. O uso agora é ligado ao pedido e ao valor, há cartões de cupons utilizados, a data de criação real da loja e o desconto por uso no retorno por origem' },
+      { type: 'fix', text: 'A sincronização de cupons da loja salvava 0 e perdia cupons sem validade; corrigido' },
+      { type: 'fix', text: 'Rastreio do Melhor Envio nunca atualizava; agora a linha do tempo do envio usa as datas reais de cada etapa' },
+      { type: 'improvement', text: 'RFM: previsão de recompra só quando faz sentido, RFM por categoria completo e anti-churn sem mensagens repetidas' },
+      { type: 'improvement', text: 'Lista de produtos até 17 vezes mais leve, com produtos inativos e dimensões' },
+      { type: 'improvement', text: 'Atendimentos no celular: botão do menu principal, cabeçalho enxuto, altura que respeita a barra do navegador e campo de mensagem com alvos de toque maiores' },
+      { type: 'feature', text: 'Editor de e-mail: prévia "Ver como" (um cliente real ou o exemplo Maria Silva) e simulação de tema escuro' },
+      { type: 'improvement', text: 'O banner de sincronização mostra o total quando a sincronização termina' },
+      { type: 'improvement', text: 'Segurança: limite de requisições nas páginas públicas (descadastro, clique e abertura de e-mail), permissões de banco mais restritas e autenticação das funções que falha de forma segura' },
+    ],
+  },
+  {
     version: '4.2.0',
     date: '05 Out 2026',
     items: [
