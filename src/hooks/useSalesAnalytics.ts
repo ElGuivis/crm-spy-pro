@@ -18,28 +18,53 @@ export interface SalesAnalyticsData {
 
 // venda = tudo que não é cancelado/devolvido/aguardando (regra única em @/lib/orderStatus)
 
+
+const PAGE = 1000;
+type Page<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>;
+
+async function fetchAll<T>(page: (from: number, to: number) => Page<T>): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await page(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    out.push(...(data ?? []));
+    if (!data || data.length < PAGE) return out;
+  }
+}
+
+async function fetchInChunks<T>(ids: string[], query: (ids: string[]) => Page<T>): Promise<T[]> {
+  const out: T[] = [];
+  for (let i = 0; i < ids.length; i += 150) {
+    const { data, error } = await query(ids.slice(i, i + 150));
+    if (error) throw new Error(error.message);
+    out.push(...(data ?? []));
+  }
+  return out;
+}
+
 async function fetchSalesAnalytics(tenantId: string): Promise<SalesAnalyticsData> {
   const thirtyDaysAgo = subDays(new Date(), 30).toISOString();
 
-  const [{ data: liOrders }, { data: blingOrders }] = await Promise.all([
-    supabase.from("li_orders").select("id, created_at_remote, totals_json, status_name").eq("tenant_id", tenantId).gte("created_at_remote", thirtyDaysAgo).limit(1000),
-    supabase.from("bling_orders").select("id, data_criacao, valor_total").eq("tenant_id", tenantId).gte("data_criacao", thirtyDaysAgo).limit(1000),
+  // pagina (o limite padrão de 1000 linhas cortava o período em silêncio) e falha alto em vez de mostrar número parcial
+  const [liOrders, blingOrders] = await Promise.all([
+    fetchAll<{ id: string; created_at_remote: string; totals_json: unknown; status_name: string | null }>((from, to) =>
+      supabase.from("li_orders").select("id, created_at_remote, totals_json, status_name").eq("tenant_id", tenantId).gte("created_at_remote", thirtyDaysAgo).order("id").range(from, to)),
+    fetchAll<{ id: string; data_criacao: string; valor_total: number | null }>((from, to) =>
+      supabase.from("bling_orders").select("id, data_criacao, valor_total").eq("tenant_id", tenantId).gte("data_criacao", thirtyDaysAgo).order("id").range(from, to)),
   ]);
 
-  const liIds = (liOrders || []).map(o => o.id);
-  const blingIds = (blingOrders || []).map(o => o.id);
+  const liIds = liOrders.map(o => o.id);
+  const blingIds = blingOrders.map(o => o.id);
 
-  const [{ data: liItems }, { data: blingItems }] = await Promise.all([
-    liIds.length > 0
-      ? supabase.from("li_order_items").select("name, qty, price, order_id").in("order_id", liIds)
-      : Promise.resolve({ data: [] as { name: string; qty: number; price: number; order_id: string }[] }),
-    blingIds.length > 0
-      ? supabase.from("bling_order_items").select("produto_nome, quantidade, valor_total, order_id").in("order_id", blingIds)
-      : Promise.resolve({ data: [] as { produto_nome: string; quantidade: number; valor_total: number; order_id: string }[] }),
+  const [liItems, blingItems] = await Promise.all([
+    fetchInChunks<{ name: string; qty: number; price: number; order_id: string }>(liIds, (ids) =>
+      supabase.from("li_order_items").select("name, qty, price, order_id").in("order_id", ids)),
+    fetchInChunks<{ produto_nome: string; quantidade: number; valor_total: number; order_id: string }>(blingIds, (ids) =>
+      supabase.from("bling_order_items").select("produto_nome, quantidade, valor_total, order_id").in("order_id", ids)),
   ]);
 
-  const effectiveLI = (liOrders || []).filter(o => isSaleStatus(o.status_name));
-  const effectiveBling = blingOrders || [];
+  const effectiveLI = liOrders.filter(o => isSaleStatus(o.status_name));
+  const effectiveBling = blingOrders;
   const getLITotal = (o: typeof effectiveLI[number]): number => {
     return Number(jsonAs<LiTotals>(o.totals_json)?.total || 0);
   };
@@ -68,14 +93,14 @@ async function fetchSalesAnalytics(tenantId: string): Promise<SalesAnalyticsData
   // Top products (items already scoped to last-30-days orders via .in() query)
   const productMap: Record<string, { revenue: number; quantity: number }> = {};
   const effectiveLIIds = new Set(effectiveLI.map(o => o.id));
-  for (const item of liItems || []) {
+  for (const item of liItems) {
     if (!effectiveLIIds.has(item.order_id)) continue;
     const name = item.name || "Sem nome";
     if (!productMap[name]) productMap[name] = { revenue: 0, quantity: 0 };
     productMap[name].revenue += (item.price || 0) * (item.qty || 0);
     productMap[name].quantity += item.qty || 0;
   }
-  for (const item of blingItems || []) {
+  for (const item of blingItems) {
     const name = item.produto_nome || "Sem nome";
     if (!productMap[name]) productMap[name] = { revenue: 0, quantity: 0 };
     productMap[name].revenue += item.valor_total || 0;

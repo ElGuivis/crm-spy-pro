@@ -63,6 +63,7 @@ interface EnhancedDashboardStats {
   msgsReceived30d: number;
   rfmSummary: RFMSegmentSummary[];
   isLoading: boolean;
+  hasError: boolean;
 }
 
 
@@ -96,6 +97,7 @@ export function useDashboardStats(): EnhancedDashboardStats {
     msgsReceived30d: 0,
     rfmSummary: [],
     isLoading: true,
+    hasError: false,
   });
 
   useEffect(() => {
@@ -159,6 +161,7 @@ export function useDashboardStats(): EnhancedDashboardStats {
           me_delivered_this_month?: number;
           me_delivered_30d?: number;
         }
+        if (rpcResult.error) logger.error('get_dashboard_stats falhou', rpcResult.error);
         const rpc: DashboardRpcResult = (rpcResult.data as DashboardRpcResult) || {};
         const totalRevenueThisMonth = Number(rpc.total_revenue_this_month || 0);
         const totalOrdersThisMonth = Number(rpc.total_orders_this_month || 0);
@@ -254,11 +257,12 @@ export function useDashboardStats(): EnhancedDashboardStats {
           msgsReceived30d,
           rfmSummary,
           isLoading: false,
+          hasError: !!rpcResult.error,
         });
       } catch (error) {
         if (cancelled) return;
         logger.error('Error fetching dashboard stats', error);
-        setStats(prev => ({ ...prev, isLoading: false }));
+        setStats(prev => ({ ...prev, isLoading: false, hasError: true }));
       }
     };
 

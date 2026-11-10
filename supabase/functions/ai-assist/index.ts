@@ -123,7 +123,7 @@ serve(async (req) => {
 
     const reversedMsgs = (messages || []).reverse();
     const chatHistory = reversedMsgs.map((m: Record<string, unknown>) => ({
-      role: m.direction === 'incoming' ? 'user' : 'assistant',
+      role: m.direction === 'inbound' ? 'user' : 'assistant',
       content: m.content,
     }));
 

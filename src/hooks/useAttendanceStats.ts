@@ -52,8 +52,8 @@ async function fetchAttendanceStats(tenantId: string): Promise<AttendanceStatsDa
     if (!convMsgMap.has(msg.conversation_id)) convMsgMap.set(msg.conversation_id, {});
     const entry = convMsgMap.get(msg.conversation_id)!;
     const ts = new Date(msg.created_at);
-    if (msg.direction === "incoming" && !entry.firstInbound) entry.firstInbound = ts;
-    if (msg.direction === "outgoing" && !entry.firstOutbound) entry.firstOutbound = ts;
+    if (msg.direction === "inbound" && !entry.firstInbound) entry.firstInbound = ts;
+    if (msg.direction === "outbound" && !entry.firstOutbound) entry.firstOutbound = ts;
   }
 
   const responseTimes: number[] = [];
@@ -106,7 +106,7 @@ async function fetchAttendanceStats(tenantId: string): Promise<AttendanceStatsDa
   const hourMap: Record<number, number> = {};
   for (let h = 0; h < 24; h++) hourMap[h] = 0;
   for (const msg of messages || []) {
-    if (msg.direction === "incoming") {
+    if (msg.direction === "inbound") {
       const h = new Date(msg.created_at).getHours();
       hourMap[h]++;
     }

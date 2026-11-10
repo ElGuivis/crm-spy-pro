@@ -37,12 +37,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDashboardStats, useDashboardIntegrations } from "@/hooks/useDashboardStats";
+import { useDashboardHealth } from "@/hooks/useDashboardHealth";
+import { DataHealthBanner } from "@/components/dashboard/DataHealthBanner";
 import { Link } from "react-router-dom";
 import { SetupChecklist } from "@/components/onboarding/SetupChecklist";
 
 const Index = () => {
   const { profile } = useAuth();
   const stats = useDashboardStats();
+  const healthProblems = useDashboardHealth();
   const { integrations, isLoading: integrationsLoading } = useDashboardIntegrations();
   const [activeTab, setActiveTab] = useState("overview");
 
@@ -161,6 +164,8 @@ const Index = () => {
           Aqui está um resumo do seu atendimento de hoje
         </p>
       </div>
+
+      <DataHealthBanner problems={healthProblems} loadFailed={stats.hasError} />
 
       {/* Dashboard Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
