@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Cake, Percent, Clock, Store, Save, Loader2, MessageSquare, Plus } from "lucide-react";
+import { Cake, Store, Save, Loader2, MessageSquare, Plus } from "lucide-react";
+import { BirthdayCouponOptions, type BirthdayCouponValues } from "./BirthdayCouponOptions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,12 +28,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { createLogger } from '@/lib/logger';
 const log = createLogger('BirthdayConfigDialog');
 
-interface BirthdayConfig {
+interface BirthdayConfig extends BirthdayCouponValues {
   id?: string;
   name: string;
   integrationId: string | null;
-  couponDiscountPercent: number;
-  couponDurationDays: number;
   whatsappIntegrationId: string | null;
   isActive: boolean;
   messageTemplate: string;
@@ -58,18 +57,25 @@ const WHATSAPP_TYPES = ['evolution_whatsapp', 'whatsapp_api', 'z_api'];
 const MESSAGE_PLACEHOLDERS = [
   { key: '{{cliente_nome}}', label: 'Nome Completo' },
   { key: '{{cliente_primeiro_nome}}', label: 'Primeiro Nome' },
-  { key: '{{desconto}}', label: '% Desconto' },
+  { key: '{{desconto_texto}}', label: 'Desconto (10% / R$ 20)' },
+  { key: '{{pedido_minimo}}', label: 'Pedido mínimo' },
   { key: '{{cupom}}', label: 'Código Cupom' },
   { key: '{{validade}}', label: 'Dias Validade' },
 ];
 
-const DEFAULT_MESSAGE = 'Olá {{cliente_nome}}! 🎂🎉 Feliz aniversário! Para comemorar, preparamos um cupom especial de {{desconto}}% de desconto para você! Use o código *{{cupom}}* e aproveite. Válido por {{validade}} dias!';
+const DEFAULT_MESSAGE = 'Olá {{cliente_nome}}! 🎂🎉 Feliz aniversário! Para comemorar, preparamos um cupom especial de {{desconto_texto}} de desconto para você! Use o código *{{cupom}}* e aproveite. Válido por {{validade}} dias!';
 
 const defaultConfig: BirthdayConfig = {
   name: "Aniversariantes",
   integrationId: null,
+  couponType: 'porcentagem',
   couponDiscountPercent: 10,
+  couponFixedValue: null,
+  maxDiscountValue: null,
+  minOrderValue: null,
   couponDurationDays: 30,
+  cumulative: false,
+  personalCoupon: true,
   whatsappIntegrationId: null,
   isActive: true,
   messageTemplate: DEFAULT_MESSAGE,
@@ -104,7 +110,7 @@ export function BirthdayConfigDialog({ open, onOpenChange, editingId, onSave }: 
     try {
       const { data, error } = await supabase
         .from('birthday_configs')
-        .select('id, name, integration_id, coupon_discount_percent, coupon_duration_days, whatsapp_integration_id, is_active, message_template')
+        .select('id, name, integration_id, coupon_discount_percent, coupon_duration_days, whatsapp_integration_id, is_active, message_template, coupon_type, coupon_fixed_value, max_discount_value, min_order_value, cumulative, personal_coupon')
         .eq('id', id)
         .single();
 
@@ -114,7 +120,13 @@ export function BirthdayConfigDialog({ open, onOpenChange, editingId, onSave }: 
           id: data.id,
           name: data.name || 'Aniversariantes',
           integrationId: data.integration_id,
+          couponType: (data.coupon_type as BirthdayCouponValues['couponType']) || 'porcentagem',
           couponDiscountPercent: Number(data.coupon_discount_percent),
+          couponFixedValue: data.coupon_fixed_value != null ? Number(data.coupon_fixed_value) : null,
+          maxDiscountValue: data.max_discount_value != null ? Number(data.max_discount_value) : null,
+          minOrderValue: data.min_order_value != null ? Number(data.min_order_value) : null,
+          cumulative: !!data.cumulative,
+          personalCoupon: data.personal_coupon !== false,
           couponDurationDays: data.coupon_duration_days,
           whatsappIntegrationId: data.whatsapp_integration_id,
           isActive: data.is_active,
@@ -179,8 +191,16 @@ export function BirthdayConfigDialog({ open, onOpenChange, editingId, onSave }: 
       toast({ title: "Erro", description: "Selecione uma integração WhatsApp", variant: "destructive" });
       return;
     }
-    if (config.couponDiscountPercent <= 0 || config.couponDiscountPercent > 100) {
+    if (config.couponType === 'porcentagem' && (config.couponDiscountPercent <= 0 || config.couponDiscountPercent > 100)) {
       toast({ title: "Erro", description: "A porcentagem deve estar entre 1 e 100%", variant: "destructive" });
+      return;
+    }
+    if (config.couponType === 'fixo' && !(Number(config.couponFixedValue) > 0)) {
+      toast({ title: "Erro", description: "Informe o valor do desconto em reais", variant: "destructive" });
+      return;
+    }
+    if (!(config.couponDurationDays >= 1)) {
+      toast({ title: "Erro", description: "A validade deve ser de pelo menos 1 dia", variant: "destructive" });
       return;
     }
 
@@ -189,7 +209,13 @@ export function BirthdayConfigDialog({ open, onOpenChange, editingId, onSave }: 
       const data = {
         name: config.name || 'Aniversariantes',
         integration_id: config.integrationId,
+        coupon_type: config.couponType,
         coupon_discount_percent: config.couponDiscountPercent,
+        coupon_fixed_value: config.couponType === 'fixo' ? config.couponFixedValue : null,
+        max_discount_value: config.couponType === 'porcentagem' ? config.maxDiscountValue : null,
+        min_order_value: config.minOrderValue,
+        cumulative: config.cumulative,
+        personal_coupon: config.personalCoupon,
         coupon_duration_days: config.couponDurationDays,
         whatsapp_integration_id: config.whatsappIntegrationId,
         is_active: config.isActive,
@@ -279,16 +305,7 @@ export function BirthdayConfigDialog({ open, onOpenChange, editingId, onSave }: 
           </div>
 
           {/* Coupon settings */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5"><Percent className="h-4 w-4" /> Desconto (%)</Label>
-              <Input type="number" min={1} max={100} value={config.couponDiscountPercent} onChange={(e) => setConfig({ ...config, couponDiscountPercent: Number(e.target.value) })} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5"><Clock className="h-4 w-4" /> Validade (dias)</Label>
-              <Input type="number" min={1} value={config.couponDurationDays} onChange={(e) => setConfig({ ...config, couponDurationDays: Number(e.target.value) })} />
-            </div>
-          </div>
+          <BirthdayCouponOptions values={config} onChange={(patch) => setConfig({ ...config, ...patch })} />
 
           {/* Message template */}
           <div className="space-y-1.5">

@@ -620,7 +620,10 @@ export type Database = {
         Row: {
           coupon_discount_percent: number
           coupon_duration_days: number
+          coupon_fixed_value: number | null
+          coupon_type: string
           created_at: string
+          cumulative: boolean
           email_body: string | null
           email_enabled: boolean | null
           email_integration_id: string | null
@@ -628,8 +631,11 @@ export type Database = {
           id: string
           integration_id: string
           is_active: boolean
+          max_discount_value: number | null
           message_template: string
+          min_order_value: number | null
           name: string
+          personal_coupon: boolean
           tenant_id: string
           tokens_per_execution: number
           updated_at: string
@@ -638,7 +644,10 @@ export type Database = {
         Insert: {
           coupon_discount_percent?: number
           coupon_duration_days?: number
+          coupon_fixed_value?: number | null
+          coupon_type?: string
           created_at?: string
+          cumulative?: boolean
           email_body?: string | null
           email_enabled?: boolean | null
           email_integration_id?: string | null
@@ -646,8 +655,11 @@ export type Database = {
           id?: string
           integration_id: string
           is_active?: boolean
+          max_discount_value?: number | null
           message_template?: string
+          min_order_value?: number | null
           name?: string
+          personal_coupon?: boolean
           tenant_id: string
           tokens_per_execution?: number
           updated_at?: string
@@ -656,7 +668,10 @@ export type Database = {
         Update: {
           coupon_discount_percent?: number
           coupon_duration_days?: number
+          coupon_fixed_value?: number | null
+          coupon_type?: string
           created_at?: string
+          cumulative?: boolean
           email_body?: string | null
           email_enabled?: boolean | null
           email_integration_id?: string | null
@@ -664,8 +679,11 @@ export type Database = {
           id?: string
           integration_id?: string
           is_active?: boolean
+          max_discount_value?: number | null
           message_template?: string
+          min_order_value?: number | null
           name?: string
+          personal_coupon?: boolean
           tenant_id?: string
           tokens_per_execution?: number
           updated_at?: string
@@ -13763,6 +13781,7 @@ export type Database = {
         }
         Returns: Json
       }
+      get_dashboard_health: { Args: { _tenant_id: string }; Returns: Json }
       get_dashboard_stats: { Args: { _tenant_id: string }; Returns: Json }
       get_email_campaign_conversions: {
         Args: { p_campaign_id: string; p_tenant_id: string }
@@ -14048,6 +14067,7 @@ export type Database = {
         Returns: boolean
       }
       leave_team_memberships: { Args: { _user_id: string }; Returns: Json }
+      li_status_is_sale: { Args: { _status: string }; Returns: boolean }
       link_me_shipments_to_orders: {
         Args: {
           p_me_integration_id: string

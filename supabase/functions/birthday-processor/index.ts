@@ -9,7 +9,10 @@ import { unsubscribeFor } from "../_shared/email-unsubscribe-link.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { ensureAutomationConversation } from "../_shared/automation-conversation.ts";
-import { brtParts, brtDateAfter, brtDayStartIso, birthMonthDay } from "../_shared/brt.ts";
+import { brtParts, brtDateAfter, brtDayStartIso, birthMonthDay, inSendWindow } from "../_shared/brt.ts";
+import { buildBirthdaySpec, birthdayVars, fillBirthday } from "../_shared/birthday-coupon.ts";
+
+const MAX_FAILED_ATTEMPTS_PER_DAY = 3;
 
 const BIRTHDAY_TOKEN_COST = 3;
 const PAGE_SIZE = 1000;
@@ -19,6 +22,7 @@ interface BirthdayCustomer {
   phone: string | null;
   email: string | null;
   source: 'loja_integrada' | 'bling';
+  liCustomerId?: string | null; // id do cliente na loja (cupom pessoal)
 }
 
 function generateCouponCode(): string {
@@ -28,6 +32,13 @@ function generateCouponCode(): string {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
   return code;
+}
+
+function liCustomerIdOf(c: { loja_integrada_customer_id?: unknown; raw_json?: unknown }): string | null {
+  if (c.loja_integrada_customer_id != null && c.loja_integrada_customer_id !== '') return String(c.loja_integrada_customer_id);
+  const raw = typeof c.raw_json === 'string' ? JSON.parse(c.raw_json) : c.raw_json;
+  const id = raw && typeof raw === 'object' ? (raw as Record<string, unknown>).id : null;
+  return id != null ? String(id) : null;
 }
 
 function formatPhoneNumber(phone: string): string {
@@ -70,6 +81,11 @@ Deno.serve(async (req) => {
     const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
 
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // mensagem ao cliente só entre 08h e 21h de Brasília (o cron roda de hora em hora; o primeiro disparo do dia é às 08h)
+    if (!inSendWindow()) {
+      return new Response(JSON.stringify({ success: true, message: 'Fora da janela de envio', processed: 0 }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
     log.info('[BIRTHDAY] Starting birthday processor...');
 
@@ -124,7 +140,7 @@ Deno.serve(async (req) => {
           const customers = await fetchAllRows(
             supabase
               .from('li_customers')
-              .select('id, name, phone, email, raw_json')
+              .select('id, name, phone, email, raw_json, loja_integrada_customer_id')
               .eq('integration_id', integrationId)
           );
 
@@ -144,6 +160,7 @@ Deno.serve(async (req) => {
                   phone: c.phone,
                   email: c.email,
                   source: 'loja_integrada',
+                  liCustomerId: liCustomerIdOf(c as Record<string, unknown>),
                 });
               }
             }
@@ -180,14 +197,21 @@ Deno.serve(async (req) => {
         const todayStart = brtDayStartIso(); // 00:00 de Brasília
         const { data: alreadyProcessed } = await supabase
           .from('birthday_executions')
-          .select('customer_phone, customer_email')
+          .select('customer_phone, customer_email, status, coupon_code')
           .eq('config_id', config.id)
           .gte('created_at', todayStart)
-          .in('status', ['sent', 'pending']);
+          .in('status', ['sent', 'pending', 'failed']);
 
-        const processedKeys = new Set(
-          (alreadyProcessed || []).map(e => `${e.customer_phone || ''}|${e.customer_email || ''}`)
-        );
+        const processedKeys = new Set<string>();
+        const failedToday = new Map<string, { count: number; coupon: string | null }>();
+        for (const e of alreadyProcessed || []) {
+          const k = `${e.customer_phone || ''}|${e.customer_email || ''}`;
+          if (e.status === 'failed') {
+            const prev = failedToday.get(k) ?? { count: 0, coupon: null };
+            failedToday.set(k, { count: prev.count + 1, coupon: (e.coupon_code as string | null) || prev.coupon });
+          } else processedKeys.add(k);
+        }
+        const vars = birthdayVars(config);
 
         // Get WhatsApp config
         let whatsappConfig: WhatsAppConfig | null = null;
@@ -211,6 +235,11 @@ Deno.serve(async (req) => {
           const customerKey = `${customer.phone || ''}|${customer.email || ''}`;
           if (processedKeys.has(customerKey)) {
             log.info(`[BIRTHDAY] Already processed ${customer.name} today, skipping`);
+            continue;
+          }
+          const failedInfo = failedToday.get(customerKey);
+          if (failedInfo && failedInfo.count >= MAX_FAILED_ATTEMPTS_PER_DAY) {
+            log.info(`[BIRTHDAY] ${customer.name}: ${failedInfo.count} falhas hoje, não tenta mais`);
             continue;
           }
 
@@ -237,10 +266,16 @@ Deno.serve(async (req) => {
             let couponCode = generateCouponCode();
             if (storeType === 'loja_integrada' && authHeader && config.store_integration?.id) {
               const expiresDate = brtDateAfter(config.coupon_duration_days);
-              const issued = await issueCoupon(supabase, {
+              // tentativa anterior de hoje falhou DEPOIS de criar o cupom na loja: reaproveita em vez de criar outro
+              let reused: string | null = null;
+              if (failedInfo?.coupon) {
+                const { data: prevCoupon } = await supabase.from('generated_coupons').select('coupon_code').eq('tenant_id', tenantId).eq('origin_type', 'birthday').eq('coupon_code', failedInfo.coupon).maybeSingle();
+                reused = (prevCoupon?.coupon_code as string | undefined) ?? null;
+              }
+              const issued = reused ? { ok: true as const, code: reused } : await issueCoupon(supabase, {
                 tenantId, integrationId: config.store_integration.id, auth: authHeader,
                 origin: { type: 'birthday', id: config.id },
-                spec: { tipo: 'porcentagem', valor: config.coupon_discount_percent, validade: expiresDate, quantidade: 1, quantidadePorCliente: 1, descricao: `Aniversário - ${customer.name}` },
+                spec: buildBirthdaySpec(config, { validade: expiresDate, descricao: `Aniversário - ${customer.name}`, liCustomerId: customer.liCustomerId }),
                 codeFactory: generateCouponCode, recipient: { name: customer.name, email: customer.email, phone: customer.phone },
               });
               if (!issued.ok) {
@@ -265,21 +300,16 @@ Deno.serve(async (req) => {
             // Build message — support both {{...}} and legacy {…} placeholders
             const firstName = customer.name.split(' ')[0];
 
-            const message = (config.message_template || '')
+            const messageBase = (config.message_template || '')
               // Modern {{...}} placeholders
               .replace(/\{\{cliente_nome\}\}/g, customer.name)
               .replace(/\{\{cliente_primeiro_nome\}\}/g, firstName)
               .replace(/\{\{nome\}\}/g, customer.name)
               .replace(/\{\{primeiro_nome\}\}/g, firstName)
-              .replace(/\{\{desconto\}\}/g, String(config.coupon_discount_percent))
-              .replace(/\{\{cupom\}\}/g, couponCode)
-              .replace(/\{\{validade\}\}/g, String(config.coupon_duration_days))
               // Legacy {…} placeholders (backward compatibility)
               .replace(/\{nome\}/g, customer.name)
-              .replace(/\{primeiro_nome\}/g, firstName)
-              .replace(/\{desconto\}/g, String(config.coupon_discount_percent))
-              .replace(/\{cupom\}/g, couponCode)
-              .replace(/\{validade\}/g, String(config.coupon_duration_days));
+              .replace(/\{primeiro_nome\}/g, firstName);
+            const message = fillBirthday(messageBase, { ...vars, cupom: couponCode, validade: String(config.coupon_duration_days) });
 
             let sent = false;
             let waSent = false, emailSent = false;
@@ -327,17 +357,12 @@ Deno.serve(async (req) => {
                     .replace(/\{primeiro_nome\}/g, firstName)
                     .replace(/\{cupom\}/g, couponCode);
 
-                  const emailBody = (config.email_body || message)
+                  const emailBodyBase = (config.email_body || message)
                     .replace(/\{\{cliente_nome\}\}/g, customer.name)
                     .replace(/\{\{cliente_primeiro_nome\}\}/g, firstName)
-                    .replace(/\{\{desconto\}\}/g, String(config.coupon_discount_percent))
-                    .replace(/\{\{cupom\}\}/g, couponCode)
-                    .replace(/\{\{validade\}\}/g, String(config.coupon_duration_days))
                     .replace(/\{nome\}/g, customer.name)
-                    .replace(/\{primeiro_nome\}/g, firstName)
-                    .replace(/\{desconto\}/g, String(config.coupon_discount_percent))
-                    .replace(/\{cupom\}/g, couponCode)
-                    .replace(/\{validade\}/g, String(config.coupon_duration_days));
+                    .replace(/\{primeiro_nome\}/g, firstName);
+                  const emailBody = fillBirthday(emailBodyBase, { ...vars, cupom: couponCode, validade: String(config.coupon_duration_days) });
 
                   // link de descadastro (obrigatório): quem clicar entra na lista de supressão
                   const unsub = await unsubscribeFor(supabase, supabaseUrl, tenantId, 'birthday', customer.email, customer.name);
@@ -390,7 +415,8 @@ Deno.serve(async (req) => {
               error_message: errorMsg,
               tokens_used: sent ? BIRTHDAY_TOKEN_COST : 0,
               metadata: {
-                discount_percent: config.coupon_discount_percent,
+                coupon_type: config.coupon_type, discount_percent: config.coupon_discount_percent, fixed_value: config.coupon_fixed_value,
+                cumulative: config.cumulative, personal: config.personal_coupon, min_order: config.min_order_value, max_discount: config.max_discount_value,
                 duration_days: config.coupon_duration_days,
               },
             });
