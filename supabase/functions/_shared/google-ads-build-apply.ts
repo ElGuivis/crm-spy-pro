@@ -198,15 +198,16 @@ export async function applyConversionGoal(
   const read = async () => (await q(ctx, `SELECT customer_conversion_goal.biddable FROM customer_conversion_goal WHERE customer_conversion_goal.category = '${a.category}' AND customer_conversion_goal.origin = '${a.origin}'`))[0];
   const before = await read();
   if (!before) return { ok: false, error: "Meta de conversao nao encontrada no Google Ads" };
-  const prev = before.customerConversionGoal?.biddable ?? null;
-  if (prev === false) return { ok: false, error: "Esta meta ja esta desligada para otimizacao de lances" };
+  // O Google omite o campo quando e false: so e "ligada" se vier true.
+  const prev = before.customerConversionGoal?.biddable === true;
+  if (!prev) return { ok: false, error: "Esta meta ja esta desligada para otimizacao de lances" };
   try {
     await mutateResource(ctx.creds, ctx.customerId, "customerConversionGoals:mutate", {
       update: { resourceName: `customers/${ctx.customerId}/customerConversionGoals/${a.category}~${a.origin}`, biddable: false }, updateMask: "biddable",
     });
   } catch (e) { return { ok: false, error: `O Google Ads recusou: ${(e as Error).message}` }; }
   const after = await read();
-  const confirmed = after?.customerConversionGoal?.biddable === false;
+  const confirmed = after?.customerConversionGoal?.biddable !== true;
   await audit(ctx, `goal:${a.category}~${a.origin}`, { biddable: prev }, { biddable: false, confirmed });
   if (!confirmed) return { ok: false, error: "O Google respondeu, mas nao consegui confirmar a mudanca. Confira em Metas de conversao." };
   return { ok: true, detail: { category: a.category, origin: a.origin } };

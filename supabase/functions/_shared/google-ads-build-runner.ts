@@ -39,7 +39,8 @@ async function reconcile(supabase: SupabaseClient, accountId: string, tenantId: 
     }
   }
   const live = new Set(proposals.map((p) => p.key));
-  for (const old of existing) if (old.status === "pending" && !live.has(old.dedupe_key)) await supabase.from("google_ads_recommendations").update({ status: "expired" }).eq("id", old.id);
+  // Pendente OU que falhou e deixou de valer (ex.: a situacao ja foi resolvida) sai da lista.
+  for (const old of existing) if ((old.status === "pending" || old.status === "failed") && !live.has(old.dedupe_key)) await supabase.from("google_ads_recommendations").update({ status: "expired", error: null }).eq("id", old.id);
 }
 
 // ---------------------------------------------------------------------------
@@ -105,7 +106,7 @@ export async function proposeConversionFixes(supabase: SupabaseClient, accountId
     const proposals: Proposal[] = [];
     for (const g of must(goals, "metas") as R[]) {
       const cat = String(g.category), org = String(g.origin);
-      if (!NOT_SALE.includes(cat) || g.biddable === false) continue;
+      if (!NOT_SALE.includes(cat) || g.biddable !== true) continue; // so propoe se a meta esta de fato ligada
       const primaries = acts.filter((a) => a.category === cat && a.origin === org && a.status === "ENABLED" && a.primary_for_goal === true);
       if (!primaries.length) continue;
       proposals.push({

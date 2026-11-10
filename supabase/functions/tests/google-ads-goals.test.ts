@@ -30,7 +30,7 @@ async function withGoogle(goals: Record<string, boolean | null>, mutations: Arra
     if (url.includes("googleAds:search")) {
       const m = /category = '([A-Z_]+)' AND customer_conversion_goal.origin = '([A-Z_]+)'/.exec(body.query);
       const key = m ? `${m[1]}~${m[2]}` : "";
-      return Promise.resolve(jsonRes({ results: key in goals ? [{ customerConversionGoal: goals[key] === null ? {} : { biddable: goals[key] } }] : [] }));
+      return Promise.resolve(jsonRes({ results: key in goals ? [{ customerConversionGoal: goals[key] === true ? { biddable: true } : {} }] : [] }));
     }
     for (const op of body.operations) {
       mutations.push(op);
@@ -72,14 +72,23 @@ Deno.test("meta de conversao: NUNCA desliga a meta de COMPRA; nem origem estranh
   assertEquals(muts.length, 0);
 });
 
-Deno.test("meta com biddable nao informado (None) tambem pode ser desligada", async () => {
+Deno.test("meta com o campo AUSENTE (o Google omite quando e false) ja esta desligada: nada a fazer", async () => {
   const goals: Record<string, boolean | null> = { "PHONE_CALL_LEAD~CALL_FROM_ADS": null };
   const muts: Array<Record<string, any>> = [];
   await withGoogle(goals, muts, async () => {
     const r = await applyConversionGoal(fakeDb(ACC).client, CREDS, { ...base, category: "PHONE_CALL_LEAD", origin: "CALL_FROM_ADS" });
+    assert(!r.ok && r.error!.includes("ja esta desligada"));
+  });
+  assertEquals(muts.length, 0);
+});
+
+Deno.test("confirmacao: depois de desligar o Google devolve o campo ausente e isso conta como confirmado (o bug do 422)", async () => {
+  const goals: Record<string, boolean | null> = { "BEGIN_CHECKOUT~WEBSITE": true };
+  const muts: Array<Record<string, any>> = [];
+  await withGoogle(goals, muts, async () => {
+    const r = await applyConversionGoal(fakeDb(ACC).client, CREDS, { ...base, category: "BEGIN_CHECKOUT", origin: "WEBSITE" });
     assertEquals(r.ok, true);
   });
-  assertEquals(muts.length, 1);
 });
 
 Deno.test("desfazer meta: volta 'otimizar lances' para ligado", async () => {

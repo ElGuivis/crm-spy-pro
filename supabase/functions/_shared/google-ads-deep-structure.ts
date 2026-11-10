@@ -181,7 +181,8 @@ const conversionGoals: Dataset = {
     const rows = await search(ctx, "SELECT customer_conversion_goal.category, customer_conversion_goal.origin, customer_conversion_goal.biddable FROM customer_conversion_goal");
     return rows.map((r) => ({
       ...base(ctx), category: str(r.customerConversionGoal?.category) ?? "UNKNOWN", origin: str(r.customerConversionGoal?.origin) ?? "UNKNOWN",
-      biddable: typeof r.customerConversionGoal?.biddable === "boolean" ? r.customerConversionGoal.biddable : null,
+      // O Google OMITE o campo quando o valor e false (proto3): ausente = desligado.
+      biddable: r.customerConversionGoal?.biddable === true,
     }));
   },
 };
