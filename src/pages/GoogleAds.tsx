@@ -133,7 +133,7 @@ const GoogleAds = () => {
               <DataBrowser accountId={account.id} />
             </TabsContent>
 
-            <TabsContent value="activity">
+            <TabsContent value="activity" className="space-y-6">
               <OutcomesCard accountId={account.id} />
               <ActivityCard
                 rows={activity.data ?? []} campaigns={data.campaigns} canEdit={canEdit}
