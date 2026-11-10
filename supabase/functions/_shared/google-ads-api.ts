@@ -158,7 +158,7 @@ async function postWithRetry(
 export async function mutateResource(
   creds: GoogleAdsCredentials,
   customerId: string,
-  path: "campaigns:mutate" | "campaignBudgets:mutate" | "campaignCriteria:mutate" | "adGroupCriteria:mutate" | "adGroupAds:mutate",
+  path: "campaigns:mutate" | "campaignBudgets:mutate" | "customerConversionGoals:mutate" | "campaignCriteria:mutate" | "adGroupCriteria:mutate" | "adGroupAds:mutate",
   operation: Record<string, unknown> | Record<string, unknown>[],
   fetchFn: FetchFn = fetch,
 ): Promise<unknown> {

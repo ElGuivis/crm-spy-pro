@@ -20,6 +20,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useGoogleAdsAccount, useGoogleAdsActions, useGoogleAdsData } from "@/hooks/useGoogleAds";
 import { useGoogleAdsActivity, useGoogleAdsHistory, useGoogleAdsStrategy } from "@/hooks/useGoogleAdsInsights";
 import { useGoogleAdsBuildActions, useGoogleAdsBuildProposals } from "@/hooks/useGoogleAdsBuild";
+import { useGoogleAdsSuggestions, useImplementActions, type Implementer } from "@/hooks/useGoogleAdsImplement";
 import { useGoogleAdsDiscoveries, useGoogleAdsDiscoveryActions } from "@/hooks/useGoogleAdsDiscoveries";
 import { useGoogleAdsPlanActions } from "@/hooks/useGoogleAdsPlan";
 
@@ -37,6 +38,13 @@ const GoogleAds = () => {
   const planActions = useGoogleAdsPlanActions(accountId);
   const build = useGoogleAdsBuildProposals(accountId);
   const buildActions = useGoogleAdsBuildActions(accountId);
+  const suggestions = useGoogleAdsSuggestions(accountId);
+  const implActions = useImplementActions(accountId);
+  const impl: Implementer = {
+    suggestions: suggestions.data ?? [], ...implActions,
+    canApply: canEdit && account?.mode === "approval",
+    blockedReason: !canEdit ? "Somente administradores implementam." : account?.mode !== "approval" ? "Ative o modo “com aprovação” na Estratégia recomendada para poder implementar." : null,
+  };
   const discoveries = useGoogleAdsDiscoveries(accountId);
   const discoveryActions = useGoogleAdsDiscoveryActions(accountId);
   const error = accountError ?? dataError ?? history.error ?? strategy.error;
@@ -70,26 +78,27 @@ const GoogleAds = () => {
 
             <TabsContent value="overview" className="space-y-6">
               <AccountStatusCard account={account} budgets={data.budgets} syncing={syncNow.isPending} onSync={() => syncNow.mutate()} />
-              <AlertsCard alerts={data.alerts} />
+              <AlertsCard alerts={data.alerts} impl={impl} onSync={() => syncNow.mutate()} syncing={syncNow.isPending} />
               <StrategyCard
                 account={account} campaigns={data.campaigns} report={strategy.data?.report ?? null}
                 plan={strategy.data?.plan ?? []} canEdit={canEdit} actions={planActions}
               />
               <BuildCards
                 negatives={build.data?.negatives ?? []} rebuilds={build.data?.rebuilds ?? []} campaigns={data.campaigns} actions={buildActions}
+                goals={impl.suggestions.filter((s) => s.kind === "set_conversion_goal")} impl={impl}
                 aiOn={(account.guardrails as { ai_enabled?: boolean } | null)?.ai_enabled === true}
                 canApply={canEdit && account.mode === "approval"}
                 blockedReason={!canEdit ? "Somente administradores aplicam mudanças." : account.mode !== "approval" ? "Ative o modo “com aprovação” na Estratégia recomendada para poder aplicar." : null}
               />
-              <AiAdvisorCard account={account} canEdit={canEdit} />
+              <AiAdvisorCard account={account} canEdit={canEdit} impl={impl} />
               <BudgetCapCard
                 account={account} campaigns={data.campaigns} canEdit={canEdit}
-                saving={saveMonthlyCap.isPending} onSave={(cap) => saveMonthlyCap.mutate(cap)}
+                saving={saveMonthlyCap.isPending} onSave={(cap) => saveMonthlyCap.mutate(cap)} impl={impl}
               />
             </TabsContent>
 
             <TabsContent value="discoveries" className="space-y-6">
-              <DiscoveriesCard account={account} report={discoveries.data ?? null} canEdit={canEdit} actions={discoveryActions} />
+              <DiscoveriesCard account={account} report={discoveries.data ?? null} canEdit={canEdit} actions={discoveryActions} impl={impl} />
               {discoveries.data && <InsightTables r={discoveries.data} />}
             </TabsContent>
 
@@ -99,14 +108,14 @@ const GoogleAds = () => {
                   <HistoryCard monthly={history.data?.monthly ?? []} />
                   <CampaignsTable
                     campaigns={data.campaigns} spend={data.spend} lifetime={history.data?.lifetime ?? new Map()}
-                    analysis={strategy.data?.report?.campaigns ?? []}
+                    analysis={strategy.data?.report?.campaigns ?? []} impl={impl}
                   />
                 </>
               )}
             </TabsContent>
 
             <TabsContent value="conversions">
-              <ConversionsCard actions={history.data?.actions ?? []} lifetime={history.data?.conversions ?? []} />
+              <ConversionsCard actions={history.data?.actions ?? []} lifetime={history.data?.conversions ?? []} impl={impl} />
             </TabsContent>
 
             <TabsContent value="data">

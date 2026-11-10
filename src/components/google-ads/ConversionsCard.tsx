@@ -2,7 +2,10 @@ import { AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ImplementButton } from "@/components/google-ads/ImplementButton";
+import type { Implementer } from "@/hooks/useGoogleAdsImplement";
 import type { ConversionActionRow, ConversionLifetimeRow } from "@/hooks/useGoogleAdsInsights";
+import { byKind } from "@/lib/googleAdsImplement";
 import { brl } from "@/lib/googleAds";
 import { fmtMonth } from "@/lib/googleAdsStrategy";
 
@@ -14,10 +17,10 @@ const CATEGORY_LABEL: Record<string, string> = {
 /** Categorias que não são venda: se forem "principais", o Google otimiza os lances para elas. */
 const NOT_SALE = new Set(["DOWNLOAD", "PHONE_CALL_LEAD", "CONTACT", "GET_DIRECTIONS", "PAGE_VIEW", "ENGAGEMENT"]);
 
-interface Props { actions: ConversionActionRow[]; lifetime: ConversionLifetimeRow[] }
+interface Props { actions: ConversionActionRow[]; lifetime: ConversionLifetimeRow[]; impl: Implementer }
 
 /** O que a conta conta como "conversão": se as conversões vêm de venda de verdade ou de ruído (ligações, instalações). */
-export function ConversionsCard({ actions, lifetime }: Props) {
+export function ConversionsCard({ actions, lifetime, impl }: Props) {
   const byName = new Map<string, ConversionActionRow[]>();
   for (const a of actions) byName.set(a.name, [...(byName.get(a.name) ?? []), a]);
   const rows = lifetime.filter((c) => Number(c.conversions) > 0 || Number(c.conversions_value) > 0).slice(0, 12);
@@ -35,6 +38,10 @@ export function ConversionsCard({ actions, lifetime }: Props) {
             <div className="flex items-center gap-2 font-medium"><AlertTriangle className="h-4 w-4" /> Pontos de atenção na medição</div>
             {noisy.length > 0 && <p>Estas ações estão ativas e como <strong>principais</strong>, mas não são venda: {noisy.map((a) => a.name).join("; ")}. Elas podem fazer os lances otimizarem para o objetivo errado.</p>}
             {hidden.length > 0 && <p>{hidden.length} ação(ões) ocultas no Google Ads ({hidden.map((a) => a.name).join("; ")}).</p>}
+            <div className="pt-1">
+              <ImplementButton impl={impl} recs={byKind(impl.suggestions, "set_conversion_goal")} label="Parar de otimizar lances para o que não é venda"
+                manual="O Google não deixa editar essas conversões automáticas; o ajuste é nas metas de conversão da conta." />
+            </div>
           </div>
         )}
         <Table>

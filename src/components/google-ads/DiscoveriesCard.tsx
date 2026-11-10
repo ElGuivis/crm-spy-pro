@@ -6,7 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { ImplementButton } from "@/components/google-ads/ImplementButton";
 import type { GoogleAdsAccount } from "@/hooks/useGoogleAds";
+import type { Implementer } from "@/hooks/useGoogleAdsImplement";
+import { MANUAL_REASON, recsForFinding } from "@/lib/googleAdsImplement";
 import type { useGoogleAdsDiscoveryActions } from "@/hooks/useGoogleAdsDiscoveries";
 import { FINDING_LABEL, FINDING_VARIANT, money, pct, type InsightsReport } from "@/lib/googleAdsInsights";
 import { fmtRoas } from "@/lib/googleAdsStrategy";
@@ -16,12 +19,13 @@ interface Props {
   report: InsightsReport | null;
   canEdit: boolean;
   actions: ReturnType<typeof useGoogleAdsDiscoveryActions>;
+  impl: Implementer;
 }
 
 const parseTerms = (text: string) => [...new Set(text.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean))];
 
 /** O que os dados detalhados do Google revelam (calculado por regras, sem IA): achados, marca x demais buscas e o que fazer. */
-export function DiscoveriesCard({ account, report, canEdit, actions }: Props) {
+export function DiscoveriesCard({ account, report, canEdit, actions, impl }: Props) {
   const { syncAll, recalc, saveBrandTerms } = actions;
   const saved = report?.brand_terms ?? [];
   const [terms, setTerms] = useState(saved.join(", "));
@@ -64,6 +68,7 @@ export function DiscoveriesCard({ account, report, canEdit, actions }: Props) {
                     <span className="font-medium">{f.title}</span>
                   </div>
                   <p className="text-sm text-muted-foreground">{f.detail}</p>
+                  <div className="mt-2"><ImplementButton impl={impl} recs={recsForFinding(f.id, impl.suggestions)} manual={MANUAL_REASON[f.id]} /></div>
                 </div>
               ))}
             </div>

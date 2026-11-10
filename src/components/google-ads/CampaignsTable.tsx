@@ -3,7 +3,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { QuickActions } from "@/components/google-ads/QuickActions";
 import type { CampaignSpend, GoogleAdsCampaign } from "@/hooks/useGoogleAds";
+import type { Implementer } from "@/hooks/useGoogleAdsImplement";
 import type { LifetimeRow } from "@/hooks/useGoogleAdsInsights";
 import { CAMPAIGN_STATUS_LABEL, CHANNEL_LABEL, SERVING_STATUS_LABEL, brl } from "@/lib/googleAds";
 import { VERDICT_LABEL, VERDICT_VARIANT, fmtRoas, type CampaignAnalysis } from "@/lib/googleAdsStrategy";
@@ -16,10 +18,11 @@ interface Props {
   spend: Map<number, CampaignSpend>;
   lifetime: Map<number, LifetimeRow>;
   analysis: CampaignAnalysis[];
+  impl: Implementer;
 }
 
 /** Todas as campanhas com o histórico da vida inteira, o último dia que gastaram e o veredito do consultor. */
-export function CampaignsTable({ campaigns, spend, lifetime, analysis }: Props) {
+export function CampaignsTable({ campaigns, spend, lifetime, analysis, impl }: Props) {
   const [showRemoved, setShowRemoved] = useState(false);
   const [onlySpent, setOnlySpent] = useState(true);
   const byId = new Map(analysis.map((a) => [a.campaign_id, a]));
@@ -49,7 +52,7 @@ export function CampaignsTable({ campaigns, spend, lifetime, analysis }: Props) 
               <TableHead>Campanha</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Orçamento/dia</TableHead>
               <TableHead className="text-right">Gasto total</TableHead><TableHead className="text-right">ROAS vida</TableHead>
               <TableHead className="text-right">ROAS recente</TableHead><TableHead>Último gasto</TableHead>
-              <TableHead className="text-right">Gasto 30d</TableHead><TableHead>Veredito</TableHead>
+              <TableHead className="text-right">Gasto 30d</TableHead><TableHead>Veredito</TableHead><TableHead>Ação</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -78,6 +81,10 @@ export function CampaignsTable({ campaigns, spend, lifetime, analysis }: Props) 
                   <TableCell className="text-right">{s ? brl(s.cost_micros) : "—"}</TableCell>
                   <TableCell className="max-w-[200px]">
                     {a ? <Badge variant={VERDICT_VARIANT[a.verdict]} title={a.reason}>{VERDICT_LABEL[a.verdict]}</Badge> : "—"}
+                  </TableCell>
+                  <TableCell>
+                    <QuickActions campaign={c} impl={impl}
+                      suggestedBudgetBrl={((impl.suggestions.find((x) => Number(x.payload.campaign_id) === c.campaign_id && (x.kind === "enable_campaign" || x.kind === "adjust_budget"))?.payload.daily_budget_micros as number | undefined) ?? 0) / 1e6 || null} />
                   </TableCell>
                 </TableRow>
               );

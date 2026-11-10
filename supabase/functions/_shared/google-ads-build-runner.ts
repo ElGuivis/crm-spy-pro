@@ -86,6 +86,46 @@ export async function proposeNegatives(supabase: SupabaseClient, accountId: stri
 }
 
 // ---------------------------------------------------------------------------
+/** Categorias que NAO sao venda: se a meta e "otimizar lances" e ha conversao principal ativa nela, os lances sao treinados para o objetivo errado. */
+const NOT_SALE = ["DOWNLOAD", "PHONE_CALL_LEAD", "CONTACT", "GET_DIRECTIONS", "PAGE_VIEW", "ENGAGEMENT", "BEGIN_CHECKOUT", "ADD_TO_CART"];
+const GOAL_LABEL: Record<string, string> = {
+  DOWNLOAD: "Instalacao de app", PHONE_CALL_LEAD: "Ligacoes de campanha inteligente", CONTACT: "Contato", GET_DIRECTIONS: "Rotas no mapa",
+  PAGE_VIEW: "Visualizacao de pagina", ENGAGEMENT: "Engajamento", BEGIN_CHECKOUT: "Inicio do checkout", ADD_TO_CART: "Adicionar ao carrinho",
+};
+
+export async function proposeConversionFixes(supabase: SupabaseClient, accountId: string): Promise<{ ok: boolean; proposals?: number; error?: string }> {
+  try {
+    const acc = must(await supabase.from("google_ads_accounts").select("tenant_id").eq("id", accountId).limit(1), "conta")[0] as { tenant_id: string } | undefined;
+    if (!acc) throw new Error("conta nao encontrada");
+    const [goals, actions] = await Promise.all([
+      supabase.from("google_ads_conversion_goals").select("category, origin, biddable").eq("account_id", accountId),
+      supabase.from("google_ads_conversion_actions").select("name, category, origin, status, primary_for_goal").eq("account_id", accountId),
+    ]);
+    const acts = must(actions, "acoes") as R[];
+    const proposals: Proposal[] = [];
+    for (const g of must(goals, "metas") as R[]) {
+      const cat = String(g.category), org = String(g.origin);
+      if (!NOT_SALE.includes(cat) || g.biddable === false) continue;
+      const primaries = acts.filter((a) => a.category === cat && a.origin === org && a.status === "ENABLED" && a.primary_for_goal === true);
+      if (!primaries.length) continue;
+      proposals.push({
+        key: `goal:${cat}~${org}`,
+        fields: {
+          kind: "set_conversion_goal", severity: "medium", risk: "low",
+          title: `Parar de otimizar lances para "${GOAL_LABEL[cat] ?? cat}"`,
+          rationale: `A meta "${GOAL_LABEL[cat] ?? cat}" (${org}) esta marcada para otimizar lances, com ${primaries.length} conversao(oes) principal(is) ativa(s): ${primaries.map((p) => p.name).join("; ")}. Isso nao e venda e desvia o Google do que importa (compra). O Google nao deixa editar essas conversoes diretamente; desligar a meta resolve. Os dados continuam sendo medidos, so deixam de guiar os lances.`,
+          payload: { category: cat, origin: org, biddable: false, actions: primaries.map((p) => String(p.name)) },
+        },
+      });
+    }
+    await reconcile(supabase, accountId, acc.tenant_id, "goal:", proposals);
+    return { ok: true, proposals: proposals.length };
+  } catch (err) {
+    return { ok: false, error: (err instanceof Error ? err.message : String(err)).slice(0, 400) };
+  }
+}
+
+// ---------------------------------------------------------------------------
 export async function proposeRebuilds(supabase: SupabaseClient, accountId: string, report: StrategyReport): Promise<{ ok: boolean; proposals?: number; error?: string }> {
   try {
     const acc = must(await supabase.from("google_ads_accounts").select("tenant_id").eq("id", accountId).limit(1), "conta")[0] as { tenant_id: string } | undefined;

@@ -17,7 +17,7 @@ export const DATASET_NAMES = ALL_DATASETS.map((d) => d.name);
  *  structure = o que muda com frequencia (2x/dia); stats = desempenho detalhado recente (1x/dia); static = pesado e lento (semanal).
  */
 export const PRESETS: Record<string, string[]> = {
-  structure: ["account_settings", "campaign_settings", "ad_groups", "ads", "keywords", "negatives", "user_lists", "bidding_strategies",
+  structure: ["conversion_goals", "account_settings", "campaign_settings", "ad_groups", "ads", "keywords", "negatives", "user_lists", "bidding_strategies",
     "google_recommendations", "changes"],
   stats: ["impression_share", "campaign_conversions", "device_monthly", "search_terms"],
   static: ["hour_stats", "products", "landing_pages", "demographics", "geo", "asset_groups", "asset_group_assets"],

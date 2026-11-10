@@ -1,7 +1,10 @@
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ImplementButton } from "@/components/google-ads/ImplementButton";
 import type { GoogleAdsRecommendation } from "@/hooks/useGoogleAds";
+import type { Implementer } from "@/hooks/useGoogleAdsImplement";
+import { ALERT_MANUAL, alertRule, recsForAlert } from "@/lib/googleAdsImplement";
 import { SEVERITY_LABEL, SEVERITY_ORDER, asSeverity, type Severity } from "@/lib/googleAds";
 
 const SEVERITY_CLASS: Record<Severity, string> = {
@@ -20,7 +23,9 @@ function suggestedAction(rec: GoogleAdsRecommendation): string | null {
   return null;
 }
 
-export function AlertsCard({ alerts }: { alerts: GoogleAdsRecommendation[] }) {
+interface Props { alerts: GoogleAdsRecommendation[]; impl: Implementer; onSync: () => void; syncing: boolean }
+
+export function AlertsCard({ alerts, impl, onSync, syncing }: Props) {
   const sorted = [...alerts].sort(
     (a, b) => SEVERITY_ORDER[asSeverity(a.severity)] - SEVERITY_ORDER[asSeverity(b.severity)],
   );
@@ -50,6 +55,12 @@ export function AlertsCard({ alerts }: { alerts: GoogleAdsRecommendation[] }) {
               </div>
               <p className="text-sm text-muted-foreground">{rec.rationale}</p>
               {action && <p className="text-sm"><span className="font-medium">O que fazer:</span> {action}</p>}
+              <div className="pt-1">
+                {alertRule(rec.dedupe_key) === "R6"
+                  ? <ImplementButton impl={impl} recs={[]} run={{ label: "Atualizar agora", pending: syncing, onRun: onSync }} />
+                  : <ImplementButton impl={impl} recs={recsForAlert(rec.dedupe_key, impl.suggestions)} manual={ALERT_MANUAL[alertRule(rec.dedupe_key)]}
+                      label={alertRule(rec.dedupe_key) === "R7" ? "Ajustar orçamentos ao teto" : "Implementar"} />}
+              </div>
             </div>
           );
         })}

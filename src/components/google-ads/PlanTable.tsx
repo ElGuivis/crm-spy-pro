@@ -69,7 +69,7 @@ export function PlanTable({ plan, campaigns, canApply, blockedReason, applying, 
 
       <div className="flex flex-wrap items-center gap-3">
         <Button disabled={!canApply || applying || chosen.length === 0} onClick={() => setConfirm(true)}>
-          {applying ? "Aplicando no Google Ads…" : `Aplicar ${chosen.length} mudança(s) no Google Ads`}
+          {applying ? "Implementando no Google Ads…" : `Implementar ${chosen.length} mudança(s)`}
         </Button>
         {blockedReason && <span className="text-sm text-muted-foreground">{blockedReason}</span>}
       </div>
@@ -77,7 +77,7 @@ export function PlanTable({ plan, campaigns, canApply, blockedReason, applying, 
       <AlertDialog open={confirm} onOpenChange={setConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Aplicar no Google Ads?</AlertDialogTitle>
+            <AlertDialogTitle>Implementar no Google Ads?</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2">
                 <p>Estas mudanças serão feitas de verdade na conta, nesta ordem (pausas e reduções primeiro). Cada uma é conferida depois e fica no histórico, com botão de desfazer.</p>
@@ -91,7 +91,7 @@ export function PlanTable({ plan, campaigns, canApply, blockedReason, applying, 
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => onApply(chosen.map((r) => r.rec.id))}>Aplicar</AlertDialogAction>
+            <AlertDialogAction onClick={() => onApply(chosen.map((r) => r.rec.id))}>Implementar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

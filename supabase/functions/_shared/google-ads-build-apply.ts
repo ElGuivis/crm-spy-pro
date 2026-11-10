@@ -181,6 +181,38 @@ export async function applyRebuild(supabase: SupabaseClient, creds: GoogleAdsCre
 }
 
 // ---------------------------------------------------------------------------
+// Meta de conversao: deixar de otimizar lances para uma categoria que nao e venda
+// ---------------------------------------------------------------------------
+const SAFE_GOAL_CATEGORIES = ["DOWNLOAD", "PHONE_CALL_LEAD", "CONTACT", "GET_DIRECTIONS", "PAGE_VIEW", "ENGAGEMENT", "BEGIN_CHECKOUT", "ADD_TO_CART"];
+
+export async function applyConversionGoal(
+  supabase: SupabaseClient, creds: GoogleAdsCredentials,
+  a: { accountId: string; tenantId: string; actor: string; recommendationId?: string | null; category: string; origin: string },
+): Promise<BuildOutcome> {
+  const l = await loadCtx(supabase, creds, a);
+  if ("error" in l) return { ok: false, error: l.error };
+  const { ctx, mode } = l;
+  if (mode === "read_only") return { ok: false, error: READ_ONLY };
+  // Nunca desliga a meta de COMPRA: seria parar de otimizar para vendas.
+  if (!SAFE_GOAL_CATEGORIES.includes(a.category) || !/^[A-Z_]+$/.test(a.origin)) return { ok: false, error: "Esta meta de conversao nao pode ser alterada pelo sistema (so as que nao sao venda)." };
+  const read = async () => (await q(ctx, `SELECT customer_conversion_goal.biddable FROM customer_conversion_goal WHERE customer_conversion_goal.category = '${a.category}' AND customer_conversion_goal.origin = '${a.origin}'`))[0];
+  const before = await read();
+  if (!before) return { ok: false, error: "Meta de conversao nao encontrada no Google Ads" };
+  const prev = before.customerConversionGoal?.biddable ?? null;
+  if (prev === false) return { ok: false, error: "Esta meta ja esta desligada para otimizacao de lances" };
+  try {
+    await mutateResource(ctx.creds, ctx.customerId, "customerConversionGoals:mutate", {
+      update: { resourceName: `customers/${ctx.customerId}/customerConversionGoals/${a.category}~${a.origin}`, biddable: false }, updateMask: "biddable",
+    });
+  } catch (e) { return { ok: false, error: `O Google Ads recusou: ${(e as Error).message}` }; }
+  const after = await read();
+  const confirmed = after?.customerConversionGoal?.biddable === false;
+  await audit(ctx, `goal:${a.category}~${a.origin}`, { biddable: prev }, { biddable: false, confirmed });
+  if (!confirmed) return { ok: false, error: "O Google respondeu, mas nao consegui confirmar a mudanca. Confira em Metas de conversao." };
+  return { ok: true, detail: { category: a.category, origin: a.origin } };
+}
+
+// ---------------------------------------------------------------------------
 // Desfazer (a partir do audit_log)
 // ---------------------------------------------------------------------------
 export async function revertBuild(
@@ -189,6 +221,19 @@ export async function revertBuild(
 ): Promise<BuildOutcome> {
   const { data: row } = await supabase.from("google_ads_audit_log").select("id, entity, action, before_state, after_state")
     .eq("id", a.auditId).eq("tenant_id", a.tenantId).eq("account_id", a.accountId).maybeSingle();
+  const goal = /^goal:([A-Z_]+)~([A-Z_]+)$/.exec(row?.entity ?? "");
+  if (row && row.action === "apply" && goal) {
+    const lg = await loadCtx(supabase, creds, a);
+    if ("error" in lg) return { ok: false, error: lg.error };
+    if (lg.mode === "read_only") return { ok: false, error: READ_ONLY };
+    try {
+      await mutateResource(lg.ctx.creds, lg.ctx.customerId, "customerConversionGoals:mutate", {
+        update: { resourceName: `customers/${lg.ctx.customerId}/customerConversionGoals/${goal[1]}~${goal[2]}`, biddable: true }, updateMask: "biddable",
+      });
+    } catch (e) { return { ok: false, error: `O Google Ads recusou: ${(e as Error).message}` }; }
+    await audit(lg.ctx, row.entity as string, row.after_state, { reverted: true }, "revert");
+    return { ok: true };
+  }
   const m = /^(negatives|rebuild):(\d+)$/.exec(row?.entity ?? "");
   if (!row || row.action !== "apply" || !m) return { ok: false, error: "Registro nao pode ser desfeito" };
   const l = await loadCtx(supabase, creds, a);

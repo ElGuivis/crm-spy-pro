@@ -5,7 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ImplementButton } from "@/components/google-ads/ImplementButton";
 import type { GoogleAdsAccount, GoogleAdsCampaign } from "@/hooks/useGoogleAds";
+import type { Implementer } from "@/hooks/useGoogleAdsImplement";
+import { PLAN_KINDS, byKind } from "@/lib/googleAdsImplement";
 import { DAYS_PER_MONTH, brl, parseMoneyInput, readMonthlyCapMicros } from "@/lib/googleAds";
 
 const MAX_CAP_BRL = 10_000_000;
@@ -18,10 +21,11 @@ interface Props {
   canEdit: boolean;
   saving: boolean;
   onSave: (capBrl: number | null) => void;
+  impl: Implementer;
 }
 
 /** Teto de gastos por mês: o diagnóstico alerta quando os orçamentos diários das campanhas ativas o ultrapassam. */
-export function BudgetCapCard({ account, campaigns, canEdit, saving, onSave }: Props) {
+export function BudgetCapCard({ account, campaigns, canEdit, saving, onSave, impl }: Props) {
   const capMicros = readMonthlyCapMicros(account.guardrails);
   const [text, setText] = useState(asInput(capMicros));
   useEffect(() => setText(asInput(capMicros)), [capMicros]);
@@ -67,13 +71,14 @@ export function BudgetCapCard({ account, campaigns, canEdit, saving, onSave }: P
             <AlertDescription>
               Os orçamentos diários das campanhas ativas somam cerca de {brl(projected)} por mês, acima do teto de {brl(capMicros)}.
               O Google pode gastar até o dobro do orçamento diário em um dia, então a verba pode acabar em poucos dias.
-              Reduza os orçamentos diários no Google Ads ou pause campanhas.
+              Ajuste os orçamentos ao teto com o plano abaixo.
             </AlertDescription>
+            <div className="pt-2"><ImplementButton impl={impl} recs={byKind(impl.suggestions, ...PLAN_KINDS).filter((x) => x.kind !== "enable_campaign")} label="Ajustar orçamentos ao teto" /></div>
           </Alert>
         )}
         <p className="text-xs text-muted-foreground">
           O teto é um limite de segurança do sistema: ele gera alertas e, no futuro, impede que os agentes proponham gastar além dele.
-          Ele não altera nada na sua conta do Google Ads.
+          O teto em si não altera a conta; os botões “Implementar” é que fazem as mudanças, sempre respeitando esse limite.
         </p>
       </CardContent>
     </Card>

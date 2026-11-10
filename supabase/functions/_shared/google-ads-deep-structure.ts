@@ -175,4 +175,15 @@ const changes: Dataset = {
   },
 };
 
-export const STRUCTURE_DATASETS: Dataset[] = [adGroups, ads, keywords, assetGroups, assetGroupAssets, negatives, userLists, biddingStrategies, googleRecs, changes];
+const conversionGoals: Dataset = {
+  name: "conversion_goals", table: "google_ads_conversion_goals", conflict: "account_id,category,origin", snap: null,
+  async fetch(ctx) {
+    const rows = await search(ctx, "SELECT customer_conversion_goal.category, customer_conversion_goal.origin, customer_conversion_goal.biddable FROM customer_conversion_goal");
+    return rows.map((r) => ({
+      ...base(ctx), category: str(r.customerConversionGoal?.category) ?? "UNKNOWN", origin: str(r.customerConversionGoal?.origin) ?? "UNKNOWN",
+      biddable: typeof r.customerConversionGoal?.biddable === "boolean" ? r.customerConversionGoal.biddable : null,
+    }));
+  },
+};
+
+export const STRUCTURE_DATASETS: Dataset[] = [conversionGoals, adGroups, ads, keywords, assetGroups, assetGroupAssets, negatives, userLists, biddingStrategies, googleRecs, changes];

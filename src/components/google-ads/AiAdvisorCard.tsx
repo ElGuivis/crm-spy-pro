@@ -7,7 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { ImplementButton } from "@/components/google-ads/ImplementButton";
 import type { GoogleAdsAccount } from "@/hooks/useGoogleAds";
+import type { Implementer } from "@/hooks/useGoogleAdsImplement";
+import { PLAN_KINDS, byKind } from "@/lib/googleAdsImplement";
 import { useGoogleAdsAiActions, useGoogleAdsAiAdvice, useGoogleAdsAiProviders } from "@/hooks/useGoogleAdsAi";
 
 const MAX_QUESTION = 500;
@@ -40,10 +43,10 @@ function AdviceText({ text }: { text: string }) {
   );
 }
 
-interface Props { account: GoogleAdsAccount; canEdit: boolean }
+interface Props { account: GoogleAdsAccount; canEdit: boolean; impl: Implementer }
 
 /** Consultor com IA: escolhe entre as IAs já integradas no CRM e pede um parecer sobre retomar x recriar campanhas. */
-export function AiAdvisorCard({ account, canEdit }: Props) {
+export function AiAdvisorCard({ account, canEdit, impl }: Props) {
   const saved = readAi(account.guardrails);
   const providers = useGoogleAdsAiProviders(canEdit);
   const advice = useGoogleAdsAiAdvice(account.id);
@@ -129,7 +132,11 @@ export function AiAdvisorCard({ account, canEdit }: Props) {
             </div>
             {advice.data.question && <p className="text-xs italic text-muted-foreground">Pergunta: {advice.data.question}</p>}
             <AdviceText text={advice.data.text} />
-            <p className="border-t pt-2 text-xs text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-3 border-t pt-2">
+              <ImplementButton impl={impl} recs={byKind(impl.suggestions, ...PLAN_KINDS)} label="Implementar o plano de orçamento" manual="O plano de orçamento das regras já está aplicado." />
+              <span className="text-xs text-muted-foreground">A IA só opina; o botão aplica o plano calculado pelas regras (nunca o texto da IA).</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
               A IA pode errar e não conhece margem, estoque nem promoções. Trate como opinião e confira os números. Quem aplica mudanças são as regras e o seu clique.
             </p>
           </div>

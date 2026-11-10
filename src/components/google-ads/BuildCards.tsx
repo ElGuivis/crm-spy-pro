@@ -10,7 +10,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ImplementButton } from "@/components/google-ads/ImplementButton";
 import type { GoogleAdsCampaign } from "@/hooks/useGoogleAds";
+import type { Implementer } from "@/hooks/useGoogleAdsImplement";
+import type { Suggestion } from "@/lib/googleAdsImplement";
 import type { NegativeProposal, RebuildProposal, useGoogleAdsBuildActions } from "@/hooks/useGoogleAdsBuild";
 import { brl } from "@/lib/googleAds";
 
@@ -50,7 +53,7 @@ function NegativeCard({ p, c }: { p: NegativeProposal; c: Common }) {
         {p.error && <p className="text-xs text-destructive">Falhou: {p.error}</p>}
         <div className="flex flex-wrap items-center gap-3">
           <Button disabled={!c.canApply || chosen.length === 0 || c.actions.apply.isPending} onClick={() => setConfirm(true)}>
-            {c.actions.apply.isPending ? "Aplicando…" : `Negativar ${chosen.length} termo(s) (exata)`}
+            {c.actions.apply.isPending ? "Implementando…" : `Implementar: negativar ${chosen.length} termo(s)`}
           </Button>
           {c.blockedReason && <span className="text-sm text-muted-foreground">{c.blockedReason}</span>}
         </div>
@@ -136,7 +139,7 @@ function RebuildCard({ p, c, aiOn }: { p: RebuildProposal; c: Common; aiOn: bool
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="secondary" disabled={!c.canApply || busy} onClick={() => c.actions.saveDraft.mutate({ id: p.id, patch: patch() })}>Salvar rascunho</Button>
           <Button disabled={!c.canApply || busy || problems.length > 0 || noAd || kws.length === 0} onClick={() => setConfirm(true)}>
-            {c.actions.apply.isPending ? "Aplicando no Google Ads…" : "Aplicar no Google Ads"}
+            {c.actions.apply.isPending ? "Implementando no Google Ads…" : "Implementar no Google Ads"}
           </Button>
           {c.blockedReason && <span className="text-sm text-muted-foreground">{c.blockedReason}</span>}
         </div>
@@ -168,17 +171,31 @@ function RebuildCard({ p, c, aiOn }: { p: RebuildProposal; c: Common; aiOn: bool
   );
 }
 
-interface Props extends Common { negatives: NegativeProposal[]; rebuilds: RebuildProposal[]; aiOn: boolean }
+interface Props extends Common { negatives: NegativeProposal[]; rebuilds: RebuildProposal[]; aiOn: boolean; goals: Suggestion[]; impl: Implementer }
 
 /** Propostas de construção a partir dos dados: reconstruir campanhas boas que não veiculam e negativar termos sem retorno. */
-export function BuildCards({ negatives, rebuilds, aiOn, ...c }: Props) {
-  if (!negatives.length && !rebuilds.length) return null;
+export function BuildCards({ negatives, rebuilds, aiOn, goals, impl, ...c }: Props) {
+  if (!negatives.length && !rebuilds.length && !goals.length) return null;
   return (
-    <div className="space-y-4">
+    <div id="propostas-dados" className="scroll-mt-20 space-y-4">
       <div>
         <h3 className="text-lg font-semibold">Propostas a partir dos dados</h3>
         <p className="text-sm text-muted-foreground">Nada é enviado ao Google sem o seu clique. Cada aplicação é conferida depois e pode ser desfeita.</p>
       </div>
+      {goals.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Metas de conversão: o que o Google está otimizando</CardTitle>
+            <p className="text-sm text-muted-foreground">Estas metas não são venda, mas estão guiando os lances. Desligar não apaga dados: só tira o peso delas na otimização.</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <ul className="space-y-2 text-sm">
+              {goals.map((g) => <li key={g.id}><strong>{g.title}</strong><div className="text-muted-foreground">{g.rationale}</div></li>)}
+            </ul>
+            <ImplementButton impl={impl} recs={goals} label={`Implementar: desligar ${goals.length} meta(s)`} size="default" />
+          </CardContent>
+        </Card>
+      )}
       {rebuilds.map((p) => <RebuildCard key={p.id} p={p} c={c} aiOn={aiOn} />)}
       {negatives.map((p) => <NegativeCard key={p.id} p={p} c={c} />)}
     </div>

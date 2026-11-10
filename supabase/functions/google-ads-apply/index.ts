@@ -5,21 +5,22 @@ import { requireUserAuth } from "../_shared/auth-guard.ts";
 import { createLogger, getCorrelationId } from "../_shared/correlation.ts";
 import { loadCredentials } from "../_shared/google-ads-api.ts";
 import { APPLY_KINDS, applyChange, orderPlan, type ApplyKind } from "../_shared/google-ads-apply-core.ts";
-import { applyNegatives, applyRebuild, revertBuild } from "../_shared/google-ads-build-apply.ts";
+import { applyConversionGoal, applyNegatives, applyRebuild, revertBuild } from "../_shared/google-ads-build-apply.ts";
 import { diagnoseAccount } from "../_shared/google-ads-diagnosis-runner.ts";
-import { sanitizeDraftPatch } from "../_shared/google-ads-build-draft.ts";
+import { parseQuickAction, sanitizeDraftPatch } from "../_shared/google-ads-build-draft.ts";
 
 /**
  * google-ads-apply — AUTHENTICATED, somente administradores do tenant. UNICA funcao que ESCREVE no Google Ads.
  *  - action "apply":  { account_id, recommendation_ids: uuid[] (1..10) }  aplica recomendacoes pendentes, na ordem segura.
  *  - action "revert": { account_id, audit_id }  desfaz uma aplicacao anterior (volta ao estado "antes" do log).
+ *  - action "quick": { account_id, campaign_id, op: pause|enable|set_budget, daily_budget_brl? } cria a proposta na hora e aplica pelo mesmo caminho (mesmas travas).
  *  - action "update_draft": { account_id, recommendation_id, patch }  ajusta o rascunho de uma proposta de construcao (so subconjunto do que foi proposto + texto do anuncio).
  * Tipos de proposta: orcamento/pausar/ligar (apply-core), palavras negativas e reconstrucao de campanha de Pesquisa (build-apply).
  * Todas as travas ficam em _shared/google-ads-apply-core.ts e valem aqui no servidor, nao na tela.
  */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_ITEMS = 10;
-const BUILD_KINDS = ["add_negative_keywords", "rebuild_search_structure"];
+const BUILD_KINDS = ["add_negative_keywords", "rebuild_search_structure", "set_conversion_goal"];
 
 serve(async (req) => {
   const cid = getCorrelationId(req);
@@ -34,7 +35,7 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const accountId = typeof body.account_id === "string" ? body.account_id : "";
     if (!UUID_RE.test(accountId)) return json({ error: "account_id invalido" }, 400);
-    if (body.action !== "apply" && body.action !== "revert" && body.action !== "update_draft") return json({ error: "Acao desconhecida" }, 400);
+    if (body.action !== "apply" && body.action !== "revert" && body.action !== "update_draft" && body.action !== "quick") return json({ error: "Acao desconhecida" }, 400);
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -53,7 +54,7 @@ serve(async (req) => {
       if (!UUID_RE.test(auditId)) return json({ error: "audit_id invalido" }, 400);
       const { data: row } = await supabase.from("google_ads_audit_log").select("id, entity, action, before_state")
         .eq("id", auditId).eq("tenant_id", tenantId).eq("account_id", accountId).maybeSingle();
-      if (/^(negatives|rebuild):\d+$/.test(row?.entity ?? "")) {
+      if (/^(negatives|rebuild):\d+$|^goal:[A-Z_]+~[A-Z_]+$/.test(row?.entity ?? "")) {
         const r = await revertBuild(supabase, creds, { accountId, tenantId, actor, auditId });
         return json({ results: [{ audit_id: auditId, ...r }] }, r.ok ? 200 : 422);
       }
@@ -81,7 +82,20 @@ serve(async (req) => {
       return json({ ok: true, payload: next.payload });
     }
 
-    const ids: unknown = body.recommendation_ids;
+    let ids: unknown = body.recommendation_ids;
+    if (body.action === "quick") {
+      const cid2 = Number(body.campaign_id);
+      const { data: camp } = await supabase.from("google_ads_campaigns").select("campaign_id, name").eq("account_id", accountId).eq("campaign_id", Number.isInteger(cid2) ? cid2 : -1).maybeSingle();
+      if (!camp) return json({ error: "Campanha nao encontrada nesta conta" }, 404);
+      const quick = parseQuickAction(body, String(camp.name));
+      if (!quick.ok) return json({ error: quick.error }, 400);
+      const { data: created, error: insErr } = await supabase.from("google_ads_recommendations").insert({
+        tenant_id: tenantId, account_id: accountId, agent: "manual_action", kind: quick.kind, severity: "medium", risk: quick.kind === "pause_campaign" ? "low" : "medium",
+        title: quick.title, rationale: "Acao pedida por voce direto na tabela de campanhas.", payload: quick.payload, status: "pending",
+      }).select("id").single();
+      if (insErr || !created) throw new Error(insErr?.message ?? "falha ao registrar a acao");
+      ids = [created.id];
+    }
     if (!Array.isArray(ids) || ids.length < 1 || ids.length > MAX_ITEMS || !ids.every((i) => typeof i === "string" && UUID_RE.test(i))) {
       return json({ error: `recommendation_ids deve ter de 1 a ${MAX_ITEMS} ids validos` }, 400);
     }
@@ -100,11 +114,13 @@ serve(async (req) => {
     const results: Array<{ recommendation_id: string; ok: boolean; error?: string; before?: unknown; after?: unknown }> = [];
     for (const r of ordered) {
       const campaignId = Number(r.payload.campaign_id);
-      if (!Number.isInteger(campaignId) || campaignId <= 0) {
+      if (r.kind !== "set_conversion_goal" && (!Number.isInteger(campaignId) || campaignId <= 0)) {
         results.push({ recommendation_id: r.id, ok: false, error: "campaign_id invalido na recomendacao" });
         break;
       }
-      const out = r.kind === "add_negative_keywords"
+      const out = r.kind === "set_conversion_goal"
+        ? await applyConversionGoal(supabase, creds, { accountId, tenantId, actor, recommendationId: r.id, category: String(r.payload.category), origin: String(r.payload.origin) })
+        : r.kind === "add_negative_keywords"
         ? await applyNegatives(supabase, creds, { accountId, tenantId, actor, recommendationId: r.id, campaignId, terms: Array.isArray(r.payload.terms) ? (r.payload.terms as string[]) : [] })
         : r.kind === "rebuild_search_structure"
         ? await applyRebuild(supabase, creds, {

@@ -1,7 +1,7 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { clearTokenCache, type GoogleAdsCredentials } from "../_shared/google-ads-api.ts";
 import { applyNegatives, applyRebuild, revertBuild } from "../_shared/google-ads-build-apply.ts";
-import { sanitizeDraftPatch } from "../_shared/google-ads-build-draft.ts";
+import { parseQuickAction, sanitizeDraftPatch } from "../_shared/google-ads-build-draft.ts";
 
 const CREDS: GoogleAdsCredentials = { developerToken: "d", clientId: "c", clientSecret: "s", refreshToken: "r", loginCustomerId: "9667440809" };
 const jsonRes = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } });
@@ -173,4 +173,18 @@ Deno.test("reconstrucao: pagina de destino que nao abre (404) ou fora dos domini
     assert(!outro.ok && outro.error!.includes("dominio"));
   });
   assertEquals(st.mutations.length, 0);
+});
+
+Deno.test("acao rapida: pausar, ligar e ajustar viram a proposta certa; valores fora da faixa e operacao estranha sao recusados", () => {
+  const p = parseQuickAction({ campaign_id: 7, op: "pause" }, "Marca");
+  assert(p.ok && p.kind === "pause_campaign" && p.payload.daily_budget_micros === null);
+  const e = parseQuickAction({ campaign_id: 7, op: "enable", daily_budget_brl: 17.5 }, "Camisetas");
+  assert(e.ok && e.kind === "enable_campaign" && e.payload.daily_budget_micros === 17_500_000);
+  const b = parseQuickAction({ campaign_id: 7, op: "set_budget", daily_budget_brl: "38" }, "Marca");
+  assert(b.ok && b.kind === "adjust_budget" && b.payload.daily_budget_micros === 38_000_000);
+  assert(!parseQuickAction({ campaign_id: 7, op: "enable" }, "x").ok);
+  assert(!parseQuickAction({ campaign_id: 7, op: "set_budget", daily_budget_brl: 5000 }, "x").ok);
+  assert(!parseQuickAction({ campaign_id: 7, op: "set_budget", daily_budget_brl: 0.5 }, "x").ok);
+  assert(!parseQuickAction({ campaign_id: 7, op: "delete" }, "x").ok);
+  assert(!parseQuickAction({ campaign_id: -1, op: "pause" }, "x").ok);
 });

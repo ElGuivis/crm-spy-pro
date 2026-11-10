@@ -6,6 +6,26 @@
 import { norm } from "./google-ads-build-core.ts";
 
 type Payload = Record<string, unknown>;
+
+export type QuickResult =
+  | { ok: true; kind: "pause_campaign" | "enable_campaign" | "adjust_budget"; payload: Payload; title: string }
+  | { ok: false; error: string };
+
+/** Acao rapida sobre UMA campanha (pausar, ligar com orcamento, ajustar orcamento). O servidor aplica com as mesmas travas de sempre. */
+export function parseQuickAction(body: Record<string, unknown>, campaignName: string): QuickResult {
+  const campaignId = Number(body.campaign_id);
+  if (!Number.isInteger(campaignId) || campaignId <= 0) return { ok: false, error: "campaign_id invalido" };
+  const op = body.op;
+  if (op === "pause") return { ok: true, kind: "pause_campaign", payload: { campaign_id: campaignId, action: "pause", daily_budget_micros: null }, title: `Pausar "${campaignName}"` };
+  if (op !== "enable" && op !== "set_budget") return { ok: false, error: "Operacao invalida (pause, enable ou set_budget)" };
+  const brl = Number(body.daily_budget_brl);
+  if (!Number.isFinite(brl) || brl < 1 || brl > 1000) return { ok: false, error: "Informe o orcamento diario entre R$ 1 e R$ 1.000" };
+  const micros = Math.round(brl * 100) * 10_000;
+  const money = brl.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  return op === "enable"
+    ? { ok: true, kind: "enable_campaign", payload: { campaign_id: campaignId, action: "enable", daily_budget_micros: micros }, title: `Ligar "${campaignName}" com ${money}/dia` }
+    : { ok: true, kind: "adjust_budget", payload: { campaign_id: campaignId, action: "set_budget", daily_budget_micros: micros }, title: `Ajustar "${campaignName}" para ${money}/dia` };
+}
 export type DraftResult = { ok: true; payload: Payload } | { ok: false; error: string };
 
 const isStr = (v: unknown, max: number): v is string => typeof v === "string" && v.length <= max;

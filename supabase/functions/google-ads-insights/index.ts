@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts";
 import { createLogger, getCorrelationId } from "../_shared/correlation.ts";
-import { proposeNegatives } from "../_shared/google-ads-build-runner.ts";
+import { proposeConversionFixes, proposeNegatives } from "../_shared/google-ads-build-runner.ts";
 import { runInsights } from "../_shared/google-ads-insights-runner.ts";
 
 /**
@@ -51,6 +51,8 @@ serve(async (req) => {
       else {
         const n = await proposeNegatives(supabase, a.id);
         if (!n.ok) log.warn("propostas de negativas falharam", { account_id: a.id, error: n.error });
+        const cv = await proposeConversionFixes(supabase, a.id);
+        if (!cv.ok) log.warn("propostas de conversao falharam", { account_id: a.id, error: cv.error });
       }
       results.push({ account_id: r.account_id, ok: r.ok, error: r.error, findings: r.report?.findings.length });
     }
