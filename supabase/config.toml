@@ -433,6 +433,10 @@ verify_jwt = false
 # HYBRID — usuario (JWT, uma conta do proprio tenant) ou cron (todas) via requireUserOrInternalAuth
 verify_jwt = false
 
+[functions.google-ads-economics]
+# HYBRID — admin (JWT, conta do proprio tenant) ou cron via requireUserOrInternalAuth
+verify_jwt = false
+
 [functions.google-ads-insights]
 # HYBRID — usuario admin (JWT, uma conta do proprio tenant) ou cron via requireUserOrInternalAuth
 verify_jwt = false

@@ -8,6 +8,7 @@ import { AlertsCard } from "@/components/google-ads/AlertsCard";
 import { BudgetCapCard } from "@/components/google-ads/BudgetCapCard";
 import { CampaignsTable } from "@/components/google-ads/CampaignsTable";
 import { DataBrowser } from "@/components/google-ads/DataBrowser";
+import { EconomicsCard } from "@/components/google-ads/EconomicsCard";
 import { DiscoveriesCard } from "@/components/google-ads/DiscoveriesCard";
 import { InsightTables } from "@/components/google-ads/InsightTables";
 import { BuildCards } from "@/components/google-ads/BuildCards";
@@ -22,6 +23,7 @@ import { useGoogleAdsActivity, useGoogleAdsHistory, useGoogleAdsStrategy } from 
 import { useGoogleAdsBuildActions, useGoogleAdsBuildProposals } from "@/hooks/useGoogleAdsBuild";
 import { useGoogleAdsSuggestions, useImplementActions, type Implementer } from "@/hooks/useGoogleAdsImplement";
 import { useGoogleAdsDiscoveries, useGoogleAdsDiscoveryActions } from "@/hooks/useGoogleAdsDiscoveries";
+import { useGoogleAdsEconomics } from "@/hooks/useGoogleAdsEconomics";
 import { useGoogleAdsPlanActions } from "@/hooks/useGoogleAdsPlan";
 
 /** Sistema → Google Ads: saldo, alertas, estratégia recomendada (com histórico completo), teto de gastos e campanhas. */
@@ -45,6 +47,7 @@ const GoogleAds = () => {
     canApply: canEdit && account?.mode === "approval",
     blockedReason: !canEdit ? "Somente administradores implementam." : account?.mode !== "approval" ? "Ative o modo “com aprovação” na Estratégia recomendada para poder implementar." : null,
   };
+  const economics = useGoogleAdsEconomics(accountId);
   const discoveries = useGoogleAdsDiscoveries(accountId);
   const discoveryActions = useGoogleAdsDiscoveryActions(accountId);
   const error = accountError ?? dataError ?? history.error ?? strategy.error;
@@ -71,6 +74,7 @@ const GoogleAds = () => {
               <TabsTrigger value="overview">Visão geral</TabsTrigger>
               <TabsTrigger value="discoveries">Descobertas</TabsTrigger>
               <TabsTrigger value="history">Histórico e campanhas</TabsTrigger>
+              <TabsTrigger value="economics">Economia</TabsTrigger>
               <TabsTrigger value="conversions">Conversões</TabsTrigger>
               <TabsTrigger value="data">Dados do Google</TabsTrigger>
               <TabsTrigger value="activity">Atividade</TabsTrigger>
@@ -112,6 +116,10 @@ const GoogleAds = () => {
                   />
                 </>
               )}
+            </TabsContent>
+
+            <TabsContent value="economics">
+              <EconomicsCard eco={economics} canEdit={canEdit} />
             </TabsContent>
 
             <TabsContent value="conversions">

@@ -5435,6 +5435,51 @@ export type Database = {
           },
         ]
       }
+      google_ads_conversion_goals: {
+        Row: {
+          account_id: string
+          biddable: boolean | null
+          category: string
+          id: string
+          origin: string
+          synced_at: string
+          tenant_id: string
+        }
+        Insert: {
+          account_id: string
+          biddable?: boolean | null
+          category: string
+          id?: string
+          origin: string
+          synced_at?: string
+          tenant_id: string
+        }
+        Update: {
+          account_id?: string
+          biddable?: boolean | null
+          category?: string
+          id?: string
+          origin?: string
+          synced_at?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_ads_conversion_goals_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "google_ads_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_ads_conversion_goals_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       google_ads_conversion_monthly: {
         Row: {
           account_id: string
@@ -6241,6 +6286,51 @@ export type Database = {
           },
           {
             foreignKeyName: "google_ads_search_terms_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      google_ads_unit_economics: {
+        Row: {
+          account_id: string
+          computed_at: string
+          id: string
+          metrics: Json
+          reconciliation: Json
+          tenant_id: string
+          window_months: number
+        }
+        Insert: {
+          account_id: string
+          computed_at?: string
+          id?: string
+          metrics: Json
+          reconciliation?: Json
+          tenant_id: string
+          window_months?: number
+        }
+        Update: {
+          account_id?: string
+          computed_at?: string
+          id?: string
+          metrics?: Json
+          reconciliation?: Json
+          tenant_id?: string
+          window_months?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_ads_unit_economics_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "google_ads_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_ads_unit_economics_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -13616,6 +13706,10 @@ export type Database = {
           snapshot_stock: number
           subscribers: number
         }[]
+      }
+      google_ads_crm_economics: {
+        Args: { p_account: string; p_months?: number }
+        Returns: Json
       }
       google_ads_term_split: {
         Args: { p_account: string; p_brand_terms: string[] }
