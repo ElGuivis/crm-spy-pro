@@ -10,6 +10,7 @@ import { CampaignsTable } from "@/components/google-ads/CampaignsTable";
 import { DataBrowser } from "@/components/google-ads/DataBrowser";
 import { DiscoveriesCard } from "@/components/google-ads/DiscoveriesCard";
 import { InsightTables } from "@/components/google-ads/InsightTables";
+import { BuildCards } from "@/components/google-ads/BuildCards";
 import { ConversionsCard } from "@/components/google-ads/ConversionsCard";
 import { HistoryCard } from "@/components/google-ads/HistoryCard";
 import { StrategyCard } from "@/components/google-ads/StrategyCard";
@@ -18,6 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useGoogleAdsAccount, useGoogleAdsActions, useGoogleAdsData } from "@/hooks/useGoogleAds";
 import { useGoogleAdsActivity, useGoogleAdsHistory, useGoogleAdsStrategy } from "@/hooks/useGoogleAdsInsights";
+import { useGoogleAdsBuildActions, useGoogleAdsBuildProposals } from "@/hooks/useGoogleAdsBuild";
 import { useGoogleAdsDiscoveries, useGoogleAdsDiscoveryActions } from "@/hooks/useGoogleAdsDiscoveries";
 import { useGoogleAdsPlanActions } from "@/hooks/useGoogleAdsPlan";
 
@@ -33,6 +35,8 @@ const GoogleAds = () => {
   const activity = useGoogleAdsActivity(accountId);
   const { syncNow, saveMonthlyCap } = useGoogleAdsActions(accountId);
   const planActions = useGoogleAdsPlanActions(accountId);
+  const build = useGoogleAdsBuildProposals(accountId);
+  const buildActions = useGoogleAdsBuildActions(accountId);
   const discoveries = useGoogleAdsDiscoveries(accountId);
   const discoveryActions = useGoogleAdsDiscoveryActions(accountId);
   const error = accountError ?? dataError ?? history.error ?? strategy.error;
@@ -70,6 +74,12 @@ const GoogleAds = () => {
               <StrategyCard
                 account={account} campaigns={data.campaigns} report={strategy.data?.report ?? null}
                 plan={strategy.data?.plan ?? []} canEdit={canEdit} actions={planActions}
+              />
+              <BuildCards
+                negatives={build.data?.negatives ?? []} rebuilds={build.data?.rebuilds ?? []} campaigns={data.campaigns} actions={buildActions}
+                aiOn={(account.guardrails as { ai_enabled?: boolean } | null)?.ai_enabled === true}
+                canApply={canEdit && account.mode === "approval"}
+                blockedReason={!canEdit ? "Somente administradores aplicam mudanças." : account.mode !== "approval" ? "Ative o modo “com aprovação” na Estratégia recomendada para poder aplicar." : null}
               />
               <AiAdvisorCard account={account} canEdit={canEdit} />
               <BudgetCapCard

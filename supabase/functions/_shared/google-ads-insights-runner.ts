@@ -6,6 +6,7 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { buildInsights, INSIGHTS, type InsightsReport } from "./google-ads-insights-rules.ts";
 import type { Structure } from "./google-ads-readiness.ts";
+import { allowedHostsFrom, checkUrls } from "./google-ads-url-check.ts";
 
 export const INSIGHTS_AGENT = "data_insights";
 const KEY = "insights:report";
@@ -46,7 +47,7 @@ export async function runInsights(supabase: SupabaseClient, accountId: string, a
       supabase.from("google_ads_products").select("item_id, title, cost_micros, conversions_value, conversions").eq("account_id", accountId).order("conversions_value", { ascending: false }).limit(200),
       supabase.from("google_ads_products").select("item_id, title, cost_micros, conversions_value, conversions").eq("account_id", accountId).order("cost_micros", { ascending: false }).limit(200),
       supabase.from("google_ads_keywords").select("campaign_id, ad_group_id, text, match_type, status, negative, quality_score, cost_micros, conversions, conversions_value").eq("account_id", accountId).limit(1000),
-      supabase.from("google_ads_ads").select("campaign_id, ad_group_id, status, ad_strength, approval_status").eq("account_id", accountId).limit(1000),
+      supabase.from("google_ads_ads").select("campaign_id, ad_group_id, status, ad_strength, approval_status, final_url").eq("account_id", accountId).limit(1000),
       supabase.from("google_ads_campaigns").select("campaign_id, name, status, channel_type").eq("account_id", accountId),
       supabase.from("google_ads_recommendations").select("id").eq("account_id", accountId).eq("agent", INSIGHTS_AGENT).eq("dedupe_key", KEY).maybeSingle(),
       supabase.from("google_ads_ad_groups").select("campaign_id, ad_group_id, status").eq("account_id", accountId).limit(1000),
@@ -83,6 +84,22 @@ export async function runInsights(supabase: SupabaseClient, accountId: string, a
         adGroups: must(adGroups, "grupos"), ads: must(ads, "anuncios"), keywords: must(kws, "palavras"), assetGroups: must(assetGroups, "ativos"),
       } as unknown as Structure,
     });
+
+    // Paginas de destino dos anuncios LIGADOS em campanhas ligadas (testadas com o robo do Google; so dominios da propria conta).
+    const adRows = must(ads, "anuncios") as Array<{ campaign_id: number; status: string; final_url?: string | null }>;
+    const enabledCamps = new Set((must(camps, "campanhas") as Array<{ campaign_id: number; status: string }>).filter((c) => c.status === "ENABLED").map((c) => Number(c.campaign_id)));
+    const live = adRows.filter((a) => a.status === "ENABLED" && enabledCamps.has(Number(a.campaign_id)) && a.final_url);
+    const urlCount = new Map<string, number>();
+    for (const a of live) urlCount.set(String(a.final_url), (urlCount.get(String(a.final_url)) ?? 0) + 1);
+    const checks = await checkUrls([...urlCount.keys()].slice(0, 15), allowedHostsFrom(adRows.map((a) => a.final_url ?? null)));
+    report.broken_destinations = [...checks.values()].filter((c) => !c.ok).map((c) => ({ url: c.url, status: c.status, ads: urlCount.get(c.url) ?? 0 }));
+    if (report.broken_destinations.length) {
+      report.findings.unshift({
+        id: "broken_destination", severity: "high",
+        title: `${report.broken_destinations.length} pagina(s) de destino de anuncios ligados nao abrem para o Google`,
+        detail: report.broken_destinations.slice(0, 4).map((b) => `${b.url.replace(/^https?:\/\/(www\.)?/, "")} (${b.status ?? "sem resposta"}, ${b.ads} anuncio(s))`).join("; ") + ". O Google reprova o anuncio (DESTINATION_NOT_WORKING) e o clique vai para uma pagina quebrada. Corrija a pagina ou troque a URL do anuncio.",
+      });
+    }
 
     const fields = {
       kind: "insights_report", severity: "low", risk: "low", title: "Descobertas dos dados do Google (historico completo)",

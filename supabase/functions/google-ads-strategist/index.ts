@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { requireUserOrInternalAuth } from "../_shared/auth-guard.ts";
 import { createLogger, getCorrelationId } from "../_shared/correlation.ts";
+import { proposeRebuilds } from "../_shared/google-ads-build-runner.ts";
 import { runStrategy } from "../_shared/google-ads-strategy-runner.ts";
 
 /**
@@ -43,6 +44,11 @@ serve(async (req) => {
 
     const result = await runStrategy(supabase, accountId, auth.isInternal ? "system" : `user:${auth.userId}`);
     if (!result.ok) log.warn("estrategia falhou", { error: result.error });
+    // Propostas de reconstrucao das campanhas boas que nao veiculam (so propoe; quem aplica e o google-ads-apply).
+    if (result.ok && result.report) {
+      const b = await proposeRebuilds(supabase, accountId, result.report);
+      if (!b.ok) log.warn("propostas de reconstrucao falharam", { error: b.error });
+    }
     return json(result, result.ok ? 200 : 500);
   } catch (err) {
     if (err instanceof Response) return err;

@@ -14,6 +14,15 @@ const describe = (s: State | null) => (s ? `${s.status === "ENABLED" ? "Ligada" 
 function summary(r: AuditRow, campaigns: GoogleAdsCampaign[]): string {
   const b = r.before_state as State | null;
   const a = r.after_state as State | null;
+  const build = /^(negatives|rebuild):(\d+)$/.exec(r.entity ?? "");
+  if (build && (r.action === "apply" || r.action === "revert")) {
+    const camp = campaigns.find((c) => c.campaign_id === Number(build[2]))?.name ?? build[2];
+    const st = (r.after_state ?? {}) as { terms?: string[]; keyword_texts?: string[]; enabled_ads?: number[]; new_ad?: string | null; reverted?: boolean };
+    if (r.action === "revert" || st.reverted) return `${build[1] === "negatives" ? "Negativas" : "Reconstrução"} desfeita em ${camp}`;
+    return build[1] === "negatives"
+      ? `Negativas (exatas) em ${camp}: ${(st.terms ?? []).slice(0, 6).join(", ")}${(st.terms?.length ?? 0) > 6 ? "…" : ""}`
+      : `Reconstrução de ${camp}: ${st.keyword_texts?.length ?? 0} palavras-chave, ${st.enabled_ads?.length ?? 0} anúncio(s) religado(s)${st.new_ad ? ", 1 anúncio novo" : ""}`;
+  }
   if (r.action === "apply" || r.action === "revert") {
     const id = Number(String(r.entity ?? "").replace("campaign:", ""));
     return `${campaigns.find((c) => c.campaign_id === id)?.name ?? r.entity}: ${describe(b)} → ${describe(a)}`;

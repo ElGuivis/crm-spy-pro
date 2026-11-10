@@ -7,12 +7,14 @@ import { callAIWithFallback } from "../_shared/ai-chat-providers.ts";
 import {
   ADVICE_MAX_TOKENS, AI_PROVIDERS, buildAdvisorMessages, MAX_QUESTION_CHARS, readAiSettings, type MonthPoint,
 } from "../_shared/google-ads-ai-core.ts";
-import { runInsights } from "../_shared/google-ads-insights-runner.ts";
+import { buildCopyMessages, parseCopy } from "../_shared/google-ads-ai-copy.ts";
+import { resolveBrandTerms, runInsights } from "../_shared/google-ads-insights-runner.ts";
 import { runStrategy } from "../_shared/google-ads-strategy-runner.ts";
 
 /**
  * google-ads-ai — AUTHENTICATED, somente administradores do tenant.
  *  - action "providers": quais IAs ja estao integradas no CRM (tenant_ai_credentials), sem expor chave nenhuma.
+ *  - action "draft_ad_copy": { account_id, recommendation_id } escreve o RASCUNHO do anuncio novo de uma proposta de reconstrucao (o dono edita e aprova antes de ir ao Google).
  *  - action "advise": { account_id, question? } pede o parecer do consultor com IA usando o provedor/modelo escolhidos na conta.
  * A IA so le um RESUMO numerico gerado pelas regras; nao escreve no Google Ads (so grava o texto em google_ads_recommendations).
  * Reaproveita o chamador do CRM (callAIWithFallback): credencial cifrada do tenant, saude do provedor e ai_usage_logs.
@@ -32,7 +34,7 @@ serve(async (req) => {
   try {
     const { userId, tenantId } = await requireUserAuth(req);
     const body = await req.json().catch(() => ({}));
-    if (body.action !== "providers" && body.action !== "advise") return json({ error: "Acao desconhecida" }, 400);
+    if (body.action !== "providers" && body.action !== "advise" && body.action !== "draft_ad_copy") return json({ error: "Acao desconhecida" }, 400);
 
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
       auth: { autoRefreshToken: false, persistSession: false },
@@ -50,6 +52,38 @@ serve(async (req) => {
         .filter(([id]) => configured.has(id))
         .map(([id, info]) => ({ id, label: info.label, models: info.models, is_default: (creds ?? []).some((c) => c.provider === id && c.is_active) }));
       return json({ providers });
+    }
+
+    if (body.action === "draft_ad_copy") {
+      const accId = typeof body.account_id === "string" ? body.account_id : "";
+      const recId = typeof body.recommendation_id === "string" ? body.recommendation_id : "";
+      if (!UUID_RE.test(accId) || !UUID_RE.test(recId)) return json({ error: "ids invalidos" }, 400);
+      const { data: acc } = await supabase.from("google_ads_accounts").select("id, descriptive_name, guardrails").eq("id", accId).eq("tenant_id", tenantId).maybeSingle();
+      if (!acc) return json({ error: "Conta nao encontrada" }, 404);
+      const settings = readAiSettings(acc.guardrails);
+      if (!settings.ai_enabled || !settings.ai_provider || !AI_PROVIDERS[settings.ai_provider]) return json({ error: "Ligue a IA e escolha o provedor na tela antes de gerar o texto." }, 403);
+      if (!configured.has(settings.ai_provider)) return json({ error: `O provedor ${AI_PROVIDERS[settings.ai_provider].label} nao esta integrado no CRM` }, 400);
+      const { data: rec } = await supabase.from("google_ads_recommendations").select("id, kind, status, payload")
+        .eq("id", recId).eq("tenant_id", tenantId).eq("account_id", accId).maybeSingle();
+      if (!rec || rec.kind !== "rebuild_search_structure" || !["pending", "failed"].includes(rec.status)) return json({ error: "Proposta nao encontrada" }, 404);
+      const payload = rec.payload as { campaign_id: number; keywords?: Array<{ text: string }>; final_url?: string | null; enable_ad_ids?: number[]; new_ad?: unknown };
+      const { data: camp } = await supabase.from("google_ads_campaigns").select("name").eq("account_id", accId).eq("campaign_id", payload.campaign_id).maybeSingle();
+      const { data: prods } = await supabase.from("google_ads_products").select("title").eq("account_id", accId).order("conversions_value", { ascending: false }).limit(5);
+      const keywords = (payload.keywords ?? []).map((k) => k.text);
+      const brand = resolveBrandTerms(acc.guardrails, acc.descriptive_name)[0] ?? (acc.descriptive_name ?? "");
+      const products = (prods ?? []).map((p) => String(p.title ?? "")).filter(Boolean);
+      const finalUrl = payload.final_url ?? "";
+      const messages = buildCopyMessages({ brand, campaignName: camp?.name ?? "", keywords, products, finalUrl });
+      const model = settings.ai_model ?? AI_PROVIDERS[settings.ai_provider].models[0].id;
+      const result = await callAIWithFallback(supabase, tenantId, messages, model, 0.5, 4000, undefined, undefined, settings.ai_provider);
+      if (!result.success) return json({ error: `A IA nao respondeu: ${String(result.error).slice(0, 300)}` }, 502);
+      const parsed = parseCopy(result.data?.choices?.[0]?.message?.content ?? "", [brand, camp?.name ?? "", ...keywords, ...products].join(" "));
+      if (!parsed.ok) return json({ error: parsed.error }, 422);
+      const next = { ...payload, new_ad: { headlines: parsed.headlines, descriptions: parsed.descriptions, final_url: finalUrl }, needs_copy: false, ai_generated: true };
+      const { error: upErr } = await supabase.from("google_ads_recommendations").update({ payload: next }).eq("id", recId);
+      if (upErr) throw new Error(upErr.message);
+      await supabase.from("google_ads_audit_log").insert({ tenant_id: tenantId, account_id: accId, actor: `user:${userId}`, action: "ai_advice", entity: `draft_ad:${payload.campaign_id}`, after_state: { provider: result.provider, model: result.model, dropped: parsed.dropped } });
+      return json({ ok: true, new_ad: next.new_ad, dropped: parsed.dropped, provider: result.provider, model: result.model });
     }
 
     const accountId = typeof body.account_id === "string" ? body.account_id : "";

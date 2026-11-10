@@ -51,6 +51,8 @@ export interface InsightsInput {
   campaigns: CampaignRef[];
   /** Estrutura sincronizada para checar se as campanhas ligadas conseguem veicular. */
   structure?: Structure;
+  /** Paginas de destino dos anuncios ligados, ja testadas com o robo do Google. */
+  destinations?: Array<{ url: string; ok: boolean; status: number | null; reason?: string; ads: number }>;
 }
 
 export interface Finding { id: string; severity: "high" | "medium" | "low" | "info"; title: string; detail: string }
@@ -69,6 +71,7 @@ export interface InsightsReport {
   keywords: { waste: Array<{ text: string; cost: number }>; low_quality: Array<{ text: string; score: number; cost: number }> };
   ads: { total: number; weak: number; not_approved: number };
   not_serving: Array<{ campaign: string; reasons: string[] }>;
+  broken_destinations: Array<{ url: string; status: number | null; ads: number }>;
   findings: Finding[];
 }
 
@@ -241,6 +244,15 @@ export function buildInsights(input: InsightsInput): InsightsReport {
     }
   }
 
+  const broken = (input.destinations ?? []).filter((d) => !d.ok).map((d) => ({ url: d.url, status: d.status, ads: d.ads }));
+  if (broken.length) {
+    findings.push({
+      id: "broken_destination", severity: "high",
+      title: `${broken.length} pagina(s) de destino de anuncios ligados nao abrem para o Google`,
+      detail: broken.slice(0, 4).map((b) => `${b.url.replace(/^https?:\/\/(www\.)?/, "")} (${b.status ?? "sem resposta"}, ${b.ads} anuncio(s))`).join("; ") + ". O Google reprova o anuncio (DESTINATION_NOT_WORKING) e o clique vai para uma pagina quebrada. Corrija a pagina ou troque a URL do anuncio.",
+    });
+  }
+
   const order = { high: 0, medium: 1, low: 2, info: 3 };
   findings.sort((a, b) => order[a.severity] - order[b.severity]);
 
@@ -255,6 +267,7 @@ export function buildInsights(input: InsightsInput): InsightsReport {
     keywords: { waste: kwWaste, low_quality: lowQ },
     ads: { total: liveAds.length, weak, not_approved: notApproved },
     not_serving: notServing,
+    broken_destinations: broken,
     findings,
   };
 }

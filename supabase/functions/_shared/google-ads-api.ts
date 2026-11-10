@@ -152,14 +152,14 @@ async function postWithRetry(
 }
 
 /**
- * Escrita no Google Ads (mutate). Sem retentativa em 5xx/429: uma alteracao duplicada ou duvidosa e pior que um erro claro.
+ * Escrita no Google Ads (mutate; uma ou VARIAS operacoes na mesma chamada, que o Google aplica todas ou nenhuma). Sem retentativa em 5xx/429: uma alteracao duplicada ou duvidosa e pior que um erro claro.
  * So renova o token e tenta de novo UMA vez em 401. `path` e relativo a /customers/<id>/, ex.: "campaigns:mutate".
  */
 export async function mutateResource(
   creds: GoogleAdsCredentials,
   customerId: string,
-  path: "campaigns:mutate" | "campaignBudgets:mutate",
-  operation: Record<string, unknown>,
+  path: "campaigns:mutate" | "campaignBudgets:mutate" | "campaignCriteria:mutate" | "adGroupCriteria:mutate" | "adGroupAds:mutate",
+  operation: Record<string, unknown> | Record<string, unknown>[],
   fetchFn: FetchFn = fetch,
 ): Promise<unknown> {
   if (!/^\d{10}$/.test(customerId)) throw new GoogleAdsApiError("customer_id invalido (use 10 digitos)", 400, "BAD_CUSTOMER_ID");
@@ -173,7 +173,7 @@ export async function mutateResource(
     };
     if (creds.loginCustomerId) headers["login-customer-id"] = creds.loginCustomerId;
     const res = await fetchFn(`${API_BASE}/${GOOGLE_ADS_API_VERSION}/customers/${customerId}/${path}`, {
-      method: "POST", headers, body: JSON.stringify({ operations: [operation] }),
+      method: "POST", headers, body: JSON.stringify({ operations: Array.isArray(operation) ? operation : [operation] }),
     });
     const json = await res.json().catch(() => ({}));
     if (res.ok) return json;
