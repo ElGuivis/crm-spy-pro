@@ -49,3 +49,20 @@ Deno.test("R11: reprovado em campanha ligada; high se nao ha aprovado, medium se
   const f = runExtraDiagnosis(base({ campaigns: camps, ads }));
   assertEquals(f.map((x) => x.dedupe_key + ":" + x.severity).sort(), ["R11:a1:1:high", "R11:a1:2:medium"]);
 });
+
+Deno.test("R12: duas acoes de compra principais com conversoes recentes = alerta; uma so ou antigas = nada", () => {
+  const act = (name: string) => ({ name, category: "PURCHASE", status: "ENABLED", primary_for_goal: true });
+  const m = (name: string, month: string, conversions = 5) => ({ conversion_action_name: name, month, conversions });
+  const dup = runExtraDiagnosis(base({ actions: [act("A"), act("B")], convMonthly: [m("A", "2026-10-01"), m("B", "2026-11-01")] }));
+  assertEquals(dup.map((f) => f.rule), ["R12"]);
+  assertEquals(runExtraDiagnosis(base({ actions: [act("A"), act("B")], convMonthly: [m("A", "2026-10-01"), m("B", "2025-03-01")] })).length, 0);
+  assertEquals(runExtraDiagnosis(base({ actions: [act("A")], convMonthly: [m("A", "2026-10-01")] })).length, 0);
+});
+
+Deno.test("R13: gastou, CRM recebeu pedidos e o Google registrou zero = alerta; com conversao ou sem pedidos = nada", () => {
+  const d = (conv: number) => days(14, 20, 0).map((x) => ({ ...x, conversions: conv }));
+  assert(rules(base({ daily: d(0), crmPaidOrders14d: 12 })).includes("R13:high"));
+  assert(!rules(base({ daily: d(1), crmPaidOrders14d: 12 })).some((r) => r.startsWith("R13")));
+  assert(!rules(base({ daily: d(0), crmPaidOrders14d: 2 })).some((r) => r.startsWith("R13")));
+  assert(!rules(base({ daily: d(0), crmPaidOrders14d: null })).some((r) => r.startsWith("R13")));
+});

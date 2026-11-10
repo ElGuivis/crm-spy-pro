@@ -49,15 +49,21 @@ export async function diagnoseAccount(
 
     const since = new Date(now.getTime() - DAILY_LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
     const sinceChange = new Date(now.getTime() - 2 * 86_400_000).toISOString();
-    const [campaigns, budgets, daily, existingRows, changes, ads] = await Promise.all([
+    const sinceMonth = new Date(now.getTime() - 130 * 86_400_000).toISOString().slice(0, 10);
+    const sinceOrders = new Date(now.getTime() - 14 * 86_400_000).toISOString();
+    const [campaigns, budgets, daily, existingRows, changes, ads, actions, convMonthly, orders] = await Promise.all([
       supabase.from("google_ads_campaigns").select("campaign_id, name, status, serving_status, daily_budget_micros").eq("account_id", accountId),
       supabase.from("google_ads_account_budget")
         .select("status, approved_spending_limit_micros, adjusted_spending_limit_micros, amount_served_micros").eq("account_id", accountId),
-      supabase.from("google_ads_campaign_daily").select("campaign_id, date, impressions, cost_micros, conversions_value").eq("account_id", accountId).gte("date", since),
+      supabase.from("google_ads_campaign_daily").select("campaign_id, date, impressions, cost_micros, conversions_value, conversions").eq("account_id", accountId).gte("date", since),
       supabase.from("google_ads_recommendations").select("id, dedupe_key, status")
         .eq("account_id", accountId).eq("agent", DIAGNOSIS_AGENT).not("dedupe_key", "is", null),
       supabase.from("google_ads_changes").select("changed_at, client_type, resource_type, user_email").eq("account_id", accountId).gte("changed_at", sinceChange).limit(1000),
       supabase.from("google_ads_ads").select("campaign_id, status, approval_status").eq("account_id", accountId).limit(1000),
+      supabase.from("google_ads_conversion_actions").select("name, category, status, primary_for_goal").eq("account_id", accountId),
+      supabase.from("google_ads_conversion_monthly").select("conversion_action_name, month, conversions").eq("account_id", accountId).gte("month", sinceMonth).limit(1000),
+      supabase.from("li_orders").select("id", { count: "exact", head: true }).eq("tenant_id", account.tenant_id)
+        .in("status_name", ["Pedido Entregue", "Pedido Enviado", "Pedido Pago"]).gte("created_at_remote", sinceOrders),
     ]);
 
     const input: RuleInput = {
@@ -78,6 +84,8 @@ export async function diagnoseAccount(
       ...runExtraDiagnosis({
         now, accountId, minRoas, alertRoas, campaigns: input.campaigns as ExtraInput["campaigns"], daily: input.daily as unknown as ExtraInput["daily"],
         changes: must(changes, "mudancas") as ExtraInput["changes"], ads: must(ads, "anuncios") as ExtraInput["ads"],
+        actions: must(actions, "acoes") as ExtraInput["actions"], convMonthly: must(convMonthly, "conversoes") as ExtraInput["convMonthly"],
+        crmPaidOrders14d: orders.error ? null : (orders.count ?? 0),
       }),
     ].sort((a, b) => ORDER[a.severity] - ORDER[b.severity]);
     const existing = new Map((must(existingRows, "alertas") as Array<{ id: string; dedupe_key: string; status: string }>).map((r) => [r.dedupe_key, r]));

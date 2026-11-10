@@ -13,7 +13,8 @@ function fakeDb(tables: Record<string, Row[]>) {
     private patch: Row = {};
     private rowsToInsert: Row[] = [];
     constructor(private table: string) {}
-    select(_cols?: string) { return this; }
+    select(_cols?: string, _opts?: { count?: string; head?: boolean }) { return this; }
+    in(col: string, vals: unknown[]) { this.filters.push((r) => vals.includes(r[col])); return this; }
     eq(col: string, v: unknown) { this.filters.push((r) => r[col] === v); return this; }
     gte(col: string, v: string) { this.filters.push((r) => String(r[col]) >= v); return this; }
     not(col: string, op: string, v: unknown) { if (op === "is" && v === null) this.filters.push((r) => r[col] != null); return this; }
@@ -31,7 +32,8 @@ function fakeDb(tables: Record<string, Row[]>) {
         for (const r of t.filter((x) => this.filters.every((f) => f(x)))) Object.assign(r, this.patch);
         res = { data: null, error: null };
       } else {
-        res = { data: t.filter((x) => this.filters.every((f) => f(x))).map((x) => ({ ...x })), error: null };
+        const rows = t.filter((x) => this.filters.every((f) => f(x))).map((x) => ({ ...x }));
+        res = { data: rows, error: null, count: rows.length } as typeof res;
       }
       return Promise.resolve(res).then(ok, bad);
     }

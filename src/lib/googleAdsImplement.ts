@@ -38,6 +38,8 @@ export const ALERT_MANUAL: Record<string, string> = {
   R4: "Ação sua: resolver a situação da conta/faturamento dentro do Google Ads. O sistema não mexe nisso.",
   R8: "Só aviso: alguém alterou a conta direto no painel do Google. Se foi você, está tudo certo; os dados já foram relidos.",
   R9: "Sem botão: o ROAS baixo vem de campanhas e termos específicos. Veja a aba Descobertas e as propostas de verba, negativas e reconstrução.",
+  R12: "Sem botão: decidir qual conversão de compra fica como principal exige conferir as tags no Google Ads (o Google bloqueia editar algumas por API).",
+  R13: "Sem botão: o conserto é no site/tag de compra (Google Tag Manager ou Loja Integrada). Verifique se a tag de compra dispara na página de pedido concluído.",
   R10: "Sem botão: gastar menos que o orçamento costuma ser limite de ranking, não de verba; mudar o orçamento sozinho não resolve.",
 };
 

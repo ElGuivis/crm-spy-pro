@@ -2,16 +2,21 @@
  * Regras extras do diagnostico (tipo A: sem IA). Funcoes puras.
  * R8 mudanca feita fora do sistema | R9 ROAS dos ultimos 7 dias abaixo do alerta/minimo
  * R10 ritmo de gasto fora do esperado | R11 anuncio reprovado em campanha ligada
+ * R12 duas acoes de compra principais com conversoes recentes (risco de contar o pedido 2x)
+ * R13 gastou, vendeu no CRM e o Google registrou zero conversoes (rastreamento pode estar quebrado)
  */
 import type { Finding, Severity } from "./google-ads-diagnosis-rules.ts";
 
-export interface ExtraDaily { campaign_id: number; date: string; cost_micros: number; conversions_value: number }
+export interface ExtraDaily { campaign_id: number; date: string; cost_micros: number; conversions_value: number; conversions?: number }
+export interface ExtraAction { name: string; category: string | null; status: string; primary_for_goal: boolean | null }
+export interface ExtraConvMonth { conversion_action_name: string; month: string; conversions: number }
 export interface ExtraChange { changed_at: string; client_type: string | null; resource_type: string | null; user_email: string | null }
 export interface ExtraAd { campaign_id: number; status: string; approval_status: string | null }
 export interface ExtraCampaign { campaign_id: number; name: string; status: string; daily_budget_micros: number | null }
 export interface ExtraInput {
   now: Date; accountId: string; campaigns: ExtraCampaign[]; daily: ExtraDaily[]; changes: ExtraChange[]; ads: ExtraAd[];
   minRoas: number; alertRoas: number;
+  actions?: ExtraAction[]; convMonthly?: ExtraConvMonth[]; crmPaidOrders14d?: number | null;
 }
 
 export const EXTRA = {
@@ -98,6 +103,32 @@ export function runExtraDiagnosis(i: ExtraInput): Finding[] {
         ? "Ha anuncios aprovados rodando, mas os reprovados nao veiculam e ocupam espaco. Corrija o motivo ou remova."
         : "A campanha esta ligada mas nao tem nenhum anuncio aprovado, entao nao veicula. Reprovado nao e reanalisado sozinho: e preciso editar ou recriar o anuncio.",
       payload: { campaign_id: cid, disapproved: e.bad, approved: e.good },
+    }));
+  }
+
+  // R12: duas acoes de COMPRA principais com conversoes nos ultimos 3 meses -> pode contar o mesmo pedido duas vezes
+  const recentMonth = day(new Date(i.now.getTime() - 100 * 86_400_000)).slice(0, 7);
+  const purchasePrimary = new Set((i.actions ?? []).filter((a) => a.category === "PURCHASE" && a.primary_for_goal === true && a.status === "ENABLED").map((a) => a.name));
+  const active = [...purchasePrimary].filter((n) => (i.convMonthly ?? []).some((m) => m.conversion_action_name === n && m.month.slice(0, 7) >= recentMonth && Number(m.conversions) > 0));
+  if (active.length >= 2) {
+    out.push(mk({
+      rule: "R12", severity: "high", kind: "alert", dedupe_key: `R12:${i.accountId}`,
+      title: `${active.length} acoes de compra principais registram conversoes ao mesmo tempo`,
+      rationale: `${active.join("; ")}. Se as duas disparam no mesmo pedido, o Google conta a venda em dobro e o ROAS fica inflado. Deixe so uma como principal ou confira se disparam em paginas diferentes.`,
+      payload: { actions: active },
+    }));
+  }
+
+  // R13: gasto relevante + pedidos pagos no CRM + zero conversoes no Google nos ultimos 14 dias completos
+  const w14 = i.daily.filter((d) => d.date >= day(new Date(i.now.getTime() - 14 * 86_400_000)) && d.date < today);
+  const cost14 = w14.reduce((s, d) => s + Number(d.cost_micros), 0) / 1e6;
+  const conv14 = w14.reduce((s, d) => s + Number(d.conversions ?? 0), 0);
+  if (i.crmPaidOrders14d != null && cost14 >= 100 && conv14 === 0 && i.crmPaidOrders14d >= 5) {
+    out.push(mk({
+      rule: "R13", severity: "high", kind: "alert", dedupe_key: `R13:${i.accountId}`,
+      title: "O Google nao registrou nenhuma venda, mas o CRM recebeu pedidos",
+      rationale: `Nos ultimos 14 dias a conta gastou ${brl(cost14)} com 0 conversoes, enquanto o CRM recebeu ${i.crmPaidOrders14d} pedidos pagos. Pode ser que o rastreamento de compra (tag/pixel) tenha parado. Sem ele os lances automaticos ficam cegos.`,
+      payload: { cost_14d: cost14, google_conversions: conv14, crm_paid_orders: i.crmPaidOrders14d },
     }));
   }
   return out;
