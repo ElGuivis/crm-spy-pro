@@ -9,6 +9,7 @@
  */
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { runDiagnosis, type Finding, type RuleInput } from "./google-ads-diagnosis-rules.ts";
+import { runExtraDiagnosis, type ExtraInput } from "./google-ads-diagnosis-extra.ts";
 
 export const DIAGNOSIS_AGENT = "account_diagnosis";
 const DAILY_LOOKBACK_DAYS = 14;
@@ -29,6 +30,8 @@ const must = <T>(res: { data: T | null; error: { message: string } | null }, wha
   return (res.data ?? []) as T;
 };
 
+const ORDER = { critical: 0, high: 1, medium: 2, low: 3 } as const;
+
 export async function diagnoseAccount(
   supabase: SupabaseClient,
   accountId: string,
@@ -45,13 +48,16 @@ export async function diagnoseAccount(
     if (!account) throw new Error("conta nao encontrada");
 
     const since = new Date(now.getTime() - DAILY_LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
-    const [campaigns, budgets, daily, existingRows] = await Promise.all([
+    const sinceChange = new Date(now.getTime() - 2 * 86_400_000).toISOString();
+    const [campaigns, budgets, daily, existingRows, changes, ads] = await Promise.all([
       supabase.from("google_ads_campaigns").select("campaign_id, name, status, serving_status, daily_budget_micros").eq("account_id", accountId),
       supabase.from("google_ads_account_budget")
         .select("status, approved_spending_limit_micros, adjusted_spending_limit_micros, amount_served_micros").eq("account_id", accountId),
-      supabase.from("google_ads_campaign_daily").select("campaign_id, date, impressions, cost_micros").eq("account_id", accountId).gte("date", since),
+      supabase.from("google_ads_campaign_daily").select("campaign_id, date, impressions, cost_micros, conversions_value").eq("account_id", accountId).gte("date", since),
       supabase.from("google_ads_recommendations").select("id, dedupe_key, status")
         .eq("account_id", accountId).eq("agent", DIAGNOSIS_AGENT).not("dedupe_key", "is", null),
+      supabase.from("google_ads_changes").select("changed_at, client_type, resource_type, user_email").eq("account_id", accountId).gte("changed_at", sinceChange).limit(1000),
+      supabase.from("google_ads_ads").select("campaign_id, status, approval_status").eq("account_id", accountId).limit(1000),
     ]);
 
     const input: RuleInput = {
@@ -64,7 +70,16 @@ export async function diagnoseAccount(
       accountBudgets: must(budgets, "limite da conta") as RuleInput["accountBudgets"],
       daily: must(daily, "metricas") as RuleInput["daily"],
     };
-    const findings = runDiagnosis(input);
+    const g = (account.guardrails ?? {}) as { min_roas?: number; alert_roas?: number };
+    const minRoas = typeof g.min_roas === "number" && g.min_roas > 0 ? g.min_roas : 4;
+    const alertRoas = typeof g.alert_roas === "number" && g.alert_roas > 0 ? g.alert_roas : 3;
+    const findings = [
+      ...runDiagnosis(input),
+      ...runExtraDiagnosis({
+        now, accountId, minRoas, alertRoas, campaigns: input.campaigns as ExtraInput["campaigns"], daily: input.daily as unknown as ExtraInput["daily"],
+        changes: must(changes, "mudancas") as ExtraInput["changes"], ads: must(ads, "anuncios") as ExtraInput["ads"],
+      }),
+    ].sort((a, b) => ORDER[a.severity] - ORDER[b.severity]);
     const existing = new Map((must(existingRows, "alertas") as Array<{ id: string; dedupe_key: string; status: string }>).map((r) => [r.dedupe_key, r]));
     const counts = { created: 0, updated: 0, reopened: 0, resolved: 0 };
 

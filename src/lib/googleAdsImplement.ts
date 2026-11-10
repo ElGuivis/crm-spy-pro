@@ -36,6 +36,9 @@ export const ALERT_MANUAL: Record<string, string> = {
   R1: "Ação sua: repor o crédito em Google Ads → Faturamento. O sistema não mexe em pagamento.",
   R2: "Ação sua: repor o crédito em Google Ads → Faturamento antes de acabar. O sistema não mexe em pagamento.",
   R4: "Ação sua: resolver a situação da conta/faturamento dentro do Google Ads. O sistema não mexe nisso.",
+  R8: "Só aviso: alguém alterou a conta direto no painel do Google. Se foi você, está tudo certo; os dados já foram relidos.",
+  R9: "Sem botão: o ROAS baixo vem de campanhas e termos específicos. Veja a aba Descobertas e as propostas de verba, negativas e reconstrução.",
+  R10: "Sem botão: gastar menos que o orçamento costuma ser limite de ranking, não de verba; mudar o orçamento sozinho não resolve.",
 };
 
 /** Propostas que resolvem um achado das Descobertas. */
@@ -49,7 +52,7 @@ export function recsForFinding(id: string, s: Suggestion[]): Suggestion[] {
 export function recsForAlert(dedupeKey: string | null, s: Suggestion[]): Suggestion[] {
   const rule = (dedupeKey ?? "").split(":")[0];
   if (rule === "R7") return byKind(s, ...PLAN_KINDS).filter((x) => x.kind !== "enable_campaign");
-  if (rule === "R3") {
+  if (rule === "R3" || rule === "R11") {
     const cid = Number((dedupeKey ?? "").split(":")[2]);
     const rebuild = byKind(forCampaign(s, cid), "rebuild_search_structure");
     return rebuild.length ? rebuild : byKind(forCampaign(s, cid), "pause_campaign");
