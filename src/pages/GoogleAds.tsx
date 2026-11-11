@@ -9,6 +9,7 @@ import { AlertsCard } from "@/components/google-ads/AlertsCard";
 import { BlockedProposalsCard } from "@/components/google-ads/BlockedProposalsCard";
 import { BudgetCapCard } from "@/components/google-ads/BudgetCapCard";
 import { CampaignsTable } from "@/components/google-ads/CampaignsTable";
+import { ClaudeSummaryCard } from "@/components/google-ads/ClaudeSummaryCard";
 import { DataBrowser } from "@/components/google-ads/DataBrowser";
 import { EconomicsCard } from "@/components/google-ads/EconomicsCard";
 import { DiscoveriesCard } from "@/components/google-ads/DiscoveriesCard";
@@ -101,6 +102,10 @@ const GoogleAds = () => {
                 blockedReason={!canEdit ? "Somente administradores aplicam mudanças." : account.mode !== "approval" ? "Ative o modo “com aprovação” na Estratégia recomendada para poder aplicar." : null}
               />
               <AiAdvisorCard account={account} canEdit={canEdit} impl={impl} />
+              <ClaudeSummaryCard
+                account={account} budgets={data.budgets} campaigns={data.campaigns} spend={data.spend}
+                alerts={data.alerts} conversionActions={history.data?.actions ?? []}
+              />
               <BudgetCapCard
                 account={account} campaigns={data.campaigns} canEdit={canEdit}
                 saving={saveMonthlyCap.isPending} onSave={(cap) => saveMonthlyCap.mutate(cap)} impl={impl}
