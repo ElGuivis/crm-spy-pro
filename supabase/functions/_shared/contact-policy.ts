@@ -1,11 +1,11 @@
 // Regra única de contato (Fase N3): todo envio de marketing/automação consulta `canContact`/`blockedTargets` antes e grava `recordTouches` depois.
 // As regras ficam em SQL (get_contact_blockers) para valer em lote: supressão de e-mail, telefone bloqueado, limite diário por pessoa
-// (todos os canais somados) e prioridade (disparo em massa cede a quem recebeu algo de ciclo de vida). Cashback e aniversário não entram no limite.
+// (todos os canais somados) e prioridade (disparo em massa cede a quem recebeu algo de ciclo de vida). Cashback, aniversário e status de pedido (transacional) não entram no limite; só respeitam bloqueio e supressão.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
 type Supabase = ReturnType<typeof createClient>;
 
-export type TouchPurpose = "campaign" | "bulk" | "recovery" | "welcome" | "cashback" | "cashback_reminder" | "birthday" | "reactivation";
+export type TouchPurpose = "campaign" | "bulk" | "recovery" | "welcome" | "cashback" | "cashback_reminder" | "birthday" | "reactivation" | "order_status";
 export type TouchChannel = "email" | "whatsapp";
 export interface ContactTarget { email?: string | null; phone?: string | null }
 

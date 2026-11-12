@@ -4,6 +4,9 @@ import { requireInternalAuth } from "../_shared/auth-guard.ts";
 import { readSmtpPassword } from "../_shared/credential-helpers.ts";
 import { sendEmail as sharedSendEmail, getEmailConfig } from "../_shared/email-sender.ts";
 import { unsubscribeFor, withHtmlFooter, type SystemEmailKind } from "../_shared/email-unsubscribe-link.ts";
+import { isAmbiguousSendError, isPermanentRecipientError } from "../_shared/outbound-errors.ts";
+import { applyTracking, lookupTracking, normStatus } from "../_shared/order-notification-render.ts";
+import { recordTouches } from "../_shared/contact-policy.ts";
 import { sendWhatsAppMessage as sharedSendWhatsApp, type WhatsAppConfig } from "../_shared/whatsapp-sender.ts";
 import type { MessageQueueRecord, EmailIntegrationRecord } from "../_shared/supabase-types.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
@@ -20,6 +23,19 @@ const FALLBACK_PUBLISHABLE_JWT =
 
 // Retry delays in minutes: 1, 5, 30
 const RETRY_DELAYS = [1, 5, 30];
+// Rastreio ainda inexistente na hora do envio: espera 30 min por vez, até 6 vezes (3 h), e então sai com texto neutro.
+const TRACKING_WAIT_MIN = 30;
+const TRACKING_MAX_WAITS = 6;
+const TRACKING_FALLBACK = "ainda em preparação (você recebe o código assim que ele sair)";
+
+type Supa = Parameters<typeof lookupTracking>[0];
+/** Atualiza o registro de envio ligado à mensagem (pelo id exato; mensagens antigas sem id caem no critério anterior). */
+async function setExecution(supabase: Supa, meta: Record<string, unknown> | null, channel: string, patch: Record<string, unknown>) {
+  const id = meta?.execution_id as string | undefined;
+  if (id) { await supabase.from('order_notification_executions').update(patch).eq('id', id); return; }
+  const num = meta?.order_number as string | undefined;
+  if (num) await supabase.from('order_notification_executions').update(patch).eq('order_number', num).eq('channel', channel).eq('status', 'pending');
+}
 
 
 Deno.serve(async (req) => {
@@ -44,6 +60,7 @@ Deno.serve(async (req) => {
     const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
 
     const supabase = createClient(supabaseUrl, supabaseKey);
+    const sb = supabase as unknown as Supa; // os ajudantes compartilhados tipam o cliente de outro jeito (mesmo objeto)
     const now = new Date();
 
     // Fetch messages ready to process
@@ -91,6 +108,7 @@ Deno.serve(async (req) => {
               status: 'cancelled',
               last_error: `Pedido muito antigo (${orderAge.created_at_remote}) - proteção contra disparos em massa`
             }).eq('id', msg.id);
+            await setExecution(sb, msg.metadata, msg.channel, { status: 'cancelled', error_message: 'Pedido muito antigo (proteção contra disparo em massa)' });
             failed++;
             continue;
           }
@@ -98,7 +116,8 @@ Deno.serve(async (req) => {
       }
 
       // PRE-SEND VALIDATION: Check if order status has changed (for order_notification messages)
-      if (msg.reference_type === 'order_notification' && msg.metadata?.expected_status && msg.reference_id) {
+      // So vale quando a regra tem espera (ex.: 'Aguardando pagamento' em 10 min nao sai se o cliente ja pagou). Sem espera, o aviso do status em que o pedido entrou sempre sai.
+      if (msg.reference_type === 'order_notification' && msg.metadata?.expected_status && Number(msg.metadata?.delay_minutes ?? 0) > 0 && msg.reference_id) {
         const expectedStatus = msg.metadata.expected_status as string;
         const orderNumber = msg.metadata.order_number as string || '';
         
@@ -124,26 +143,38 @@ Deno.serve(async (req) => {
           }
         }
         
-        if (currentStatusName && currentStatusName !== expectedStatus) {
+        if (currentStatusName && normStatus(currentStatusName) !== normStatus(expectedStatus)) {
           log.info(`[MESSAGE-QUEUE-PROCESSOR] ⏭️ Message ${msg.id} CANCELLED - Order #${orderNumber} status changed from "${expectedStatus}" to "${currentStatusName}"`);
           await supabase.from('message_queue').update({
             status: 'cancelled',
             last_error: `Status do pedido alterou de "${expectedStatus}" para "${currentStatusName}" - mensagem cancelada`
           }).eq('id', msg.id);
           
-          await supabase.from('order_notification_executions')
-            .update({ 
-              status: 'cancelled',
-              error_message: `Status alterou para "${currentStatusName}" antes do envio`
-            })
-            .eq('order_number', orderNumber)
-            .eq('status', 'pending');
+          await setExecution(sb, msg.metadata, msg.channel, { status: 'cancelled', error_message: `Status alterou para "${currentStatusName}" antes do envio` });
           
           failed++;
           continue;
         }
         
         log.info(`[MESSAGE-QUEUE-PROCESSOR] ✓ Order #${orderNumber} still has status "${expectedStatus}" - proceeding with send`);
+      }
+
+      // Rastreio ainda inexistente quando a mensagem foi enfileirada: confere de novo agora; se nao ha, espera (ate 3 h) e so entao sai com texto neutro
+      if (msg.metadata?.tracking_required && msg.reference_id) {
+        const code = await lookupTracking(sb, msg.reference_id as string);
+        const waits = Number(msg.metadata.tracking_waits ?? 0);
+        if (code || waits >= TRACKING_MAX_WAITS) {
+          const fill = code || TRACKING_FALLBACK;
+          msg.message_content = applyTracking(msg.message_content, fill);
+          msg.subject = msg.subject ? applyTracking(msg.subject, fill) : msg.subject;
+          msg.html_content = msg.html_content ? applyTracking(msg.html_content, fill) : msg.html_content;
+        } else {
+          await supabase.from('message_queue').update({
+            status: 'pending', next_retry_at: new Date(Date.now() + TRACKING_WAIT_MIN * 60_000).toISOString(),
+            metadata: { ...msg.metadata, tracking_waits: waits + 1 }, last_error: 'Aguardando o código de rastreio',
+          }).eq('id', msg.id);
+          continue;
+        }
       }
 
       // Check token balance before sending (1 token required for auto messages)
@@ -158,6 +189,7 @@ Deno.serve(async (req) => {
           status: 'failed',
           last_error: 'Tokens insuficientes para enviar mensagem automática'
         }).eq('id', msg.id);
+        await setExecution(sb, msg.metadata, msg.channel, { status: 'failed', error_message: 'Tokens insuficientes' });
         failed++;
         continue;
       }
@@ -238,33 +270,28 @@ Deno.serve(async (req) => {
           last_error: null
         }).eq('id', msg.id);
         
-        // Update order_notification_executions status to 'sent' if this is an order notification
-        if (msg.reference_type === 'order_notification' && msg.metadata?.order_number) {
-          const orderNumber = msg.metadata.order_number as string;
-          await supabase.from('order_notification_executions')
-            .update({ 
-              status: 'sent',
-              tokens_used: 1
-            })
-            .eq('order_number', orderNumber)
-            .eq('channel', msg.channel)
-            .eq('status', 'pending');
-          log.info(`[MESSAGE-QUEUE-PROCESSOR] ✅ Updated execution log for order #${orderNumber}`);
+        if (msg.reference_type === 'order_notification') {
+          await setExecution(sb, msg.metadata, msg.channel, { status: 'sent', tokens_used: 1 });
+          await recordTouches(sb, msg.tenant_id, [{ target: msg.channel === 'email' ? { email: msg.recipient } : { phone: msg.recipient }, channel: msg.channel as 'email' | 'whatsapp', purpose: 'order_status', ref: msg.reference_id }]);
         }
-        
+
         sent++;
         log.info(`[MESSAGE-QUEUE-PROCESSOR] ✅ Message ${msg.id} sent`);
       } else {
         // Failed - check if we should retry
         const newRetryCount = msg.retry_count + 1;
+        // Numero sem WhatsApp nao melhora repetindo; tempo esgotado pode ter saido (repetir duplicaria): em ambos nao repete.
+        const unconfirmed = isAmbiguousSendError(result.error ?? '');
+        const permanent = isPermanentRecipientError(result.error ?? '') || unconfirmed;
 
-        if (newRetryCount >= msg.max_retries) {
-          // Max retries reached - mark as failed
+        if (permanent || newRetryCount >= msg.max_retries) {
+          const finalError = unconfirmed ? `Envio não confirmado (tempo esgotado): não repetido para evitar mensagem duplicada. ${result.error}` : result.error;
           await supabase.from('message_queue').update({
             status: 'failed',
             retry_count: newRetryCount,
-            last_error: result.error
+            last_error: finalError
           }).eq('id', msg.id);
+          if (msg.reference_type === 'order_notification') await setExecution(sb, msg.metadata, msg.channel, { status: 'failed', error_message: finalError });
           failed++;
           log.info(`[MESSAGE-QUEUE-PROCESSOR] ❌ Message ${msg.id} failed permanently: ${result.error}`);
         } else {
