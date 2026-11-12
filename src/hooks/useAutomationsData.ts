@@ -122,7 +122,12 @@ export function useAutomationsData() {
         .select('id, name, integration_id, is_active, created_at')
         .order('created_at', { ascending: false });
       if (configsError) throw configsError;
-      setOrderNotificationConfigs(configs || []);
+
+      // Regras ativas por configuração (o cartão mostra "N regras configuradas")
+      const { data: rules } = await supabase.from('order_notification_status_rules').select('config_id').eq('is_enabled', true);
+      const rulesByConfig = new Map<string, number>();
+      for (const r of rules || []) rulesByConfig.set(r.config_id, (rulesByConfig.get(r.config_id) ?? 0) + 1);
+      setOrderNotificationConfigs((configs || []).map((c) => ({ ...c, rules_count: rulesByConfig.get(c.id) ?? 0 })));
 
       const { data: executions, error: execError } = await supabase
         .from('order_notification_executions')
