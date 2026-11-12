@@ -4,6 +4,7 @@ import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { attributionConsumer, loadOrder, recoveryConsumer, type DomainEvent } from "./consumers.ts";
 import { cashbackConsumer } from "./cashback-consumer.ts";
+import { GA4_CONSUMER, ga4RefundConsumer } from "./ga4-consumer.ts";
 
 const BATCH = 50;
 const MAX_ATTEMPTS = 5;
@@ -45,6 +46,18 @@ Deno.serve(async (req) => {
       } catch (e) {
         failures.set(ev.id, `cashback: ${(e as Error).message}`);
         log.error(`[EVENTS] cashback falhou no evento ${ev.id}:`, (e as Error).message);
+      }
+    }
+
+    // 1b) GA4: refund para pedido cancelado/devolvido
+    for (const ev of events) {
+      if (ev.event_type !== "order_ingested" || done.has(`${ev.id}:${GA4_CONSUMER}`)) continue;
+      try {
+        const out = await ga4RefundConsumer(supabase, ev, await loadOrder(supabase, ev));
+        await record(ev.id, GA4_CONSUMER, out.status, out.detail);
+      } catch (e) {
+        failures.set(ev.id, failures.get(ev.id) ?? `ga4: ${(e as Error).message}`);
+        log.error(`[EVENTS] ga4 falhou no evento ${ev.id}:`, (e as Error).message);
       }
     }
 
