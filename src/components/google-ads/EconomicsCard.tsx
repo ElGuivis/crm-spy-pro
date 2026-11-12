@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EconomicsRecon } from "@/components/google-ads/EconomicsRecon";
 import type { useGoogleAdsEconomics } from "@/hooks/useGoogleAdsEconomics";
+import { useGa4Monthly } from "@/hooks/useGa4Monthly";
 import { parseNumber, pct, reais, x, type EconomicsView } from "@/lib/googleAdsEconomics";
 
 const fmt = (n: number) => String(n).replace(".", ",");
@@ -41,6 +42,7 @@ function Settings({ v, canEdit, saving, onSave }: { v: EconomicsView; canEdit: b
 /** Economia real da loja (medida nos pedidos do CRM) → ponto de equilíbrio do ROAS e metas. */
 export function EconomicsCard({ eco, canEdit }: { eco: ReturnType<typeof useGoogleAdsEconomics>; canEdit: boolean }) {
   const { view, save } = eco;
+  const ga4 = useGa4Monthly();
   if (view.isLoading) return <Skeleton className="h-64 w-full" />;
   if (view.error || !view.data) return <p className="text-sm text-destructive">Não foi possível calcular a economia: {(view.error as Error | null)?.message}</p>;
   const v = view.data, m = v.metrics, b = v.break_even;
@@ -75,7 +77,7 @@ export function EconomicsCard({ eco, canEdit }: { eco: ReturnType<typeof useGoog
           <p className="text-xs text-muted-foreground">Calculado em {new Date(v.computed_at).toLocaleString("pt-BR")} a partir dos pedidos da Loja Integrada. Só leitura: nada muda no Google Ads.</p>
         </CardContent>
       </Card>
-      <EconomicsRecon recon={v.reconciliation} />
+      <EconomicsRecon recon={v.reconciliation} ga4={ga4.data} />
     </div>
   );
 }

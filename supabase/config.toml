@@ -471,3 +471,7 @@ verify_jwt = false
 [functions.google-ads-settings]
 # AUTHENTICATED — in-code auth via requireUserAuth (+ is_tenant_admin)
 verify_jwt = false
+
+[functions.ga4-monthly]
+# Usuário autenticado (requireUserAuth); só responde para a loja dona da propriedade GA4
+verify_jwt = false
