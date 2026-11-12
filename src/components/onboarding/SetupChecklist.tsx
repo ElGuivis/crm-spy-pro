@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { CheckCircle2, Circle, ChevronDown, ChevronUp, Plug, MessageSquare, Bot, Users, Rocket, X, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,9 @@ export function SetupChecklist() {
   const { toast } = useToast();
   const [expanded, setExpanded] = useState(true);
   const [dismissed, setDismissed] = useState(false);
+  // Só confere as etapas depois de saber se o aviso já foi concluído; antes disso o aviso reaparecia a cada visita ao painel.
+  const [dismissedLoaded, setDismissedLoaded] = useState(false);
+  const celebrated = useRef(false);
   const [statuses, setStatuses] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -80,6 +83,11 @@ export function SetupChecklist() {
     },
   ];
 
+  // Marca de "já concluído" no navegador: garante que o aviso não volte mesmo se o banco não responder
+  const doneKey = user?.id ? `setup-checklist-done-${user.id}` : null;
+  const doneLocally = () => { try { return !!doneKey && localStorage.getItem(doneKey) === '1'; } catch { return false; } };
+  const markDoneLocally = () => { try { if (doneKey) localStorage.setItem(doneKey, '1'); } catch { /* sem armazenamento: o banco segura */ } };
+
   // Load dismissed state from DB
   useEffect(() => {
     if (!user?.id) return;
@@ -89,12 +97,13 @@ export function SetupChecklist() {
         .select('checklist_dismissed')
         .eq('user_id', user.id)
         .maybeSingle();
-      if (data?.checklist_dismissed) {
+      if (data?.checklist_dismissed || doneLocally()) {
         setDismissed(true);
       }
+      setDismissedLoaded(true);
     };
     load();
-  }, [user?.id]);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const checkAll = async () => {
     setLoading(true);
@@ -105,17 +114,20 @@ export function SetupChecklist() {
     setStatuses(results);
     setLoading(false);
 
-    // Auto-dismiss if all complete
-    if (Object.values(results).every(Boolean)) {
+    // Todas as etapas prontas: comemora UMA vez e já grava como concluído (antes só gravava depois de 5 s, e quem saía da tela via o aviso de novo)
+    if (Object.values(results).every(Boolean) && !celebrated.current) {
+      celebrated.current = true;
+      markDoneLocally();
+      if (user?.id) void supabase.from('profiles').update({ checklist_dismissed: true }).eq('user_id', user.id);
       toast({ title: '🎉 Setup completo!', description: 'Todas as etapas foram concluídas.' });
-      setTimeout(() => handleDismiss(), 5000);
+      setTimeout(() => setDismissed(true), 5000);
     }
   };
 
   useEffect(() => {
-    if (dismissed || !tenant?.id) return;
+    if (!dismissedLoaded || dismissed || !tenant?.id) return;
     checkAll();
-  }, [tenant?.id, dismissed]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tenant?.id, dismissed, dismissedLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -125,6 +137,7 @@ export function SetupChecklist() {
 
   const handleDismiss = async () => {
     setDismissed(true);
+    markDoneLocally();
     if (user?.id) {
       await supabase.from('profiles').update({ checklist_dismissed: true }).eq('user_id', user.id);
     }
