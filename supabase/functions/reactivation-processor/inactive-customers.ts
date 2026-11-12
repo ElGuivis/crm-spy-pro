@@ -1,4 +1,5 @@
-import { fetchAllRows, formatPhoneNumber, type InactiveCustomer } from "./helpers.ts";
+import { fetchAllRows, type InactiveCustomer } from "./helpers.ts";
+import { customerKey } from "./state.ts";
 
 /**
  * Clientes cujo último pedido (depois da ativação da regra) é mais antigo que o corte.
@@ -78,8 +79,7 @@ export async function findInactiveCustomers(
 
         if (!custInfo) continue;
 
-        const phone = custInfo.phone ? formatPhoneNumber(custInfo.phone) : null;
-        const key = phone || custInfo.email || '';
+        const key = customerKey(custInfo.phone, custInfo.email);
         if (!key) continue;
 
         if (!lastOrderMap.has(key)) {
@@ -124,8 +124,7 @@ export async function findInactiveCustomers(
       const customerMap = new Map<string, { name: string; phone: string | null; email: string | null; lastOrder: string }>();
 
       for (const o of orders) {
-        const phone = o.cliente_telefone ? formatPhoneNumber(o.cliente_telefone) : null;
-        const key = phone || o.cliente_email || '';
+        const key = customerKey(o.cliente_telefone, o.cliente_email);
         if (!key) continue;
 
         if (!customerMap.has(key)) {

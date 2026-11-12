@@ -3,11 +3,13 @@ import { sendWhatsAppMessage, type WhatsAppConfig } from "../_shared/whatsapp-se
 import { requireInternalAuth } from "../_shared/auth-guard.ts";
 import { liAuthHeader } from "../_shared/li-auth.ts";
 import { issueCoupon } from "../_shared/coupon-issuer.ts";
-import { canContact, recordTouches } from "../_shared/contact-policy.ts";
+import { canContact, normPhone, recordTouches } from "../_shared/contact-policy.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { ensureAutomationConversation } from "../_shared/automation-conversation.ts";
-import { fetchAllRows, formatPhoneNumber, generateCouponCode } from "./helpers.ts";
+import { fetchAllRows, generateCouponCode, type InactiveCustomer } from "./helpers.ts";
+import { customerKey, decideNext, type ExecRow } from "./state.ts";
+import { isAmbiguousSendError, isPermanentRecipientError } from "../_shared/outbound-errors.ts";
 import { findInactiveCustomers } from "./inactive-customers.ts";
 import { brtDateAfter, brtDayStartIso, inSendWindow } from "../_shared/brt.ts";
 import { paceQuota, pauseBetweenSends } from "../_shared/send-pacing.ts";
@@ -114,166 +116,101 @@ Deno.serve(async (req) => {
         log.info(`[REACTIVATION] Found ${inactiveCustomers.length} inactive customer(s) for config ${config.id}`);
         if (inactiveCustomers.length === 0) continue;
 
-        // Check deduplication — get existing executions for this config with cycle_step info
-        const existingExecs = await fetchAllRows(
-          supabase
-            .from('reactivation_executions')
-            .select('customer_phone, customer_email, created_at, cycle_step')
-            .eq('config_id', config.id)
-            .in('status', ['sent', 'pending'])
-        );
-
-        // Build dedup map: customer key → { count, lastExecDate, lastStep }
-        const execMap = new Map<string, { count: number; lastExecDate: Date; lastStep: number }>();
-        for (const ex of existingExecs) {
-          const phone = ex.customer_phone ? formatPhoneNumber(ex.customer_phone) : null;
-          const key = phone || ex.customer_email || '';
-          if (!key) continue;
-          const execDate = new Date(ex.created_at);
-          const existing = execMap.get(key);
-          if (!existing) {
-            execMap.set(key, { count: 1, lastExecDate: execDate, lastStep: ex.cycle_step || 1 });
-          } else {
-            existing.count++;
-            if (execDate > existing.lastExecDate) {
-              existing.lastExecDate = execDate;
-              existing.lastStep = ex.cycle_step || 1;
-            }
-          }
+        // Sem WhatsApp conectado não há o que enviar: antes o processador gerava cupom e gravava "pending" para cada cliente,
+        // gastando os passos do ciclo sem mandar nada.
+        if (config.whatsapp_integration?.status !== 'connected') {
+          log.warn(`[REACTIVATION] Config ${config.id}: WhatsApp desconectado ou não configurado; nada enviado`);
+          continue;
         }
-
-        // Get WhatsApp config
         let whatsappConfig: WhatsAppConfig | null = null;
-        if (config.whatsapp_integration_id && evolutionUrl && evolutionApiKey) {
+        if (evolutionUrl && evolutionApiKey) {
           const metadata = config.whatsapp_integration?.metadata as Record<string, unknown>;
           const instanceName = metadata?.instance_name || metadata?.instanceName;
-          if (instanceName) {
-            whatsappConfig = {
-              evolutionApiUrl: evolutionUrl,
-              evolutionApiKey,
-              instanceName: instanceName as string,
-            };
-          }
+          if (instanceName) whatsappConfig = { evolutionApiUrl: evolutionUrl, evolutionApiKey, instanceName: instanceName as string };
         }
+        if (!whatsappConfig) { log.warn(`[REACTIVATION] Config ${config.id}: instância do WhatsApp não encontrada`); continue; }
+
+        // Histórico da configuração (todas as situações), agrupado por pessoa
+        const history = await fetchAllRows(
+          supabase.from('reactivation_executions').select('customer_key, created_at, cycle_step, last_order_date, status, attempt_no').eq('config_id', config.id)
+        ) as (ExecRow & { customer_key: string | null })[];
+        const rowsByKey = new Map<string, ExecRow[]>();
+        for (const r of history) {
+          if (!r.customer_key) continue;
+          rowsByKey.set(r.customer_key, [...(rowsByKey.get(r.customer_key) ?? []), r]);
+        }
+
+        // Quem pode receber agora: tem telefone válido e o ciclo dele permite (passo, espera, limite, episódio)
+        const eligible: { customer: InactiveCustomer; key: string; stepIndex: number; attemptNo: number }[] = [];
+        for (const customer of inactiveCustomers) {
+          if (!normPhone(customer.phone)) continue; // a reativação é por WhatsApp
+          const key = customerKey(customer.phone, customer.email);
+          const d = decideNext({ rows: rowsByKey.get(key) ?? [], steps, maxCycles, inactivityDays, resendIntervalDays: config.resend_interval_days || 0, lastOrderDate: customer.lastOrderDate, now });
+          if (d.send) eligible.push({ customer, key, stepIndex: d.stepIndex, attemptNo: d.attemptNo });
+        }
+
+        // ritmo: divide quem ainda pode receber pelas execuções que restam na janela
+        const lastSentAt = history.reduce<Date | null>((m, r) => {
+          const d = new Date(r.created_at);
+          return d >= dayStart && (r.status === 'sent' || r.status === 'pending') && (!m || d > m) ? d : m;
+        }, null);
+        const quota = paceQuota(eligible.length, lastSentAt);
+        log.info(`[REACTIVATION] ${eligible.length} elegível(is); cota desta execução: ${quota}`);
+        if (quota === 0) continue; // ainda não é a hora do próximo envio
+        let attempted = 0;
+        let transientFailures = 0;
 
         // LI coupon auth
         const apiKey = config.store_integration?.api_key;
         const authHeader = apiKey ? liAuthHeader(apiKey) : null;
 
-        // ritmo: divide quem ainda não foi contactado hoje pelas execuções que restam na janela
-        const pending = inactiveCustomers.filter((c) => {
-          const k = (c.phone ? formatPhoneNumber(c.phone) : null) || c.email || '';
-          const e = execMap.get(k);
-          return !!k && (!e || e.lastExecDate < dayStart);
-        });
-        const lastSentAt = [...execMap.values()].reduce<Date | null>((m, e) => (e.lastExecDate >= dayStart && (!m || e.lastExecDate > m) ? e.lastExecDate : m), null);
-        const quota = paceQuota(pending.length, lastSentAt);
-        log.info(`[REACTIVATION] ${pending.length} pendente(s); cota desta execução: ${quota}`);
-        if (quota === 0) continue; // ainda não é a hora do próximo envio
-        let attempted = 0;
-
-        for (const customer of inactiveCustomers) {
+        for (const { customer, key, stepIndex, attemptNo } of eligible) {
           if (attempted >= quota || Date.now() - runStartedAt > RUN_BUDGET_MS) break;
-          const phone = customer.phone ? formatPhoneNumber(customer.phone) : null;
-          const customerKey = phone || customer.email || '';
-          if (!customerKey) continue;
+          if (transientFailures >= 3) { log.warn(`[REACTIVATION] 3 falhas seguidas (provedor/loja fora do ar?): parando esta rodada; os clientes continuam elegíveis`); break; }
 
-          // Determine which cycle step this customer is on
-          const customerExec = execMap.get(customerKey);
-          let nextStepIndex = 0;
-          
-          if (customerExec) {
-            // Max cycles check: if maxCycles > 0 and customer already reached it, skip
-            if (maxCycles > 0 && customerExec.count >= maxCycles) {
-              log.info(`[REACTIVATION] Customer ${customer.name} reached max ${maxCycles} cycles, skipping`);
-              continue;
-            }
+          const { data: stillHasTokens } = await supabase.rpc('has_enough_tokens', { _tenant_id: tenantId, _amount: REACTIVATION_TOKEN_COST });
+          if (!stillHasTokens) { log.info(`[REACTIVATION] Tokens exhausted for tenant ${tenantId}`); break; }
 
-            // Find the next step to send
-            const nextStepNumber = customerExec.lastStep + 1;
-            nextStepIndex = steps.findIndex(s => s.step_number === nextStepNumber);
-            
-            // If no more steps, loop back to first (if not limited by maxCycles)
-            if (nextStepIndex === -1) {
-              nextStepIndex = 0; // restart cycle
-            }
+          const currentStep = steps[stepIndex];
+          const stepDiscount = currentStep.use_custom_coupon && currentStep.coupon_discount_percent != null ? currentStep.coupon_discount_percent : config.coupon_discount_percent;
+          const stepDuration = currentStep.use_custom_coupon && currentStep.coupon_duration_days != null ? currentStep.coupon_duration_days : config.coupon_duration_days;
 
-            // Check delay: days since last execution must be >= this step's delay_days
-            const currentStep = steps[nextStepIndex];
-            const daysSinceExec = Math.floor((now.getTime() - customerExec.lastExecDate.getTime()) / (1000 * 60 * 60 * 24));
-            if (daysSinceExec < currentStep.delay_days) {
-              continue; // Not time yet for next step
-            }
-          }
+          // regra única de contato: telefone bloqueado => não gera cupom (a pessoa continua elegível nas próximas rodadas)
+          const rule = await canContact(supabase, tenantId, { phone: customer.phone, email: customer.email }, 'reactivation');
+          if (!rule.ok) { log.info(`[REACTIVATION] ${customer.name}: pulado pelas regras de contato (${rule.reason})`); continue; }
 
-          // Check tokens again
-          const { data: stillHasTokens } = await supabase.rpc('has_enough_tokens', {
-            _tenant_id: tenantId,
-            _amount: REACTIVATION_TOKEN_COST,
-          });
-          if (!stillHasTokens) {
-            log.info(`[REACTIVATION] Tokens exhausted for tenant ${tenantId}`);
-            break;
-          }
+          // RESERVA antes de qualquer cupom ou envio: o índice único (config, pessoa, compra, tentativa) impede que duas execuções
+          // mandem a mesma mensagem; se o processo cair no meio, a reserva fica e o cliente NÃO recebe de novo.
+          const { data: claimed, error: claimErr } = await supabase.from('reactivation_executions').insert({
+            tenant_id: tenantId, config_id: config.id, customer_name: customer.name, customer_phone: customer.phone, customer_email: customer.email,
+            last_order_date: customer.lastOrderDate, days_inactive: customer.daysInactive, cycle_step: currentStep.step_number,
+            customer_key: key, attempt_no: attemptNo, status: 'pending', tokens_used: 0,
+          }).select('id').single();
+          if (claimErr) { if (claimErr.code !== '23505') log.error(`[REACTIVATION] não reservou ${customer.name}:`, claimErr.message); continue; }
+          const execId = (claimed as { id: string }).id;
+          const release = () => supabase.from('reactivation_executions').delete().eq('id', execId); // volta a ser elegível na próxima rodada
+          attempted++;
 
           try {
-            // Get the current step's settings
-            const currentStep = steps[nextStepIndex];
-            
-            // Determine coupon settings: step-specific or global
-            const stepDiscount = currentStep.use_custom_coupon && currentStep.coupon_discount_percent != null
-              ? currentStep.coupon_discount_percent
-              : config.coupon_discount_percent;
-            const stepDuration = currentStep.use_custom_coupon && currentStep.coupon_duration_days != null
-              ? currentStep.coupon_duration_days
-              : config.coupon_duration_days;
-
-            // regra única de contato: telefone bloqueado ou limite diário atingido => não gera cupom agora (a pessoa continua elegível nas próximas rodadas)
-            if (whatsappConfig && customer.phone) {
-              const rule = await canContact(supabase, tenantId, { phone: customer.phone, email: customer.email }, 'reactivation');
-              if (!rule.ok) {
-                log.info(`[REACTIVATION] ${customer.name}: pulado pelas regras de contato (${rule.reason})`);
-                continue;
-              }
-            }
-
-            // Cupom: loja integrada pelo emissor único (livro-razão, nova tentativa em 429, código sem colisão);
-            // outras lojas seguem só com o código sorteado, como antes.
-            attempted++;
+            // Cupom: loja integrada pelo emissor único (livro-razão, nova tentativa em 429, código sem colisão); outras lojas, só o código sorteado.
             let couponCode = generateCouponCode();
             if (storeType === 'loja_integrada' && authHeader && config.store_integration?.id) {
-              const expiresDate = brtDateAfter(stepDuration);
               const issued = await issueCoupon(supabase, {
                 tenantId, integrationId: config.store_integration.id, auth: authHeader,
                 origin: { type: 'reactivation', id: config.id, ref: `ciclo ${currentStep.step_number}` },
-                spec: { tipo: 'porcentagem', valor: stepDiscount, validade: expiresDate, quantidade: 1, quantidadePorCliente: 1, descricao: `Reativação - ${customer.name} - Ciclo ${currentStep.step_number}` },
+                spec: { tipo: 'porcentagem', valor: stepDiscount, validade: brtDateAfter(stepDuration), quantidade: 1, quantidadePorCliente: 1, descricao: `Reativação - ${customer.name} - Ciclo ${currentStep.step_number}` },
                 codeFactory: generateCouponCode, recipient: { name: customer.name, email: customer.email, phone: customer.phone },
               });
               if (!issued.ok) {
                 log.error(`[REACTIVATION] Failed to create coupon for ${customer.name}: ${issued.status} - ${issued.error}`);
-                await supabase.from('reactivation_executions').insert({
-                  tenant_id: tenantId,
-                  config_id: config.id,
-                  customer_name: customer.name,
-                  customer_phone: customer.phone,
-                  customer_email: customer.email,
-                  coupon_code: couponCode,
-                  last_order_date: customer.lastOrderDate,
-                  days_inactive: customer.daysInactive,
-                  status: 'failed',
-                  error_message: `Coupon creation failed: ${issued.error}`,
-                });
+                await release(); transientFailures++;
                 continue;
               }
               couponCode = issued.code;
             }
+            await supabase.from('reactivation_executions').update({ coupon_code: couponCode }).eq('id', execId);
 
-            // Get the current step's message template
-            const currentStepNumber = currentStep.step_number;
-            
-            // Build message from step-specific template
             const firstName = customer.name.split(' ')[0];
-
             const message = (currentStep.message_template || config.message_template || '')
               .replace(/\{\{cliente_nome\}\}/g, customer.name)
               .replace(/\{\{cliente_primeiro_nome\}\}/g, firstName)
@@ -281,91 +218,47 @@ Deno.serve(async (req) => {
               .replace(/\{\{cupom\}\}/g, couponCode)
               .replace(/\{\{validade\}\}/g, String(stepDuration))
               .replace(/\{\{dias_inativo\}\}/g, String(customer.daysInactive))
-              .replace(/\{\{ciclo\}\}/g, String(customerExec ? customerExec.count + 1 : 1))
+              .replace(/\{\{ciclo\}\}/g, String(attemptNo))
               // Legacy placeholders compatibility
-              .replace(/\{nome\}/g, customer.name)
-              .replace(/\{primeiro_nome\}/g, firstName)
-              .replace(/\{desconto\}/g, String(stepDiscount))
-              .replace(/\{cupom\}/g, couponCode)
-              .replace(/\{dias\}/g, String(stepDuration));
+              .replace(/\{nome\}/g, customer.name).replace(/\{primeiro_nome\}/g, firstName)
+              .replace(/\{desconto\}/g, String(stepDiscount)).replace(/\{cupom\}/g, couponCode).replace(/\{dias\}/g, String(stepDuration));
 
-            let sent = false;
-            let errorMsg: string | null = null;
-
-            // Send WhatsApp
-            if (whatsappConfig && customer.phone) {
-              const result = await sendWhatsAppMessage(whatsappConfig, customer.phone, message);
-              if (result.success) {
-                sent = true;
-                log.info(`[REACTIVATION] ✅ WhatsApp sent to ${customer.name} (step ${currentStepNumber}, inactive ${customer.daysInactive}d)`);
-
-                // Create automation conversation
-                if (config.whatsapp_integration_id) {
-                  try {
-                    await ensureAutomationConversation({
-                      supabase,
-                      tenantId,
-                      customerPhone: customer.phone,
-                      integrationId: config.whatsapp_integration_id,
-                      messageContent: message,
-                      automationType: 'reactivation',
-                      metadata: { customer_name: customer.name },
-                    });
-                  } catch (autoConvErr) {
-                    log.error('[REACTIVATION] Failed to create automation conversation:', autoConvErr);
-                  }
-                }
+            const result = await sendWhatsAppMessage(whatsappConfig, customer.phone!, message);
+            if (!result.success) {
+              const err = result.error || 'WhatsApp send failed';
+              log.error(`[REACTIVATION] WhatsApp failed for ${customer.name}: ${err}`);
+              if (isPermanentRecipientError(err)) {
+                // número sem WhatsApp: não adianta repetir (nem neste passo nem nos próximos)
+                await supabase.from('reactivation_executions').update({ status: 'unreachable', error_message: err }).eq('id', execId);
+              } else if (isAmbiguousSendError(err)) {
+                // tempo esgotado: pode ter saído; repetir duplicaria. Fica registrado e o ciclo segue
+                await supabase.from('reactivation_executions').update({ status: 'failed', error_message: `Envio não confirmado: ${err}` }).eq('id', execId);
               } else {
-                errorMsg = result.error || 'WhatsApp send failed';
-                log.error(`[REACTIVATION] WhatsApp failed for ${customer.name}: ${errorMsg}`);
+                await release(); transientFailures++; // falha do provedor: tenta de novo na próxima rodada
               }
+              continue;
             }
 
-            // Deduct tokens ONLY when message was actually sent
-            if (sent) {
-              await recordTouches(supabase, tenantId, [{ target: { phone: customer.phone, email: customer.email }, channel: 'whatsapp', purpose: 'reactivation', ref: config.id }]);
-              await supabase.rpc('deduct_tokens', {
-                _tenant_id: tenantId,
-                _amount: REACTIVATION_TOKEN_COST,
-                _type: 'automation',
-                _description: `Reativação - ${customer.name} - Ciclo ${currentStepNumber} - Cupom ${couponCode}`,
-                _reference_id: config.id,
-              });
+            transientFailures = 0;
+            log.info(`[REACTIVATION] ✅ WhatsApp sent to ${customer.name} (step ${currentStep.step_number}, tentativa ${attemptNo}, inactive ${customer.daysInactive}d)`);
+            await supabase.from('reactivation_executions').update({ status: 'sent', tokens_used: REACTIVATION_TOKEN_COST }).eq('id', execId);
+            try {
+              await ensureAutomationConversation({ supabase, tenantId, customerPhone: customer.phone!, integrationId: config.whatsapp_integration_id, messageContent: message, automationType: 'reactivation', metadata: { customer_name: customer.name } });
+            } catch (autoConvErr) {
+              log.error('[REACTIVATION] Failed to create automation conversation:', autoConvErr);
             }
-
-            // Log execution with cycle_step
-            await supabase.from('reactivation_executions').insert({
-              tenant_id: tenantId,
-              config_id: config.id,
-              customer_name: customer.name,
-              customer_phone: customer.phone,
-              customer_email: customer.email,
-              coupon_code: couponCode,
-              last_order_date: customer.lastOrderDate,
-              days_inactive: customer.daysInactive,
-              cycle_step: currentStepNumber,
-              status: sent ? 'sent' : (errorMsg ? 'failed' : 'pending'),
-              error_message: errorMsg,
-              tokens_used: sent ? REACTIVATION_TOKEN_COST : 0,
+            await recordTouches(supabase, tenantId, [{ target: { phone: customer.phone, email: customer.email }, channel: 'whatsapp', purpose: 'reactivation', ref: config.id }]);
+            await supabase.rpc('deduct_tokens', {
+              _tenant_id: tenantId, _amount: REACTIVATION_TOKEN_COST, _type: 'automation',
+              _description: `Reativação - ${customer.name} - Passo ${currentStep.step_number} - Cupom ${couponCode}`, _reference_id: config.id,
             });
-
             totalProcessed++;
             if (attempted < quota) await pauseBetweenSends(quota);
           } catch (custError: unknown) {
             const msg = custError instanceof Error ? custError.message : 'Unknown error';
             log.error(`[REACTIVATION] Error processing ${customer.name}:`, msg);
-
-            await supabase.from('reactivation_executions').insert({
-              tenant_id: tenantId,
-              config_id: config.id,
-              customer_name: customer.name,
-              customer_phone: customer.phone,
-              customer_email: customer.email,
-              last_order_date: customer.lastOrderDate,
-              days_inactive: customer.daysInactive,
-              status: 'failed',
-              error_message: msg,
-            });
+            // erro inesperado antes de saber se saiu: mantém a reserva como falha (não repete às cegas) e segue
+            await supabase.from('reactivation_executions').update({ status: 'failed', error_message: msg }).eq('id', execId).eq('status', 'pending');
           }
         }
       } catch (configError: unknown) {
