@@ -34,7 +34,7 @@ export async function findInactiveCustomers(
       const customerIds = [...new Set(orders.map(o => o.customer_id).filter(Boolean))];
 
       // Fetch customer details from li_customers
-      const customerMap = new Map<string, { name: string; phone: string | null; email: string | null }>();
+      const customerMap = new Map<string, { name: string; phone: string | null; email: string | null; liId: number | null }>();
 
       if (customerIds.length > 0) {
         // Fetch in batches of 500 to avoid query size limits
@@ -42,16 +42,17 @@ export async function findInactiveCustomers(
           const batch = customerIds.slice(i, i + 500);
           const { data: customers } = await supabase
             .from('li_customers')
-            .select('loja_integrada_id, name, phone, email')
+            .select('id, loja_integrada_customer_id, name, phone, email')
             .eq('integration_id', integrationId)
-            .in('loja_integrada_id', batch);
+            .in('id', batch); // li_orders.customer_id é o id (uuid) de li_customers; a consulta antiga usava uma coluna que não existe
 
           if (customers) {
             for (const c of customers) {
-              customerMap.set(String(c.loja_integrada_id), {
+              customerMap.set(String(c.id), {
                 name: c.name || 'Cliente',
                 phone: c.phone || null,
                 email: c.email || null,
+                liId: Number.isFinite(Number(c.loja_integrada_customer_id)) ? Number(c.loja_integrada_customer_id) : null,
               });
             }
           }
@@ -59,7 +60,7 @@ export async function findInactiveCustomers(
       }
 
       // Group orders by customer, tracking last order date
-      const lastOrderMap = new Map<string, { name: string; phone: string | null; email: string | null; lastOrder: string }>();
+      const lastOrderMap = new Map<string, { name: string; phone: string | null; email: string | null; lastOrder: string; liId: number | null }>();
 
       for (const o of orders) {
         // Try to get customer info from li_customers first, fallback to raw_json
@@ -73,6 +74,7 @@ export async function findInactiveCustomers(
               name: cliente.nome || 'Cliente',
               phone: cliente.telefone_celular || cliente.telefone_principal || null,
               email: cliente.email || null,
+              liId: Number.isFinite(Number(cliente.id)) ? Number(cliente.id) : null,
             };
           }
         }
@@ -88,6 +90,7 @@ export async function findInactiveCustomers(
             phone: custInfo.phone,
             email: custInfo.email,
             lastOrder: o.created_at_remote,
+            liId: custInfo.liId,
           });
         }
         // Already ordered desc, so first occurrence is the latest
@@ -106,6 +109,7 @@ export async function findInactiveCustomers(
             lastOrderDate: cust.lastOrder,
             daysInactive,
             source: 'loja_integrada',
+            liCustomerId: cust.liId,
           });
         }
       }

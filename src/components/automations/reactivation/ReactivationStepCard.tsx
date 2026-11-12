@@ -9,6 +9,7 @@ import {
   type CycleStep, type ReactivationConfig,
   MESSAGE_PLACEHOLDERS,
 } from "./reactivationHelpers";
+import { ReactivationTest } from "./ReactivationTest";
 
 interface Props {
   step: CycleStep;
@@ -86,6 +87,8 @@ export function ReactivationStepCard({
             rows={4}
             placeholder={index === 0 ? "Primeira mensagem de reativação..." : `Mensagem do ${step.stepNumber}º ciclo...`}
           />
+
+          <ReactivationTest whatsappIntegrationId={config.whatsappIntegrationId} message={step.messageTemplate} />
 
           <div className="space-y-2 pt-2 border-t border-dashed">
             <div className="flex items-center gap-2">

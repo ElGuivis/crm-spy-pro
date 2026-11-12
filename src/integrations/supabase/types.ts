@@ -12360,10 +12360,12 @@ export type Database = {
       }
       reactivation_executions: {
         Row: {
+          attempt_no: number | null
           config_id: string | null
           coupon_code: string | null
           created_at: string | null
           customer_email: string | null
+          customer_key: string | null
           customer_name: string | null
           customer_phone: string | null
           cycle_step: number | null
@@ -12376,10 +12378,12 @@ export type Database = {
           tokens_used: number | null
         }
         Insert: {
+          attempt_no?: number | null
           config_id?: string | null
           coupon_code?: string | null
           created_at?: string | null
           customer_email?: string | null
+          customer_key?: string | null
           customer_name?: string | null
           customer_phone?: string | null
           cycle_step?: number | null
@@ -12392,10 +12396,12 @@ export type Database = {
           tokens_used?: number | null
         }
         Update: {
+          attempt_no?: number | null
           config_id?: string | null
           coupon_code?: string | null
           created_at?: string | null
           customer_email?: string | null
+          customer_key?: string | null
           customer_name?: string | null
           customer_phone?: string | null
           cycle_step?: number | null
@@ -13953,6 +13959,16 @@ export type Database = {
           revenue: number
           touches: number
           whatsapp_touches: number
+        }[]
+      }
+      get_reactivation_results: {
+        Args: { p_config_id: string }
+        Returns: {
+          failed: number
+          returned: number
+          revenue: number
+          sent: number
+          unreachable: number
         }[]
       }
       get_recent_email_recipients: {

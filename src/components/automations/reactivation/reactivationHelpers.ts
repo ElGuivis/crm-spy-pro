@@ -38,7 +38,7 @@ export const MESSAGE_PLACEHOLDERS = [
   { key: '{{cliente_primeiro_nome}}', label: 'Primeiro Nome', description: 'Apenas o primeiro nome do cliente' },
   { key: '{{desconto}}', label: '% Desconto', description: 'Porcentagem de desconto do cupom' },
   { key: '{{cupom}}', label: 'Código Cupom', description: 'O código do cupom gerado' },
-  { key: '{{validade}}', label: 'Validade', description: 'Data de validade do cupom' },
+  { key: '{{validade}}', label: 'Validade', description: 'Data de validade do cupom (ex.: 19/11/2026)' },
   { key: '{{dias_inativo}}', label: 'Dias Inativo', description: 'Quantidade de dias sem comprar' },
   { key: '{{ciclo}}', label: 'Nº Ciclo', description: 'Número do ciclo atual (1, 2, 3...)' },
 ];

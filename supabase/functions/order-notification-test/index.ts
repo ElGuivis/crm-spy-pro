@@ -18,6 +18,15 @@ const SAMPLE = {
 };
 const MAX_TEXT = 4000;
 
+/** Exemplo da reativação: mesmos marcadores do reactivation-processor. */
+function renderReactivation(tpl: string): string {
+  const venc = new Date(Date.now() + 7 * 86_400_000 - 3 * 3_600_000).toISOString().slice(0, 10).split('-').reverse().join('/');
+  return tpl
+    .replace(/\{\{cliente_nome\}\}/g, 'Cliente Teste').replace(/\{\{cliente_primeiro_nome\}\}/g, 'Cliente')
+    .replace(/\{\{desconto\}\}/g, '10').replace(/\{\{cupom\}\}/g, 'TESTE10').replace(/\{\{validade\}\}/g, venc)
+    .replace(/\{\{dias_inativo\}\}/g, '65').replace(/\{\{ciclo\}\}/g, '1');
+}
+
 serve(async (req) => {
   const log = createLogger("order-notification-test", getCorrelationId(req));
   const corsHeaders = getRestrictedCorsHeaders(req);
@@ -50,7 +59,8 @@ serve(async (req) => {
       const url = Deno.env.get("EVOLUTION_API_URL"), key = Deno.env.get("EVOLUTION_API_KEY");
       if (!instance || !url || !key) return json({ error: "WhatsApp não está conectado: escolha uma integração conectada" }, 400);
       const cfg: WhatsAppConfig = { evolutionApiUrl: url, evolutionApiKey: key, instanceName: instance };
-      result = await sendWhatsAppMessage(cfg, phone, `🧪 *Teste* (exemplo, não é um pedido real)\n\n${renderTemplate(template, SAMPLE)}`);
+      const isReact = body.kind === 'reactivation';
+      result = await sendWhatsAppMessage(cfg, phone, `🧪 *Teste* (exemplo, não é ${isReact ? 'uma reativação real' : 'um pedido real'})\n\n${isReact ? renderReactivation(template) : renderTemplate(template, SAMPLE)}`);
       sentTo = phone;
     } else {
       const to = normEmail(typeof body.to === "string" ? body.to : "");

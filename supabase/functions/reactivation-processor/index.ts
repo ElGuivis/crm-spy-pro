@@ -198,7 +198,7 @@ Deno.serve(async (req) => {
               const issued = await issueCoupon(supabase, {
                 tenantId, integrationId: config.store_integration.id, auth: authHeader,
                 origin: { type: 'reactivation', id: config.id, ref: `ciclo ${currentStep.step_number}` },
-                spec: { tipo: 'porcentagem', valor: stepDiscount, validade: brtDateAfter(stepDuration), quantidade: 1, quantidadePorCliente: 1, descricao: `Reativação - ${customer.name} - Ciclo ${currentStep.step_number}` },
+                spec: { tipo: 'porcentagem', valor: stepDiscount, validade: brtDateAfter(stepDuration), quantidade: 1, quantidadePorCliente: 1, clientes: customer.liCustomerId ? [customer.liCustomerId] : undefined, descricao: `Reativação - ${customer.name} - Ciclo ${currentStep.step_number}` },
                 codeFactory: generateCouponCode, recipient: { name: customer.name, email: customer.email, phone: customer.phone },
               });
               if (!issued.ok) {
@@ -211,12 +211,13 @@ Deno.serve(async (req) => {
             await supabase.from('reactivation_executions').update({ coupon_code: couponCode }).eq('id', execId);
 
             const firstName = customer.name.split(' ')[0];
+            const validadeBr = brtDateAfter(stepDuration).split('-').reverse().join('/'); // {{validade}} = data (ex.: 19/11/2026), não a quantidade de dias
             const message = (currentStep.message_template || config.message_template || '')
               .replace(/\{\{cliente_nome\}\}/g, customer.name)
               .replace(/\{\{cliente_primeiro_nome\}\}/g, firstName)
               .replace(/\{\{desconto\}\}/g, String(stepDiscount))
               .replace(/\{\{cupom\}\}/g, couponCode)
-              .replace(/\{\{validade\}\}/g, String(stepDuration))
+              .replace(/\{\{validade\}\}/g, validadeBr)
               .replace(/\{\{dias_inativo\}\}/g, String(customer.daysInactive))
               .replace(/\{\{ciclo\}\}/g, String(attemptNo))
               // Legacy placeholders compatibility

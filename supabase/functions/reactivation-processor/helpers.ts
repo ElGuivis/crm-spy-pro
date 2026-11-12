@@ -9,6 +9,8 @@ export interface InactiveCustomer {
   lastOrderDate: string;
   daysInactive: number;
   source: 'loja_integrada' | 'bling';
+  /** id do cliente na loja (para cupom pessoal); só Loja Integrada */
+  liCustomerId?: number | null;
 }
 
 export function generateCouponCode(): string {

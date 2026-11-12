@@ -8,6 +8,7 @@ import { CashbackSubCard } from '@/components/automations/CashbackSubCard';
 import { CashbackConfigDialog } from '@/components/automations/CashbackConfigDialog';
 import { OrderNotificationConfigDialog } from '@/components/automations/OrderNotificationConfigDialog';
 import { OrderNotificationHistoryDialog } from '@/components/automations/OrderNotificationHistoryDialog';
+import { ReactivationHistoryDialog } from '@/components/automations/ReactivationHistoryDialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { BirthdayConfigDialog } from '@/components/automations/BirthdayConfigDialog';
@@ -43,6 +44,7 @@ const AutomationsPage = () => {
   const [editingCashbackId, setEditingCashbackId] = useState<string | null>(null);
   const [orderNotificationDialogOpen, setOrderNotificationDialogOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [reactivationHistoryOpen, setReactivationHistoryOpen] = useState(false);
   const [editingOrderNotificationId, setEditingOrderNotificationId] = useState<string | null>(null);
   const [birthdayDialogOpen, setBirthdayDialogOpen] = useState(false);
   const [editingBirthdayId, setEditingBirthdayId] = useState<string | null>(null);
@@ -232,6 +234,9 @@ const AutomationsPage = () => {
           accentClass="border-violet-500/50"
         >
           <div className="ml-8 space-y-2 border-l-2 border-violet-500/20 pl-4">
+            <Button variant="outline" size="sm" onClick={() => setReactivationHistoryOpen(true)}>
+              <History className="mr-2 h-4 w-4" />Ver histórico e resultado
+            </Button>
             {data.reactivationConfigs.map(config => (
               <AutomationSubCard
                 key={config.id}
@@ -261,6 +266,7 @@ const AutomationsPage = () => {
         onSave={data.loadCashbackData}
       />
       <OrderNotificationHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} />
+      <ReactivationHistoryDialog open={reactivationHistoryOpen} onOpenChange={setReactivationHistoryOpen} configIds={data.reactivationConfigs.map(c => c.id)} />
       <OrderNotificationConfigDialog
         open={orderNotificationDialogOpen}
         onOpenChange={(open) => { setOrderNotificationDialogOpen(open); if (!open) setEditingOrderNotificationId(null); }}
