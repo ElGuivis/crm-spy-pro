@@ -475,3 +475,7 @@ verify_jwt = false
 [functions.ga4-monthly]
 # Usuário autenticado (requireUserAuth); só responde para a loja dona da propriedade GA4
 verify_jwt = false
+
+[functions.order-notification-test]
+# Usuário admin autenticado (requireUserAuth + is_tenant_admin); manda 1 mensagem de teste
+verify_jwt = false

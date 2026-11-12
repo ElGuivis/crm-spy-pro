@@ -6,6 +6,7 @@ import { sendEmail as sharedSendEmail, getEmailConfig } from "../_shared/email-s
 import { unsubscribeFor, withHtmlFooter, type SystemEmailKind } from "../_shared/email-unsubscribe-link.ts";
 import { isAmbiguousSendError, isPermanentRecipientError } from "../_shared/outbound-errors.ts";
 import { applyTracking, lookupTracking, normStatus } from "../_shared/order-notification-render.ts";
+import { nextWindowOpen } from "../_shared/send-window.ts";
 import { recordTouches } from "../_shared/contact-policy.ts";
 import { sendWhatsAppMessage as sharedSendWhatsApp, type WhatsAppConfig } from "../_shared/whatsapp-sender.ts";
 import type { MessageQueueRecord, EmailIntegrationRecord } from "../_shared/supabase-types.ts";
@@ -26,7 +27,6 @@ const RETRY_DELAYS = [1, 5, 30];
 // Rastreio ainda inexistente na hora do envio: espera 30 min por vez, até 6 vezes (3 h), e então sai com texto neutro.
 const TRACKING_WAIT_MIN = 30;
 const TRACKING_MAX_WAITS = 6;
-const TRACKING_FALLBACK = "ainda em preparação (você recebe o código assim que ele sair)";
 
 type Supa = Parameters<typeof lookupTracking>[0];
 /** Atualiza o registro de envio ligado à mensagem (pelo id exato; mensagens antigas sem id caem no critério anterior). */
@@ -115,6 +115,16 @@ Deno.serve(async (req) => {
         }
       }
 
+      // JANELA DE ENVIO (horário de Brasília): fora dela a mensagem espera a próxima abertura (depois a validação de status roda de novo)
+      const win = msg.reference_type === 'order_notification' ? (msg.metadata?.send_window as { start: number; end: number } | null | undefined) : null;
+      if (win) {
+        const opens = nextWindowOpen(Date.now(), Number(win.start), Number(win.end));
+        if (opens !== null) {
+          await supabase.from('message_queue').update({ status: 'pending', next_retry_at: new Date(opens).toISOString(), last_error: 'Fora do horário de envio: aguardando a abertura da janela' }).eq('id', msg.id);
+          continue;
+        }
+      }
+
       // PRE-SEND VALIDATION: Check if order status has changed (for order_notification messages)
       // So vale quando a regra tem espera (ex.: 'Aguardando pagamento' em 10 min nao sai se o cliente ja pagou). Sem espera, o aviso do status em que o pedido entrou sempre sai.
       if (msg.reference_type === 'order_notification' && msg.metadata?.expected_status && Number(msg.metadata?.delay_minutes ?? 0) > 0 && msg.reference_id) {
@@ -164,7 +174,7 @@ Deno.serve(async (req) => {
         const code = await lookupTracking(sb, msg.reference_id as string);
         const waits = Number(msg.metadata.tracking_waits ?? 0);
         if (code || waits >= TRACKING_MAX_WAITS) {
-          const fill = code || TRACKING_FALLBACK;
+          const fill = code || null; // null = texto neutro ("ainda em preparação")
           msg.message_content = applyTracking(msg.message_content, fill);
           msg.subject = msg.subject ? applyTracking(msg.subject, fill) : msg.subject;
           msg.html_content = msg.html_content ? applyTracking(msg.html_content, fill) : msg.html_content;

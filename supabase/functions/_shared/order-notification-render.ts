@@ -8,8 +8,14 @@ type Supabase = ReturnType<typeof createClient>;
 export const normStatus = (s: string | null | undefined): string =>
   (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
 
-const TRACKING_RE = /\{\{(rastreamento|tracking_code)\}\}/g;
-export const usesTracking = (text: string): boolean => /\{\{(rastreamento|tracking_code)\}\}/.test(text);
+const CODE_RE = /\{\{(rastreamento|tracking_code)\}\}/g;
+const LINK_RE = /\{\{link_rastreio\}\}/g;
+export const usesTracking = (text: string): boolean => /\{\{(rastreamento|tracking_code|link_rastreio)\}\}/.test(text);
+
+export const TRACKING_FALLBACK = "ainda em preparação (você recebe o código assim que ele sair)";
+export const TRACKING_LINK_FALLBACK = "disponível assim que o código sair";
+/** Página pública de acompanhamento (o mesmo endereço que as regras já citavam). */
+export const trackingUrl = (code: string) => `https://www.melhorrastreio.com.br/rastreio/${encodeURIComponent(code)}`;
 
 export interface RenderVars {
   firstName: string; name: string; orderNumber: string; status: string; total: string; products: string;
@@ -30,13 +36,13 @@ export function renderTemplate(tpl: string, v: RenderVars, html = false): string
     .replace(/\{\{status\}\}/g, put(v.status))
     .replace(/\{\{valor_total\}\}/g, put(v.total))
     .replace(/\{\{produtos\}\}/g, products || "—");
-  if (v.tracking != null) out = out.replace(TRACKING_RE, put(v.tracking));
+  if (v.tracking != null) out = out.replace(CODE_RE, put(v.tracking)).replace(LINK_RE, put(trackingUrl(v.tracking)));
   return out;
 }
 
-/** Preenche o rastreio que faltava no enfileiramento (usado pelo processador de fila na hora de enviar). */
-export function applyTracking(text: string | null | undefined, code: string): string {
-  return (text ?? "").replace(TRACKING_RE, code);
+/** Preenche o rastreio que faltava no enfileiramento (usado pelo processador de fila na hora de enviar). code null = texto neutro. */
+export function applyTracking(text: string | null | undefined, code: string | null): string {
+  return (text ?? "").replace(CODE_RE, code ?? TRACKING_FALLBACK).replace(LINK_RE, code ? trackingUrl(code) : TRACKING_LINK_FALLBACK);
 }
 
 const pick = (v: unknown): string => (typeof v === "string" || typeof v === "number" ? String(v).trim() : "");

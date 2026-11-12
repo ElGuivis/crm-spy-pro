@@ -23,6 +23,11 @@ export async function updateOrderStatuses(
 
   try {
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    // Pedido em aberto (pago, em separação, enviado...) é conferido a cada 5 min; pedido já encerrado (entregue/cancelado) só 1x por dia.
+    // Antes os 200 pedidos mais novos eram refeitos a cada 5 min mesmo encerrados (~40 das 100 chamadas/min que a loja permite).
+    const closed = '("Pedido Entregue","Pedido Cancelado","Pedido Devolvido")';
+    const needsCheck = `last_status_check_at.is.null,and(last_status_check_at.lt.${fiveMinutesAgo},or(status_name.is.null,status_name.not.in.${closed})),and(last_status_check_at.lt.${dayAgo},status_name.in.${closed})`;
 
     let countQuery = supabase.from("li_orders").select("id", { count: "exact", head: true });
     if (integrationId) countQuery = countQuery.eq("integration_id", integrationId);
@@ -31,7 +36,7 @@ export async function updateOrderStatuses(
     let ordersQuery = supabase
       .from("li_orders")
       .select("id, loja_integrada_order_id, order_number, status_id, status_name, created_at_remote, last_status_check_at, integration_id, raw_json, totals_json, shipping_json")
-      .or(`last_status_check_at.is.null,last_status_check_at.lt.${fiveMinutesAgo}`)
+      .or(needsCheck)
       .order("created_at_remote", { ascending: false })
       .limit(200);
     if (integrationId) ordersQuery = ordersQuery.eq("integration_id", integrationId);

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Gift, Bell, Cake, Plus, Coins, Loader2, Repeat } from 'lucide-react';
+import { Gift, Bell, Cake, Plus, Coins, Loader2, Repeat, History, AlertTriangle } from 'lucide-react';
 
 import { AutomationMainCard } from '@/components/automations/AutomationMainCard';
 import { AutomationSubCard } from '@/components/automations/AutomationSubCard';
@@ -7,6 +7,9 @@ import { AutomationCreateCard } from '@/components/automations/AutomationCreateC
 import { CashbackSubCard } from '@/components/automations/CashbackSubCard';
 import { CashbackConfigDialog } from '@/components/automations/CashbackConfigDialog';
 import { OrderNotificationConfigDialog } from '@/components/automations/OrderNotificationConfigDialog';
+import { OrderNotificationHistoryDialog } from '@/components/automations/OrderNotificationHistoryDialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { BirthdayConfigDialog } from '@/components/automations/BirthdayConfigDialog';
 import { ReactivationConfigDialog } from '@/components/automations/ReactivationConfigDialog';
 import { useAutomationsData } from '@/hooks/useAutomationsData';
@@ -22,6 +25,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+/** Abaixo disso o aviso de saldo baixo aparece nas notificações de pedido (cada aviso usa 1 token). */
+const LOW_TOKEN_BALANCE = 100;
+
 const AutomationsPage = () => {
   const { balance } = useTokens();
   const data = useAutomationsData();
@@ -36,6 +42,7 @@ const AutomationsPage = () => {
   const [cashbackDialogOpen, setCashbackDialogOpen] = useState(false);
   const [editingCashbackId, setEditingCashbackId] = useState<string | null>(null);
   const [orderNotificationDialogOpen, setOrderNotificationDialogOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [editingOrderNotificationId, setEditingOrderNotificationId] = useState<string | null>(null);
   const [birthdayDialogOpen, setBirthdayDialogOpen] = useState(false);
   const [editingBirthdayId, setEditingBirthdayId] = useState<string | null>(null);
@@ -145,6 +152,17 @@ const AutomationsPage = () => {
           accentClass="border-info/50"
         >
           <div className="ml-8 space-y-2 border-l-2 border-info/20 pl-4">
+            {balance < LOW_TOKEN_BALANCE && data.orderNotificationConfigs.some(c => c.is_active) && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  Saldo baixo: {balance.toLocaleString('pt-BR')} tokens. Cada aviso de pedido usa 1 token e, sem saldo, as mensagens deixam de sair. Recarregue em <a className="underline" href="/tokens">Tokens</a>.
+                </AlertDescription>
+              </Alert>
+            )}
+            <Button variant="outline" size="sm" onClick={() => setHistoryOpen(true)}>
+              <History className="mr-2 h-4 w-4" />Ver histórico de envios
+            </Button>
             {data.orderNotificationConfigs.map(config => (
               <AutomationSubCard
                 key={config.id}
@@ -242,6 +260,7 @@ const AutomationsPage = () => {
         editingId={editingCashbackId}
         onSave={data.loadCashbackData}
       />
+      <OrderNotificationHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} />
       <OrderNotificationConfigDialog
         open={orderNotificationDialogOpen}
         onOpenChange={(open) => { setOrderNotificationDialogOpen(open); if (!open) setEditingOrderNotificationId(null); }}

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict TDeQuBtl39cUbhXcOZkAicUcEoIcyiLkQysvquGalZOeIiJvaDdl3995zmKFZgS
+\restrict nhUszFu511PHHkFazUbJh2GU14WnoZZaRz0zXQBIRtIVDnpn7pcOiLez8y7z4Pm
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -1702,7 +1702,7 @@ CREATE FUNCTION public.get_contact_blockers(p_tenant_id uuid, p_emails text[], p
     AS $$
 DECLARE
   v_enabled boolean := true; v_cap integer := 3; v_gap integer := 24;
-  v_exempt boolean := p_purpose IN ('cashback', 'birthday', 'cashback_reminder');
+  v_exempt boolean := p_purpose IN ('cashback', 'birthday', 'cashback_reminder', 'order_status');
   v_broadcast boolean := p_purpose IN ('campaign', 'bulk');
   v_emails text[] := COALESCE(p_emails, ARRAY[]::text[]);
   v_phones text[] := COALESCE(p_phones, ARRAY[]::text[]);
@@ -1840,6 +1840,39 @@ $$;
 
 
 --
+-- Name: get_dashboard_health(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.get_dashboard_health(_tenant_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  d jsonb; v_rpc numeric; v_direct numeric; v_rfm date; v_unknown bigint; v_seg int;
+BEGIN
+  IF NOT public.caller_has_tenant(_tenant_id) THEN RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501'; END IF;
+  d := public.get_dashboard_stats(_tenant_id);
+  v_rpc := COALESCE((d->>'total_revenue_this_month')::numeric, 0);
+  -- conferência direta (sem passar pelo RPC): receita do mês = LI com status de venda + Bling
+  SELECT COALESCE(SUM((totals_json->>'total')::numeric), 0) INTO v_direct FROM li_orders
+    WHERE tenant_id = _tenant_id AND public.li_status_is_sale(status_name) AND created_at_remote >= date_trunc('month', now());
+  v_direct := v_direct + COALESCE((SELECT SUM(valor_total) FROM bling_orders WHERE tenant_id = _tenant_id AND data_criacao >= date_trunc('month', now())), 0);
+  SELECT MAX(reference_date) INTO v_rfm FROM customer_rfm_snapshots
+    WHERE integration_id IN (SELECT id FROM integrations WHERE tenant_id = _tenant_id);
+  SELECT COUNT(*) INTO v_unknown FROM messages
+    WHERE tenant_id = _tenant_id AND created_at >= now() - interval '30 days'
+      AND direction NOT IN ('inbound', 'outbound', 'system', 'internal_note');
+  RETURN jsonb_build_object(
+    'rfm_age_days', CASE WHEN v_rfm IS NULL THEN NULL ELSE (current_date - v_rfm) END,
+    'revenue_rpc', v_rpc, 'revenue_direct', v_direct,
+    'revenue_mismatch', ABS(v_rpc - v_direct) > 0.01,
+    'unknown_message_directions', v_unknown
+  );
+END;
+$$;
+
+
+--
 -- Name: get_dashboard_stats(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1891,7 +1924,7 @@ BEGIN
   INTO _li_revenue_this_month, _li_orders_this_month
   FROM li_orders
   WHERE tenant_id = _tenant_id
-    AND status_name = ANY(_effective_statuses)
+    AND public.li_status_is_sale(status_name)
     AND created_at_remote >= _start_this_month;
 
   -- LI Revenue last month
@@ -1899,7 +1932,7 @@ BEGIN
   INTO _li_revenue_last_month
   FROM li_orders
   WHERE tenant_id = _tenant_id
-    AND status_name = ANY(_effective_statuses)
+    AND public.li_status_is_sale(status_name)
     AND created_at_remote >= _start_last_month
     AND created_at_remote < _end_last_month;
 
@@ -1935,8 +1968,8 @@ BEGIN
 
   -- Messages last 30 days
   SELECT 
-    COUNT(*) FILTER (WHERE direction = 'outgoing'),
-    COUNT(*) FILTER (WHERE direction = 'incoming')
+    COUNT(*) FILTER (WHERE direction = 'outbound'),
+    COUNT(*) FILTER (WHERE direction = 'inbound')
   INTO _msgs_sent, _msgs_received
   FROM messages
   WHERE tenant_id = _tenant_id
@@ -1971,7 +2004,7 @@ BEGIN
         COUNT(*) as cnt
       FROM li_orders
       WHERE tenant_id = _tenant_id
-        AND status_name = ANY(_effective_statuses)
+        AND public.li_status_is_sale(status_name)
         AND created_at_remote >= _30d_ago
       GROUP BY day
     ) li ON li.day = d::date
@@ -2016,7 +2049,7 @@ BEGIN
         FROM li_order_items oi
         JOIN li_orders o ON o.id = oi.order_id
         WHERE oi.tenant_id = _tenant_id
-          AND o.status_name = ANY(_effective_statuses)
+          AND public.li_status_is_sale(o.status_name)
           AND o.created_at_remote >= _start_this_month
       ) combined
       WHERE name IS NOT NULL
@@ -2041,7 +2074,7 @@ BEGIN
         FROM li_order_items oi
         JOIN li_orders o ON o.id = oi.order_id
         WHERE oi.tenant_id = _tenant_id
-          AND o.status_name = ANY(_effective_statuses)
+          AND public.li_status_is_sale(o.status_name)
           AND o.created_at_remote >= _30d_ago
       ) combined
       WHERE name IS NOT NULL
@@ -2690,7 +2723,7 @@ BEGIN
 
   WITH o AS (
     SELECT id, customer_id, created_at_remote,
-      CASE WHEN status_name IN ('Pedido Entregue','Pedido Enviado','Pedido Pago') THEN 'valid'
+      CASE WHEN public.li_status_is_sale(status_name) THEN 'valid'
            WHEN status_name = 'Pedido Cancelado' THEN 'cancelled'
            WHEN status_name LIKE 'Pagamento devolvido%' OR status_name LIKE '%chargeback%' THEN 'refunded'
            ELSE 'other' END AS kind,
@@ -2742,7 +2775,7 @@ BEGIN
     SELECT date_trunc('month', created_at_remote)::date AS month, COUNT(*) AS orders, SUM((totals_json->>'total')::numeric) AS revenue
     FROM li_orders
     WHERE tenant_id = v_tenant AND created_at_remote >= date_trunc('month', now()) - interval '11 months'
-      AND status_name IN ('Pedido Entregue','Pedido Enviado','Pedido Pago')
+      AND public.li_status_is_sale(status_name)
     GROUP BY 1
   ) m
   LEFT JOIN (
@@ -2994,6 +3027,18 @@ BEGIN
     'logs', to_jsonb(_logs)
   );
 END;
+$$;
+
+
+--
+-- Name: li_status_is_sale(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.li_status_is_sale(_status text) RETURNS boolean
+    LANGUAGE sql IMMUTABLE PARALLEL SAFE
+    SET search_path TO 'public'
+    AS $$
+  SELECT _status IS NOT NULL AND _status !~* '(cancel|devolvid|chargeback|estorn|reembols|aguardando|an[aá]lise|efetuado|recusad|n[aã]o aprovad)'
 $$;
 
 
@@ -4021,40 +4066,39 @@ CREATE FUNCTION public.replace_order_notification_rules(p_config_id uuid, p_tena
     AS $$
 DECLARE
   r jsonb;
+  v_names text[];
 BEGIN
-  -- Validate inputs
-  IF p_config_id IS NULL THEN
-    RAISE EXCEPTION 'p_config_id is required';
-  END IF;
-  IF p_tenant_id IS NULL THEN
-    RAISE EXCEPTION 'p_tenant_id is required';
-  END IF;
-  IF p_rules IS NULL OR jsonb_typeof(p_rules) <> 'array' THEN
-    RAISE EXCEPTION 'p_rules must be a JSON array';
-  END IF;
+  IF p_config_id IS NULL THEN RAISE EXCEPTION 'p_config_id is required'; END IF;
+  IF p_tenant_id IS NULL THEN RAISE EXCEPTION 'p_tenant_id is required'; END IF;
+  IF p_rules IS NULL OR jsonb_typeof(p_rules) <> 'array' THEN RAISE EXCEPTION 'p_rules must be a JSON array'; END IF;
 
-  -- Replace rules atomically (function execution is a single transaction)
-  DELETE FROM public.order_notification_status_rules WHERE config_id = p_config_id;
+  SELECT COALESCE(array_agg(x->>'status_name'), ARRAY[]::text[]) INTO v_names FROM jsonb_array_elements(p_rules) x;
+  DELETE FROM public.order_notification_status_rules WHERE config_id = p_config_id AND NOT (status_name = ANY (v_names));
 
-  IF jsonb_array_length(p_rules) > 0 THEN
-    FOR r IN SELECT jsonb_array_elements(p_rules) LOOP
+  FOR r IN SELECT jsonb_array_elements(p_rules) LOOP
+    UPDATE public.order_notification_status_rules SET
+      status_id = NULLIF((r->>'status_id'), '')::integer,
+      is_enabled = COALESCE((r->>'is_enabled')::boolean, true),
+      message_template = r->>'message_template',
+      email_subject = NULLIF(r->>'email_subject', ''),
+      email_body = NULLIF(r->>'email_body', ''),
+      delay_minutes = COALESCE((r->>'delay_minutes')::integer, 0),
+      followup_enabled = COALESCE((r->>'followup_enabled')::boolean, false),
+      followup_delay_minutes = COALESCE((r->>'followup_delay_minutes')::integer, 0),
+      followup_template = NULLIF(r->>'followup_template', ''),
+      updated_at = now()
+    WHERE config_id = p_config_id AND status_name = r->>'status_name';
+    IF NOT FOUND THEN
       INSERT INTO public.order_notification_status_rules (
-        config_id, tenant_id, status_name, status_id, is_enabled,
-        message_template, email_subject, email_body, delay_minutes
-      )
-      VALUES (
-        p_config_id,
-        p_tenant_id,
-        r->>'status_name',
-        NULLIF((r->>'status_id'), '')::integer,
-        COALESCE((r->>'is_enabled')::boolean, true),
-        r->>'message_template',
-        NULLIF(r->>'email_subject', ''),
-        NULLIF(r->>'email_body', ''),
-        COALESCE((r->>'delay_minutes')::integer, 0)
+        config_id, tenant_id, status_name, status_id, is_enabled, message_template, email_subject, email_body, delay_minutes,
+        followup_enabled, followup_delay_minutes, followup_template
+      ) VALUES (
+        p_config_id, p_tenant_id, r->>'status_name', NULLIF((r->>'status_id'), '')::integer, COALESCE((r->>'is_enabled')::boolean, true),
+        r->>'message_template', NULLIF(r->>'email_subject', ''), NULLIF(r->>'email_body', ''), COALESCE((r->>'delay_minutes')::integer, 0),
+        COALESCE((r->>'followup_enabled')::boolean, false), COALESCE((r->>'followup_delay_minutes')::integer, 0), NULLIF(r->>'followup_template', '')
       );
-    END LOOP;
-  END IF;
+    END IF;
+  END LOOP;
 END;
 $$;
 
@@ -4967,7 +5011,15 @@ CREATE TABLE public.birthday_configs (
     message_template text DEFAULT 'Olá {nome}! 🎂🎉 Feliz aniversário! Para comemorar, preparamos um cupom especial de {desconto}% de desconto para você! Use o código *{cupom}* e aproveite. Válido por {validade} dias!'::text NOT NULL,
     tokens_per_execution integer DEFAULT 3 NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    coupon_type text DEFAULT 'porcentagem'::text NOT NULL,
+    coupon_fixed_value numeric,
+    max_discount_value numeric,
+    min_order_value numeric,
+    cumulative boolean DEFAULT false NOT NULL,
+    personal_coupon boolean DEFAULT true NOT NULL,
+    CONSTRAINT birthday_configs_coupon_type_check CHECK ((coupon_type = ANY (ARRAY['porcentagem'::text, 'fixo'::text, 'frete_gratis'::text]))),
+    CONSTRAINT birthday_configs_values_check CHECK ((((coupon_type <> 'fixo'::text) OR (COALESCE(coupon_fixed_value, (0)::numeric) > (0)::numeric)) AND (COALESCE(max_discount_value, (0)::numeric) >= (0)::numeric) AND (COALESCE(min_order_value, (0)::numeric) >= (0)::numeric)))
 );
 
 
@@ -8916,7 +8968,11 @@ CREATE TABLE public.order_notification_configs (
     is_active boolean DEFAULT true,
     tokens_per_execution integer DEFAULT 1,
     created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now()
+    updated_at timestamp with time zone DEFAULT now(),
+    send_window_enabled boolean DEFAULT true NOT NULL,
+    send_window_start smallint DEFAULT 8 NOT NULL,
+    send_window_end smallint DEFAULT 21 NOT NULL,
+    CONSTRAINT order_notification_configs_window_chk CHECK ((((send_window_start >= 0) AND (send_window_start <= 23)) AND ((send_window_end >= 1) AND (send_window_end <= 24)) AND (send_window_start < send_window_end)))
 );
 
 
@@ -8939,7 +8995,8 @@ CREATE TABLE public.order_notification_executions (
     status text DEFAULT 'pending'::text,
     error_message text,
     tokens_used integer DEFAULT 0,
-    created_at timestamp with time zone DEFAULT now()
+    created_at timestamp with time zone DEFAULT now(),
+    kind text DEFAULT 'primary'::text NOT NULL
 );
 
 
@@ -8959,7 +9016,10 @@ CREATE TABLE public.order_notification_status_rules (
     email_body text,
     delay_minutes integer DEFAULT 0,
     created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now()
+    updated_at timestamp with time zone DEFAULT now(),
+    followup_enabled boolean DEFAULT false NOT NULL,
+    followup_delay_minutes integer DEFAULT 0 NOT NULL,
+    followup_template text
 );
 
 
@@ -11881,10 +11941,24 @@ CREATE INDEX cashback_credits_tenant_idx ON public.cashback_credits USING btree 
 
 
 --
+-- Name: cashback_reminders_coupon_number_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX cashback_reminders_coupon_number_unique ON public.cashback_reminders USING btree (coupon_id, reminder_number);
+
+
+--
 -- Name: conversations_csat_token_idx; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX conversations_csat_token_idx ON public.conversations USING btree (csat_token);
+
+
+--
+-- Name: generated_coupons_cashback_order_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX generated_coupons_cashback_order_unique ON public.generated_coupons USING btree (tenant_id, order_id) WHERE ((origin_type = 'cashback'::text) AND (order_id IS NOT NULL));
 
 
 --
@@ -14314,6 +14388,13 @@ CREATE UNIQUE INDEX uniq_chatbot_flow_sessions_active ON public.chatbot_flow_ses
 --
 
 CREATE UNIQUE INDEX uq_google_ads_recommendations_dedupe ON public.google_ads_recommendations USING btree (account_id, dedupe_key);
+
+
+--
+-- Name: uq_order_notif_exec_once; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX uq_order_notif_exec_once ON public.order_notification_executions USING btree (config_id, order_number, channel, kind, status_name);
 
 
 --
@@ -22385,5 +22466,5 @@ ALTER TABLE public.whatsapp_channels ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict TDeQuBtl39cUbhXcOZkAicUcEoIcyiLkQysvquGalZOeIiJvaDdl3995zmKFZgS
+\unrestrict nhUszFu511PHHkFazUbJh2GU14WnoZZaRz0zXQBIRtIVDnpn7pcOiLez8y7z4Pm
 

@@ -15,8 +15,9 @@ const MAX_ORDER_AGE_DAYS = 7;
 /** Quando o texto usa o rastreio e ele ainda não existe, a 1ª tentativa de envio espera isto (min). */
 const TRACKING_FIRST_WAIT_MIN = 10;
 
-interface Config { id: string; whatsapp_integration_id: string | null; email_integration_id: string | null; send_via_whatsapp: boolean | null; send_via_email: boolean | null }
-interface Rule { id: string; status_name: string; message_template: string; delay_minutes: number | null; email_subject: string | null; email_body: string | null }
+interface Config { id: string; whatsapp_integration_id: string | null; email_integration_id: string | null; send_via_whatsapp: boolean | null; send_via_email: boolean | null; send_window_enabled: boolean | null; send_window_start: number | null; send_window_end: number | null }
+interface Rule { id: string; status_name: string; message_template: string; delay_minutes: number | null; email_subject: string | null; email_body: string | null; followup_enabled: boolean | null; followup_delay_minutes: number | null; followup_template: string | null }
+type Kind = "primary" | "followup";
 interface Ctx { vars: RenderVars; phone: string | null; email: string | null; orderRowId: string; orderNumber: string; liId: string; tenantId: string }
 
 async function buildContext(supabase: Supabase, apiOrder: Row, dbOrder: Row, statusName: string, tenantId: string): Promise<Ctx> {
@@ -39,15 +40,15 @@ async function buildContext(supabase: Supabase, apiOrder: Row, dbOrder: Row, sta
 }
 
 /** Reserva (regra, pedido, canal). false = já reservado por outra execução (não enviar de novo). */
-async function claim(supabase: Supabase, ctx: Ctx, config: Config, rule: Rule, channel: "whatsapp" | "email", message: string, status: "pending" | "cancelled", reason?: string): Promise<string | null> {
+async function claim(supabase: Supabase, ctx: Ctx, config: Config, rule: Rule, channel: "whatsapp" | "email", kind: Kind, message: string, status: "pending" | "cancelled", reason?: string): Promise<string | null> {
   // Confere antes (funciona mesmo sem o índice único) e reserva com INSERT; o índice único do banco fecha a corrida entre duas execuções.
   const { data: already } = await supabase.from("order_notification_executions").select("id")
-    .eq("rule_id", rule.id).eq("order_number", ctx.orderNumber).eq("channel", channel).limit(1);
+    .eq("config_id", config.id).eq("order_number", ctx.orderNumber).eq("channel", channel).eq("kind", kind).eq("status_name", ctx.vars.status).limit(1);
   if (already?.length) return null;
   const { data, error } = await supabase.from("order_notification_executions").insert({
     tenant_id: ctx.tenantId, config_id: config.id, rule_id: rule.id, order_number: ctx.orderNumber, order_id: ctx.liId, status_name: ctx.vars.status, channel,
     customer_phone: channel === "whatsapp" ? ctx.phone : null, customer_email: channel === "email" ? ctx.email : null,
-    message_sent: message, status, error_message: reason ?? null,
+    kind, message_sent: message, status, error_message: reason ?? null,
   }).select("id").single();
   if (error) {
     if (error.code !== "23505") log.error(`[ORDER-NOTIFICATION] não reservou o envio do pedido #${ctx.orderNumber}:`, error.message);
@@ -56,39 +57,44 @@ async function claim(supabase: Supabase, ctx: Ctx, config: Config, rule: Rule, c
   return (data as { id: string }).id;
 }
 
-async function queueChannel(supabase: Supabase, ctx: Ctx, config: Config, rule: Rule, channel: "whatsapp" | "email"): Promise<void> {
+async function queueChannel(supabase: Supabase, ctx: Ctx, config: Config, rule: Rule, channel: "whatsapp" | "email", kind: Kind): Promise<void> {
   const isWa = channel === "whatsapp";
-  const text = renderTemplate(rule.message_template, ctx.vars);
-  const emailBodyTpl = rule.email_body || `<p>${rule.message_template.split("\n").join("<br>")}</p>`;
-  const subject = renderTemplate(rule.email_subject || `Atualização do Pedido #${ctx.orderNumber}`, ctx.vars);
+  const followup = kind === "followup";
+  const tpl = followup ? (rule.followup_template ?? "") : rule.message_template;
+  const text = renderTemplate(tpl, ctx.vars);
+  const emailBodyTpl = (!followup && rule.email_body) || `<p>${tpl.split("\n").join("<br>")}</p>`;
+  const subjectTpl = followup ? `Lembrete sobre o Pedido #${ctx.orderNumber}` : (rule.email_subject || `Atualização do Pedido #${ctx.orderNumber}`);
+  const subject = renderTemplate(subjectTpl, ctx.vars);
   const htmlBody = renderTemplate(emailBodyTpl, ctx.vars, true);
-  const texts = isWa ? [rule.message_template] : [rule.message_template, emailBodyTpl, rule.email_subject ?? ""];
+  const texts = isWa ? [tpl] : [tpl, emailBodyTpl, subjectTpl];
   const waitsForTracking = texts.some(usesTracking) && !ctx.vars.tracking;
 
   const recipient = isWa ? ctx.phone : ctx.email;
   if (!recipient) {
-    await claim(supabase, ctx, config, rule, channel, text, "cancelled", isWa ? "Cliente sem telefone válido" : "Cliente sem e-mail válido");
+    if (!followup) await claim(supabase, ctx, config, rule, channel, kind, text, "cancelled", isWa ? "Cliente sem telefone válido" : "Cliente sem e-mail válido");
     return;
   }
   const decision = await canContact(supabase, ctx.tenantId, isWa ? { phone: recipient } : { email: recipient }, "order_status");
   // Só supressão e bloqueio impedem aviso de pedido; limite diário e prioridade são de marketing e não se aplicam a mensagem transacional.
   if (!decision.ok && decision.permanent) {
-    await claim(supabase, ctx, config, rule, channel, text, "cancelled", `Destinatário bloqueado (${decision.reason})`);
+    if (!followup) await claim(supabase, ctx, config, rule, channel, kind, text, "cancelled", `Destinatário bloqueado (${decision.reason})`);
     return;
   }
 
-  const executionId = await claim(supabase, ctx, config, rule, channel, text, "pending");
+  const executionId = await claim(supabase, ctx, config, rule, channel, kind, text, "pending");
   if (!executionId) return; // já reservado: outra execução cuida
 
-  const delay = Math.max(0, Number(rule.delay_minutes ?? 0));
+  // O lembrete conta a partir do aviso principal e só sai se o pedido continuar no mesmo status (o processador confere antes de enviar).
+  const delay = Math.max(0, Number(rule.delay_minutes ?? 0)) + (followup ? Math.max(0, Number(rule.followup_delay_minutes ?? 0)) : 0);
   const waitMin = waitsForTracking ? Math.max(delay, TRACKING_FIRST_WAIT_MIN) : delay;
+  const window = config.send_window_enabled === false ? null : { start: config.send_window_start ?? 8, end: config.send_window_end ?? 21 };
   const { error } = await supabase.from("message_queue").insert({
     tenant_id: ctx.tenantId, channel, recipient,
     message_content: text, subject: isWa ? null : subject, html_content: isWa ? null : htmlBody,
     whatsapp_integration_id: isWa ? config.whatsapp_integration_id : null, email_integration_id: isWa ? null : config.email_integration_id,
     reference_type: "order_notification", reference_id: ctx.orderRowId, status: "pending",
     next_retry_at: new Date(Date.now() + waitMin * 60_000).toISOString(),
-    metadata: { expected_status: ctx.vars.status, order_number: ctx.orderNumber, delay_minutes: delay, execution_id: executionId, tracking_required: waitsForTracking, tracking_waits: 0 },
+    metadata: { expected_status: ctx.vars.status, order_number: ctx.orderNumber, delay_minutes: delay, execution_id: executionId, kind, tracking_required: waitsForTracking, tracking_waits: 0, send_window: window },
   });
   if (error) {
     // não ficou na fila: libera a reserva para uma próxima mudança/sincronização tentar de novo
@@ -96,7 +102,7 @@ async function queueChannel(supabase: Supabase, ctx: Ctx, config: Config, rule: 
     await supabase.from("order_notification_executions").delete().eq("id", executionId);
     return;
   }
-  log.info(`[ORDER-NOTIFICATION] ✓ ${channel} do pedido #${ctx.orderNumber} na fila (${rule.status_name}, espera ${waitMin} min)`);
+  log.info(`[ORDER-NOTIFICATION] ✓ ${channel}${followup ? " (lembrete)" : ""} do pedido #${ctx.orderNumber} na fila (${rule.status_name}, espera ${waitMin} min)`);
 }
 
 /** Pedido entrou ou mudou de status: enfileira as mensagens das regras que combinam com o status. */
@@ -109,7 +115,7 @@ export async function processOrderNotificationsInJob(
     if (created && new Date(created).getTime() < Date.now() - MAX_ORDER_AGE_DAYS * 86_400_000) return;
 
     const { data: configs } = await supabase.from("order_notification_configs")
-      .select("id, whatsapp_integration_id, email_integration_id, send_via_whatsapp, send_via_email")
+      .select("id, whatsapp_integration_id, email_integration_id, send_via_whatsapp, send_via_email, send_window_enabled, send_window_start, send_window_end")
       .eq("tenant_id", tenantId).eq("is_active", true).eq("integration_id", integrationId);
     if (!configs?.length) return;
 
@@ -117,13 +123,16 @@ export async function processOrderNotificationsInJob(
     let ctx: Ctx | null = null;
     for (const config of configs as Config[]) {
       const { data: all } = await supabase.from("order_notification_status_rules")
-        .select("id, status_name, message_template, delay_minutes, email_subject, email_body").eq("config_id", config.id).eq("is_enabled", true);
+        .select("id, status_name, message_template, delay_minutes, email_subject, email_body, followup_enabled, followup_delay_minutes, followup_template").eq("config_id", config.id).eq("is_enabled", true);
       const rules = ((all ?? []) as Rule[]).filter((r) => normStatus(r.status_name) === wanted);
       if (!rules.length) continue;
       ctx ??= await buildContext(supabase, apiOrder, dbOrder, statusName, tenantId);
       for (const rule of rules) {
-        if (config.send_via_whatsapp && config.whatsapp_integration_id) await queueChannel(supabase, ctx, config, rule, "whatsapp");
-        if (config.send_via_email && config.email_integration_id) await queueChannel(supabase, ctx, config, rule, "email");
+        const kinds: Kind[] = rule.followup_enabled && rule.followup_template?.trim() && Number(rule.followup_delay_minutes) > 0 ? ["primary", "followup"] : ["primary"];
+        for (const kind of kinds) {
+          if (config.send_via_whatsapp && config.whatsapp_integration_id) await queueChannel(supabase, ctx, config, rule, "whatsapp", kind);
+          if (config.send_via_email && config.email_integration_id) await queueChannel(supabase, ctx, config, rule, "email", kind);
+        }
       }
     }
   } catch (error) {

@@ -7,6 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { OrderNotificationFollowup } from "./OrderNotificationFollowup";
+import { OrderNotificationTest } from "./OrderNotificationTest";
 import {
   StatusRule, OrderNotificationConfig, DelayUnit,
   DELAY_UNIT_LABELS, MESSAGE_PLACEHOLDERS, delayConfigToMinutes,
@@ -19,12 +21,14 @@ interface OrderNotificationStatusRulesProps {
   toggleStatusRule: (statusName: string) => void;
   updateRuleMessage: (statusName: string, message: string) => void;
   updateRuleDelayParts: (statusName: string, value: number, unit: DelayUnit) => void;
+  updateRule: (statusName: string, patch: Partial<StatusRule>) => void;
+  updateFollowupDelay: (statusName: string, value: number, unit: DelayUnit) => void;
   insertPlaceholder: (placeholder: string, statusName: string) => void;
 }
 
 export function OrderNotificationStatusRules({
   config, availableStatuses, isLoadingStatuses,
-  toggleStatusRule, updateRuleMessage, updateRuleDelayParts, insertPlaceholder,
+  toggleStatusRule, updateRuleMessage, updateRuleDelayParts, updateRule, updateFollowupDelay, insertPlaceholder,
 }: OrderNotificationStatusRulesProps) {
   const enabledRules = config.status_rules.filter((r) => r.is_enabled);
 
@@ -126,6 +130,9 @@ export function OrderNotificationStatusRules({
                     <span className="text-xs text-muted-foreground">0 = envio imediato</span>
                   )}
                 </div>
+
+                <OrderNotificationFollowup rule={rule} updateRule={updateRule} updateFollowupDelay={updateFollowupDelay} />
+                <OrderNotificationTest config={config} rule={rule} />
               </TabsContent>
             ))}
           </Tabs>

@@ -1,5 +1,6 @@
 import { assert, assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { applyTracking, normStatus, renderTemplate, trackingFromOrder } from "../_shared/order-notification-render.ts";
+import { nextWindowOpen } from "../_shared/send-window.ts";
 import { processOrderNotificationsInJob } from "../_shared/order-notifications.ts";
 
 // ---------- banco falso em memória (só o que o módulo usa) ----------
@@ -28,7 +29,7 @@ function fakeDb(seed: Record<string, Row[]>, opts: FakeOpts = {}) {
         const p = this.payload!;
         if (this.table === "message_queue" && opts.failQueue) return { data: null, error: { message: "queue down" } };
         if (this.table === "order_notification_executions" && opts.uniqueExec &&
-          rows.some((r) => r.rule_id === p.rule_id && r.order_number === p.order_number && r.channel === p.channel)) {
+          rows.some((r) => r.config_id === p.config_id && r.order_number === p.order_number && r.channel === p.channel && (r.kind ?? "primary") === (p.kind ?? "primary") && r.status_name === p.status_name)) {
           return { data: null, error: { code: "23505", message: "duplicate key" } };
         }
         const row = { id: `id-${++n}`, ...p };
@@ -56,8 +57,8 @@ function fakeDb(seed: Record<string, Row[]>, opts: FakeOpts = {}) {
 
 const TENANT = "t1", INTEG = "i1";
 const baseSeed = (over: Record<string, Row[]> = {}): Record<string, Row[]> => ({
-  order_notification_configs: [{ id: "c1", tenant_id: TENANT, integration_id: INTEG, is_active: true, send_via_whatsapp: true, send_via_email: false, whatsapp_integration_id: "wa1", email_integration_id: null }],
-  order_notification_status_rules: [{ id: "r1", config_id: "c1", is_enabled: true, status_name: "Pedido Pago", message_template: "Oi {{cliente_primeiro_nome}}, pedido #{{numero_pedido}} pago. Rastreio: {{rastreamento}}", delay_minutes: 0, email_subject: null, email_body: null }],
+  order_notification_configs: [{ id: "c1", tenant_id: TENANT, integration_id: INTEG, is_active: true, send_via_whatsapp: true, send_via_email: false, whatsapp_integration_id: "wa1", email_integration_id: null, send_window_enabled: true, send_window_start: 8, send_window_end: 21 }],
+  order_notification_status_rules: [{ id: "r1", config_id: "c1", is_enabled: true, status_name: "Pedido Pago", message_template: "Oi {{cliente_primeiro_nome}}, pedido #{{numero_pedido}} pago. Rastreio: {{rastreamento}}", delay_minutes: 0, email_subject: null, email_body: null, followup_enabled: false, followup_delay_minutes: 0, followup_template: null }],
   li_order_items: [], me_shipments: [], order_notification_executions: [], message_queue: [],
   ...over,
 });
@@ -222,4 +223,60 @@ Deno.test("e-mail usa assunto e corpo próprios da regra (antes eram ignorados)"
   assertEquals(q.subject, "Pedido 9001 confirmado");
   assertEquals(q.html_content, "<h1>Olá Maria &lt;x&gt;</h1>");
   assertEquals(q.message_content, "texto");
+});
+
+// ---------- lembrete, janela, link e regra editada ----------
+Deno.test("lembrete: segundo aviso com espera somada, tipo followup e sem duplicar", async () => {
+  const seed = baseSeed();
+  const rule = seed.order_notification_status_rules[0] as Row;
+  rule.status_name = "Aguardando Pagamento"; rule.delay_minutes = 10; rule.message_template = "pague {{numero_pedido}}";
+  rule.followup_enabled = true; rule.followup_delay_minutes = 120; rule.followup_template = "ainda não pagou o pedido {{numero_pedido}}?";
+  const db = fakeDb(seed, { uniqueExec: true });
+  const before = Date.now();
+  await run(db, dbOrder(), "Aguardando Pagamento"); await run(db, dbOrder(), "Aguardando Pagamento");
+  assertEquals(db.tables.message_queue.length, 2);
+  const f = db.tables.message_queue.find((m) => (m.metadata as Row).kind === "followup")!;
+  assertEquals(f.message_content, "ainda não pagou o pedido 9001?");
+  assert(new Date(String(f.next_retry_at)).getTime() >= before + 129 * 60_000);
+  assertEquals((f.metadata as Row).expected_status, "Aguardando Pagamento");
+  assertEquals((f.metadata as Row).delay_minutes, 130);
+});
+
+Deno.test("sem lembrete ligado, só o aviso principal", async () => {
+  const db = fakeDb(baseSeed());
+  await run(db);
+  assertEquals(db.tables.message_queue.length, 1);
+  assertEquals((db.tables.message_queue[0].metadata as Row).kind, "primary");
+});
+
+Deno.test("janela de envio vai na mensagem (8h–21h) e pode ser desligada", async () => {
+  const on = fakeDb(baseSeed()); await run(on);
+  assertEquals((on.tables.message_queue[0].metadata as Row).send_window, { start: 8, end: 21 });
+  const seed = baseSeed(); (seed.order_notification_configs[0] as Row).send_window_enabled = false;
+  const off = fakeDb(seed); await run(off);
+  assertEquals((off.tables.message_queue[0].metadata as Row).send_window, null);
+});
+
+Deno.test("editar e salvar a configuração (regra com id novo) não reenvia o que já foi avisado", async () => {
+  const db = fakeDb(baseSeed(), { uniqueExec: true });
+  await run(db);
+  (db.tables.order_notification_status_rules[0] as Row).id = "r-novo-depois-de-salvar";
+  await run(db);
+  assertEquals(db.tables.message_queue.length, 1);
+});
+
+Deno.test("{{link_rastreio}} vira o link e, sem código, o texto neutro", () => {
+  const v = { firstName: "A", name: "A", orderNumber: "1", status: "s", total: "t", products: "", tracking: "AB123BR" };
+  assertEquals(renderTemplate("veja {{link_rastreio}}", v), "veja https://www.melhorrastreio.com.br/rastreio/AB123BR");
+  assertEquals(applyTracking("veja {{link_rastreio}}", "AB123BR"), "veja https://www.melhorrastreio.com.br/rastreio/AB123BR");
+  assertEquals(applyTracking("veja {{link_rastreio}}", null), "veja disponível assim que o código sair");
+});
+
+Deno.test("nextWindowOpen: dentro da janela envia; fora espera a abertura (Brasília, UTC-3)", () => {
+  const at = (iso: string) => Date.parse(iso);
+  assertEquals(nextWindowOpen(at("2026-11-12T15:00:00Z"), 8, 21), null); // 12h em Brasília
+  assertEquals(nextWindowOpen(at("2026-11-12T11:00:00Z"), 8, 21), null); // 8h exatas
+  assertEquals(new Date(nextWindowOpen(at("2026-11-13T01:30:00Z"), 8, 21)!).toISOString(), "2026-11-13T11:00:00.000Z"); // 22h30 → 8h do dia seguinte
+  assertEquals(new Date(nextWindowOpen(at("2026-11-12T07:00:00Z"), 8, 21)!).toISOString(), "2026-11-12T11:00:00.000Z"); // 4h → 8h do mesmo dia
+  assertEquals(nextWindowOpen(at("2026-11-12T00:00:00Z"), 21, 8), null); // janela inválida não restringe
 });

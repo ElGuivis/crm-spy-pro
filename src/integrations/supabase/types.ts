@@ -11816,6 +11816,9 @@ export type Database = {
           name: string
           send_via_email: boolean | null
           send_via_whatsapp: boolean | null
+          send_window_enabled: boolean
+          send_window_end: number
+          send_window_start: number
           tenant_id: string
           tokens_per_execution: number | null
           updated_at: string | null
@@ -11830,6 +11833,9 @@ export type Database = {
           name?: string
           send_via_email?: boolean | null
           send_via_whatsapp?: boolean | null
+          send_window_enabled?: boolean
+          send_window_end?: number
+          send_window_start?: number
           tenant_id: string
           tokens_per_execution?: number | null
           updated_at?: string | null
@@ -11844,6 +11850,9 @@ export type Database = {
           name?: string
           send_via_email?: boolean | null
           send_via_whatsapp?: boolean | null
+          send_window_enabled?: boolean
+          send_window_end?: number
+          send_window_start?: number
           tenant_id?: string
           tokens_per_execution?: number | null
           updated_at?: string | null
@@ -11889,6 +11898,7 @@ export type Database = {
           customer_phone: string | null
           error_message: string | null
           id: string
+          kind: string
           message_sent: string | null
           order_id: string
           order_number: string | null
@@ -11906,6 +11916,7 @@ export type Database = {
           customer_phone?: string | null
           error_message?: string | null
           id?: string
+          kind?: string
           message_sent?: string | null
           order_id: string
           order_number?: string | null
@@ -11923,6 +11934,7 @@ export type Database = {
           customer_phone?: string | null
           error_message?: string | null
           id?: string
+          kind?: string
           message_sent?: string | null
           order_id?: string
           order_number?: string | null
@@ -11963,6 +11975,9 @@ export type Database = {
           delay_minutes: number | null
           email_body: string | null
           email_subject: string | null
+          followup_delay_minutes: number
+          followup_enabled: boolean
+          followup_template: string | null
           id: string
           is_enabled: boolean | null
           message_template: string
@@ -11977,6 +11992,9 @@ export type Database = {
           delay_minutes?: number | null
           email_body?: string | null
           email_subject?: string | null
+          followup_delay_minutes?: number
+          followup_enabled?: boolean
+          followup_template?: string | null
           id?: string
           is_enabled?: boolean | null
           message_template: string
@@ -11991,6 +12009,9 @@ export type Database = {
           delay_minutes?: number | null
           email_body?: string | null
           email_subject?: string | null
+          followup_delay_minutes?: number
+          followup_enabled?: boolean
+          followup_template?: string | null
           id?: string
           is_enabled?: boolean | null
           message_template?: string

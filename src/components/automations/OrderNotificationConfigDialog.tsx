@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { useOrderNotificationConfig, getStoreIntegrationIcon, getWhatsAppIntegrationIcon } from "@/hooks/useOrderNotificationConfig";
 import { OrderNotificationStatusRules } from "./OrderNotificationStatusRules";
+import { OrderNotificationWindow } from "./OrderNotificationWindow";
 
 interface OrderNotificationConfigDialogProps {
   open: boolean;
@@ -20,7 +21,7 @@ export function OrderNotificationConfigDialog({ open, onOpenChange, editingId, o
     config, setConfig, isSaving, isLoading,
     storeIntegrations, whatsappIntegrations, emailIntegrations,
     availableStatuses, isLoadingStatuses,
-    toggleStatusRule, updateRuleMessage, updateRuleDelayParts, insertPlaceholder, handleSave,
+    toggleStatusRule, updateRuleMessage, updateRuleDelayParts, updateRule, updateFollowupDelay, insertPlaceholder, handleSave,
   } = useOrderNotificationConfig({ open, onOpenChange, editingId, onSave });
 
   return (
@@ -73,9 +74,11 @@ export function OrderNotificationConfigDialog({ open, onOpenChange, editingId, o
               <OrderNotificationStatusRules
                 config={config} availableStatuses={availableStatuses} isLoadingStatuses={isLoadingStatuses}
                 toggleStatusRule={toggleStatusRule} updateRuleMessage={updateRuleMessage}
-                updateRuleDelayParts={updateRuleDelayParts} insertPlaceholder={insertPlaceholder}
+                updateRuleDelayParts={updateRuleDelayParts} updateRule={updateRule} updateFollowupDelay={updateFollowupDelay} insertPlaceholder={insertPlaceholder}
               />
             )}
+
+            <OrderNotificationWindow config={config} setConfig={setConfig} />
 
             <div className="space-y-4">
               <Label>Canais de Envio</Label>
