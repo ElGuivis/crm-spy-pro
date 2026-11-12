@@ -1,7 +1,5 @@
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 
 import { createLogger } from '@/lib/logger';
 import { brtDate } from "@/lib/brt";
@@ -71,6 +69,11 @@ export function useExport() {
 
     setIsExporting(true);
     try {
+      // Carregado só ao exportar PDF: jspdf + autotable pesam ~420 kB e não precisam entrar nas telas.
+      const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+      ]);
       const doc = new jsPDF({
         orientation: headers.length > 5 ? 'landscape' : 'portrait',
         unit: 'mm',
