@@ -197,6 +197,19 @@ O `ai-chat` só sabe o que está no banco **do tenant da conversa**; nada de nic
 
 - Webhook do WhatsApp: dedup por `provider_message_id` (indice unico) e corrida de contato/conversa tratada no 23505 (reaproveita o que ja existe). Fila de saida/mensagens/buffer da IA: sempre reivindicar por RPC atomica. Numero sem WhatsApp (Evolution 400 `exists:false`) e falha definitiva e NAO conta no disjuntor (`_shared/outbound-errors.ts`). Mensagem do bot/automacao SEMPRE com `direction:'outbound'`. Auditoria semanal automatica: cron da VPS segunda 04h roda `/opt/spypro-audit/run.sh` (log em `/var/log/audit-atendimento.log`). Alerta de repasse para humano: `useHandoffAlert` (toast, bip, contador no titulo). Inatividade fecha primeiro (condicional) e so depois avisa; conversa de automacao fecha sem aviso.
 
+## Skills instaladas: uso obrigatório
+
+Skills globais (`~/.claude/skills`): `vercel-react-best-practices`, `web-design-guidelines`, `frontend-design`, `supabase-postgres-best-practices`, `supabase`, `playwright-cli`, `playwright-best-practices`, `find-skills`. **Carregar a skill ANTES de mexer na área dela** (não depois, não só se lembrar):
+
+- Componente, hook, página, performance ou bundle React → `vercel-react-best-practices`.
+- Tela nova, layout ou revisão visual/acessibilidade → `frontend-design` (criar) e `web-design-guidelines` (revisar).
+- Tabela, migration, RLS, índice, função/gatilho SQL, query lenta → `supabase-postgres-best-practices` (+ `supabase` para Auth/JWT/Realtime/Storage/Cron).
+- Edge function, auth-guard, Realtime, Storage → `supabase`.
+- Teste de tela/fluxo no navegador → `playwright-cli` e `playwright-best-practices` (testes em produção seguem a regra de guardar e restaurar a configuração do usuário).
+- Faltou uma capacidade → `find-skills` (verificar fonte e instalações antes de instalar; nada abaixo de ~1K instalações sem ler o conteúdo).
+
+Se a regra de uma skill conflitar com este arquivo, vale este arquivo.
+
 ## Convenções e regras de tamanho
 
 - **Limites**: pages ≤400L, components shared ≤250L, hooks ≤200L, edge `index.ts` ≤500L, `_shared/` ≤300L.
