@@ -276,10 +276,25 @@ Deno.serve(async (req) => {
     log.info(`[RFM] Starting insert of ${records.length} records...`)
 
     const batchSize = 100
-    for (let i = 0; i < records.length; i += batchSize) {
-      const batch = records.slice(i, i + batchSize)
-      const { error: insertErr } = await supabaseAdmin.from('customer_rfm_snapshots').insert(batch)
-      if (insertErr) { log.error(`[RFM] Insert error at batch ${i}:`, insertErr); throw insertErr }
+    try {
+      for (let i = 0; i < records.length; i += batchSize) {
+        const batch = records.slice(i, i + batchSize)
+        // pool de conexões do banco pode estar cheio por alguns segundos (PGRST003): tenta de novo antes de desistir
+        let insertErr: unknown = null
+        for (let attempt = 1; attempt <= 4; attempt++) {
+          const res = await supabaseAdmin.from('customer_rfm_snapshots').insert(batch)
+          insertErr = res.error
+          if (!insertErr) break
+          log.warn(`[RFM] Insert batch ${i} falhou (tentativa ${attempt}/4):`, insertErr)
+          await new Promise((r) => setTimeout(r, attempt * 2000))
+        }
+        if (insertErr) { log.error(`[RFM] Insert error at batch ${i}:`, insertErr); throw insertErr }
+      }
+    } catch (err) {
+      // não deixa um snapshot parcial do dia: as telas leem a data mais recente e mostrariam só parte dos clientes
+      log.warn('[RFM] Falha na gravação: removendo snapshot parcial de hoje para as telas voltarem ao dia anterior')
+      try { await batchDelete('customer_rfm_snapshots', integration_id, referenceDate) } catch (_) { /* melhor esforço */ }
+      throw err
     }
 
     log.info(`[RFM] Inserted ${records.length} snapshots successfully`)
