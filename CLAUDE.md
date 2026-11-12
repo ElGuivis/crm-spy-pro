@@ -8,7 +8,7 @@ CRM/ERP multi-tenant em produção (https://spypro.com.br) com integrações de 
 
 - **Frontend**: Vite 5 + React 18 + TypeScript + shadcn/ui (Radix) + Tailwind + React Router 7 + TanStack Query 5. Build: `vite build`. Dev: `npm run dev`.
 - **Backend**: Supabase auto-hospedado (Postgres 17 + Auth + REST + Realtime + Storage + Edge Functions Deno). 105 edge functions, 170 tabelas com RLS, 404 policies, 40 cron jobs.
-- **Deploy**: frontend via EasyPanel (Dockerfile + nginx, rebuild manual, Build Args `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`). Edge functions: `powershell scripts/deploy-functions-vps.ps1 [-Only <nome>]` (copia para a VPS e reinicia o runtime; `supabase functions deploy` NÃO se aplica ao servidor novo).
+- **Deploy**: frontend via EasyPanel (Dockerfile + nginx, Build Args `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`). **O deploy é feito pelo Claude (desde 12/11/2026):** frontend = `curl` no gatilho de implantação do EasyPanel depois do push no `main` (URL em `reference_secrets.md` na auto memory, NUNCA neste arquivo); resposta "Deploying...". Edge functions: `powershell scripts/deploy-functions-vps.ps1 [-Only <nome>]` (copia para a VPS e reinicia o runtime; `supabase functions deploy` NÃO se aplica ao servidor novo).
 - **Owner / login dev**: `usechronic@gmail.com` (único usuário; cadastros bloqueados por trigger + `DISABLE_SIGNUP`).
 
 ## Supabase ativo (auto-hospedado na VPS)
