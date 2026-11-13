@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import {
-  extractCartItems, getCampaignDetails, KIND_BY_IDENTIFIER, listAutomations, listCampaigns, normalizeCampaign,
+  extractCartItems, getAutomationConfig, getCampaignDetails, KIND_BY_IDENTIFIER, listAutomations, listCampaigns, normalizeCampaign, optOutAutomation,
   type FlowKind, type LiCampaign,
 } from "../_shared/li-marketing.ts";
 
@@ -13,6 +13,7 @@ const MAX_PAGES = 10;          // até 1.000 campanhas por automação por rodad
 const MAX_AGE_DAYS = 30;
 const DETAILS_PER_RUN = 20;    // o carrinho só existe enquanto a campanha está pendente: busca o detalhe com folga
 const DETAILS_REFRESH_MS = 30 * 60_000;
+const OPTOUTS_PER_RUN = 40;       // a loja aceita 100 chamadas/min; o gatilho nativo só age após 60 min, sobra folga
 
 interface ProductRow { id: number; name: string; price: number | null; promo: number | null; image: string | null; url: string | null; parent: number | null }
 
@@ -61,10 +62,10 @@ function buildItems(c: ReturnType<typeof normalizeCampaign>, products: Map<numbe
   });
 }
 
-export interface CaptureResult { integration: string; seen: number; upserted: number; details: number; gone: number; errors: string[] }
+export interface CaptureResult { integration: string; seen: number; upserted: number; details: number; gone: number; optouts: number; errors: string[] }
 
 export async function captureIntegration(supabase: Supabase, integration: { id: string; tenant_id: string }, auth: string): Promise<CaptureResult> {
-  const result: CaptureResult = { integration: integration.id, seen: 0, upserted: 0, details: 0, gone: 0, errors: [] };
+  const result: CaptureResult = { integration: integration.id, seen: 0, upserted: 0, details: 0, gone: 0, optouts: 0, errors: [] };
   const automations = await listAutomations(auth);
   const cutoff = Date.now() - MAX_AGE_DAYS * 86_400_000;
   const startedAt = new Date().toISOString();
@@ -103,6 +104,7 @@ export async function captureIntegration(supabase: Supabase, integration: { id: 
   }
 
   result.details = await fetchPendingDetails(supabase, integration, auth);
+  result.optouts = await optOutPending(supabase, integration, auth, result.errors);
   result.gone = await markGone(supabase, integration.id, completeKinds, startedAt);
   return result;
 }
@@ -146,4 +148,28 @@ async function markGone(supabase: Supabase, integrationId: string, kinds: FlowKi
     .eq("integration_id", integrationId).in("kind", kinds).eq("flow_status", "open").is("gone_at", null).lt("last_seen_at", seenSince)
     .select("id");
   return data?.length ?? 0;
+}
+
+/**
+ * A loja só captura: todo disparo sai pelo CRM. Quem acabou de abandonar sai da automação nativa (e-mail ou telefone), antes de a loja
+ * agir (primeira regra = 60 min; esta captura roda a cada 10). Independe de o nosso fluxo existir ou estar ligado.
+ */
+async function optOutPending(supabase: Supabase, integration: { id: string; tenant_id: string }, auth: string, errors: string[]): Promise<number> {
+  const { data: rows } = await supabase.from("li_abandonment_campaigns")
+    .select("id, automation_id, recipient_email, recipient_phone")
+    .eq("integration_id", integration.id).in("kind", ["cart", "browse", "order"]).eq("flow_status", "open").is("gone_at", null).neq("li_status", "F")
+    .is("native_optout_at", null).or("recipient_email.not.is.null,recipient_phone.not.is.null")
+    .order("event_at", { ascending: false }).limit(OPTOUTS_PER_RUN);
+  if (!rows?.length) return 0;
+  let storeId: number;
+  try { storeId = (await getAutomationConfig(auth)).storeId; } catch (e) { errors.push(`optout: ${(e as Error).message}`); return 0; }
+  let done = 0;
+  for (const r of rows) {
+    try {
+      await optOutAutomation(auth, (r.recipient_email || r.recipient_phone) as string, storeId, Number(r.automation_id));
+      await supabase.from("li_abandonment_campaigns").update({ native_optout_at: new Date().toISOString() }).eq("id", r.id);
+      done++;
+    } catch (e) { errors.push(`optout: ${(e as Error).message}`); }
+  }
+  return done;
 }
