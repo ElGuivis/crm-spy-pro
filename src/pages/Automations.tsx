@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/button';
 import { BirthdayConfigDialog } from '@/components/automations/BirthdayConfigDialog';
 import { ReactivationConfigDialog } from '@/components/automations/ReactivationConfigDialog';
 import { useAutomationsData } from '@/hooks/useAutomationsData';
+import { useDeleteAutomationConfig } from '@/hooks/useDeleteAutomationConfig';
+import { DeleteConfigDialog } from '@/components/automations/DeleteConfigDialog';
 import { useTokens } from '@/contexts/TokenContext';
 import {
   AlertDialog,
@@ -32,6 +34,7 @@ const LOW_TOKEN_BALANCE = 100;
 const AutomationsPage = () => {
   const { balance } = useTokens();
   const data = useAutomationsData();
+  const del = useDeleteAutomationConfig({ birthday: data.loadBirthdayData, reactivation: data.loadReactivationData, order_notification: data.loadOrderNotificationData });
 
   // UI state
   const [cashbackExpanded, setCashbackExpanded] = useState(false);
@@ -174,6 +177,7 @@ const AutomationsPage = () => {
                 subtitle={`${config.rules_count || 0} regra${(config.rules_count || 0) !== 1 ? 's' : ''} configurada${(config.rules_count || 0) !== 1 ? 's' : ''}`}
                 isActive={config.is_active}
                 onClick={() => openOrderNotification(config.id)}
+                onDelete={() => del.ask({ kind: 'order_notification', id: config.id, name: config.name })}
               />
             ))}
             <AutomationCreateCard
@@ -208,6 +212,7 @@ const AutomationsPage = () => {
                 subtitle={`${config.coupon_discount_percent}% • ${config.coupon_duration_days} dias`}
                 isActive={config.is_active}
                 onClick={() => openBirthday(config.id)}
+                onDelete={() => del.ask({ kind: 'birthday', id: config.id, name: config.name })}
               />
             ))}
             <AutomationCreateCard
@@ -246,6 +251,7 @@ const AutomationsPage = () => {
                 subtitle={`${config.inactivity_days} dias inatividade • ${config.coupon_discount_percent}%`}
                 isActive={config.is_active}
                 onClick={() => openReactivation(config.id)}
+                onDelete={() => del.ask({ kind: 'reactivation', id: config.id, name: config.name })}
               />
             ))}
             <AutomationCreateCard
@@ -285,6 +291,7 @@ const AutomationsPage = () => {
         editingId={editingReactivationId}
         onSave={data.loadReactivationData}
       />
+      <DeleteConfigDialog pending={del.pending} deleting={del.deleting} onCancel={del.cancel} onConfirm={del.confirm} />
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

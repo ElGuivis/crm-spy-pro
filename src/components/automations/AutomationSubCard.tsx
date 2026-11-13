@@ -1,4 +1,4 @@
-import { CheckCircle, Pause, Settings2 } from 'lucide-react';
+import { CheckCircle, Pause, Settings2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -10,9 +10,11 @@ interface AutomationSubCardProps {
   isActive: boolean;
   onClick: () => void;
   extraActions?: React.ReactNode;
+  /** Mostra o botão de excluir (a confirmação fica por conta de quem usa). */
+  onDelete?: () => void;
 }
 
-export function AutomationSubCard({ icon, activeIcon, title, subtitle, isActive, onClick, extraActions }: AutomationSubCardProps) {
+export function AutomationSubCard({ icon, activeIcon, title, subtitle, isActive, onClick, extraActions, onDelete }: AutomationSubCardProps) {
   return (
     <div
       onClick={onClick}
@@ -38,8 +40,17 @@ export function AutomationSubCard({ icon, activeIcon, title, subtitle, isActive,
         <p className="text-xs text-muted-foreground">{subtitle}</p>
       </div>
       {extraActions || (
-        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" aria-label={`Configurar ${title}`}>
           <Settings2 className="h-4 w-4" />
+        </Button>
+      )}
+      {onDelete && (
+        <Button
+          variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+          aria-label={`Excluir ${title}`} title="Excluir"
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        >
+          <Trash2 className="h-4 w-4" />
         </Button>
       )}
     </div>
