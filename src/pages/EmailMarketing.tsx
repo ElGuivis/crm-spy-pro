@@ -101,7 +101,7 @@ export default function EmailMarketing() {
         />
 
         {/* Stats */}
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
           <StatCard
             title="Total de Campanhas"
             value={allCampaigns?.length ?? 0}
@@ -146,7 +146,7 @@ export default function EmailMarketing() {
 
         {/* Main Content */}
         <Tabs defaultValue="campaigns" className="space-y-4">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <TabsList>
               <TabsTrigger value="campaigns" className="gap-2">
                 Campanhas

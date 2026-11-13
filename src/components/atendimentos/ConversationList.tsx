@@ -321,7 +321,7 @@ export function ConversationList({ inboxId, selectedConversationId, onSelectConv
       </AnimatePresence>
 
       {/* List */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 [&>[data-radix-scroll-area-viewport]>div]:!block">
         <div className="p-1.5 space-y-0.5">
           {isLoading ? (
             <SkeletonConversation count={6} />

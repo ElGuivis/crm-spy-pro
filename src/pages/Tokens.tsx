@@ -131,7 +131,7 @@ export default function TokensPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -142,13 +142,13 @@ export default function TokensPage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left Column - Balance and Usage */}
-        <div className="space-y-6">
+        <div className="space-y-6 min-w-0">
           <TokenBalance variant="card" />
           <TokenUsageCard limit={10} />
         </div>
 
         {/* Right Column - Plans */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-6 min-w-0">
           {/* Free Credits Banner */}
           <div className="p-6 rounded-xl bg-gradient-to-r from-primary/20 via-primary/10 to-accent/20 border border-primary/30">
             <div className="flex items-start gap-4">
@@ -161,13 +161,13 @@ export default function TokensPage() {
                   Durante o período de testes, você pode adicionar tokens gratuitamente! 
                   Aproveite para testar todas as funcionalidades.
                 </p>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <Input
                     type="number"
                     placeholder="Quantidade de tokens"
                     value={customAmount}
                     onChange={(e) => setCustomAmount(e.target.value)}
-                    className="max-w-[200px]"
+                    className="w-full sm:max-w-[200px]"
                     min={1}
                   />
                   <Button 

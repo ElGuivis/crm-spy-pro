@@ -36,14 +36,14 @@ export function AutomationMainCard({
       <div
         onClick={onToggle}
         className={cn(
-          'group flex items-center gap-4 rounded-xl bg-card p-4 border transition-all duration-200 hover:shadow-md cursor-pointer',
+          'group flex flex-wrap items-center gap-x-4 gap-y-3 md:flex-nowrap rounded-xl bg-card p-4 border transition-all duration-200 hover:shadow-md cursor-pointer',
           expanded ? `${accentClass} shadow-md` : 'border-border/50 hover:border-primary/30'
         )}
       >
         {icon}
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-[9rem] md:min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h3 className="font-semibold text-card-foreground">{title}</h3>
             <span
               className={cn(
@@ -69,17 +69,17 @@ export function AutomationMainCard({
           <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 md:gap-6 text-sm text-muted-foreground">
+        <div className="order-last flex w-full flex-wrap items-center gap-3 text-sm text-muted-foreground md:order-none md:w-auto md:gap-6">
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted/50">
             <Coins className="h-4 w-4 text-primary" />
             <span className="font-medium text-foreground">{tokensPerExec}</span>
-            <span className="text-xs">tokens/exec</span>
+            <span className="whitespace-nowrap text-xs">tokens/exec</span>
           </div>
           <div className="flex items-center gap-1.5">
             <Clock className="h-4 w-4" />
             {lastExecution}
           </div>
-          <div className="text-right">
+          <div className="ml-auto text-right md:ml-0">
             <p className="font-semibold text-card-foreground">{totalExecutions.toLocaleString()}</p>
             <p className="text-xs">execuções</p>
           </div>

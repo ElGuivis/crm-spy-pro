@@ -9,12 +9,12 @@ interface MobileNavProps {
 
 export function MobileNav({ onMenuToggle }: MobileNavProps) {
   return (
-    <header className="fixed top-0 left-0 right-0 z-40 flex h-14 items-center justify-between border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 safe-area-top md:hidden">
+    <header className="fixed top-0 left-0 right-0 z-40 flex h-14 items-center justify-between border-b border-sidebar-border bg-sidebar text-sidebar-foreground px-4 safe-area-top md:hidden">
       <Button
         variant="ghost"
         size="icon"
         onClick={onMenuToggle}
-        className="touch-target"
+        className="touch-target text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         aria-label="Abrir menu"
       >
         <Menu className="h-5 w-5" />
@@ -24,7 +24,7 @@ export function MobileNav({ onMenuToggle }: MobileNavProps) {
         <SpyProLogo size="sm" showText />
       </div>
 
-      <NotificationDropdown />
+      <div className="[&_svg]:text-sidebar-foreground [&_button:hover]:bg-sidebar-accent"><NotificationDropdown /></div>
     </header>
   );
 }

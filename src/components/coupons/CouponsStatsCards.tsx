@@ -31,7 +31,7 @@ export function CouponsStatsCards({ stats, formatCurrency, onClickValue }: Coupo
         <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Taxa Conversão</CardTitle></CardHeader>
         <CardContent><div className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-blue-500" /><span className="text-2xl font-bold">{stats.conversionRate.toFixed(1)}%</span></div></CardContent>
       </Card>
-      <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={onClickValue}>
+      <Card className="col-span-2 cursor-pointer transition-colors hover:bg-accent/50 md:col-span-1" onClick={onClickValue}>
         <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Valor Gerado</CardTitle></CardHeader>
         <CardContent>
           <div className="flex items-center gap-2"><DollarSign className="h-5 w-5 text-green-600" /><span className="text-xl font-bold text-green-600">{formatCurrency(stats.totalGeneratedValue)}</span></div>

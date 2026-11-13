@@ -76,7 +76,7 @@ const GoogleAds = () => {
 
         {account && data && (
           <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-            <TabsList className="flex-wrap">
+            <TabsList className="h-auto flex-wrap justify-start">
               <TabsTrigger value="overview">Visão geral</TabsTrigger>
               <TabsTrigger value="discoveries">Descobertas</TabsTrigger>
               <TabsTrigger value="history">Histórico e campanhas</TabsTrigger>

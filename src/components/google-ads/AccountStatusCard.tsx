@@ -33,7 +33,7 @@ export function AccountStatusCard({ account, budgets, syncing, onSync }: Props) 
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+      <CardHeader className="flex flex-col items-start justify-between gap-3 space-y-0 sm:flex-row sm:gap-4">
         <div className="space-y-1">
           <CardTitle className="text-lg">{account.descriptive_name ?? "Conta Google Ads"}</CardTitle>
           <p className="text-sm text-muted-foreground">
@@ -54,7 +54,7 @@ export function AccountStatusCard({ account, budgets, syncing, onSync }: Props) 
 
         {budget ? (
           <div className="space-y-2">
-            <div className="flex items-baseline justify-between">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
               <span className="text-sm text-muted-foreground">Saldo restante (limite de gastos da conta)</span>
               <span className={`text-2xl font-bold ${exhausted ? "text-destructive" : ""}`}>{brl(remaining)}</span>
             </div>

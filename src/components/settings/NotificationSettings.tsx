@@ -68,7 +68,7 @@ export function NotificationSettings() {
       </div>
 
       {/* Sound toggle + type selector */}
-      <div className="flex items-center justify-between rounded-lg border border-border p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
             {prefs.sound ? <Volume2 className="h-5 w-5 text-primary" /> : <VolumeX className="h-5 w-5 text-muted-foreground" />}

@@ -74,11 +74,11 @@ export function ConversationCard({ conversation, isSelected, onClick }: Conversa
           {/* Name + time */}
           <div className="flex items-center justify-between gap-1">
             <span className={cn(
-              "font-medium text-sm truncate",
+              "font-medium text-sm truncate min-w-0",
               isSelected ? "text-foreground" : "text-foreground"
             )}>{displayName}</span>
             {timeAgo && (
-              <span className="text-[10px] text-muted-foreground whitespace-nowrap">{timeAgo}</span>
+              <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">{timeAgo}</span>
             )}
           </div>
 
