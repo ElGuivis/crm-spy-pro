@@ -4,7 +4,7 @@ import { sendEmail, getEmailConfig } from "../_shared/email-sender.ts";
 import { requireInternalAuth } from "../_shared/auth-guard.ts";
 import { liAuthHeader } from "../_shared/li-auth.ts";
 import { issueCoupon } from "../_shared/coupon-issuer.ts";
-import { canContact, recordTouches } from "../_shared/contact-policy.ts";
+import { canContact, recordTouches, normPhone, normEmail } from "../_shared/contact-policy.ts";
 import { unsubscribeFor } from "../_shared/email-unsubscribe-link.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
@@ -67,6 +67,9 @@ async function fetchAllRows<T>(
   }
   return all;
 }
+
+/** Chave da pessoa: telefone normalizado, senão e-mail. Igual para qualquer configuração da mesma loja. */
+const personKeyOf = (phone?: string | null, email?: string | null): string => normPhone(phone) ?? normEmail(email) ?? `${phone || ''}|${email || ''}`;
 
 Deno.serve(async (req) => {
 
@@ -202,14 +205,14 @@ Deno.serve(async (req) => {
         const { data: alreadyProcessed } = await supabase
           .from('birthday_executions')
           .select('customer_phone, customer_email, status, coupon_code, error_message, created_at')
-          .eq('config_id', config.id)
+          .eq('tenant_id', tenantId) // por loja: duas configurações ativas não podem mandar a mesma mensagem à mesma pessoa
           .gte('created_at', todayStart)
           .in('status', ['sent', 'pending', 'failed']);
 
         const processedKeys = new Set<string>();
         const failedToday = new Map<string, { count: number; coupon: string | null }>();
         for (const e of alreadyProcessed || []) {
-          const k = `${e.customer_phone || ''}|${e.customer_email || ''}`;
+          const k = personKeyOf(e.customer_phone as string | null, e.customer_email as string | null);
           if (e.status === 'failed') {
             const prev = failedToday.get(k) ?? { count: 0, coupon: null };
             const final = isPermanentRecipientError(String(e.error_message ?? "")) || isAmbiguousSendError(String(e.error_message ?? "")); // número sem WhatsApp ou envio incerto: não repete
@@ -239,7 +242,7 @@ Deno.serve(async (req) => {
 
         // ritmo: divide quem falta pelas execuções que restam na janela (o dia não sai de uma vez) e deixa intervalo entre as mensagens
         const pending = birthdayCustomers.filter((c) => {
-          const k = `${c.phone || ''}|${c.email || ''}`;
+          const k = personKeyOf(c.phone, c.email);
           return !processedKeys.has(k) && (failedToday.get(k)?.count ?? 0) < MAX_FAILED_ATTEMPTS_PER_DAY;
         });
         const quota = paceQuota(pending.length, lastSentAt);
@@ -249,7 +252,7 @@ Deno.serve(async (req) => {
 
         for (const customer of birthdayCustomers) {
           if (attempted >= quota || Date.now() - runStartedAt > RUN_BUDGET_MS) break;
-          const customerKey = `${customer.phone || ''}|${customer.email || ''}`;
+          const customerKey = personKeyOf(customer.phone, customer.email);
           if (processedKeys.has(customerKey)) {
             log.info(`[BIRTHDAY] Already processed ${customer.name} today, skipping`);
             continue;
@@ -267,6 +270,7 @@ Deno.serve(async (req) => {
             break;
           }
 
+          let execId: string | null = null;
           try {
             // regra única de contato, por canal: e-mail suprimido ou telefone bloqueado não recebem; sem canal liberado, nem gera cupom
             const dEmail = customer.email && config.email_enabled && config.email_integration_id ? await canContact(supabase, tenantId, { email: customer.email }, 'birthday') : null;
@@ -277,6 +281,18 @@ Deno.serve(async (req) => {
               log.info(`[BIRTHDAY] ${customer.name}: todos os canais bloqueados pelas regras de contato, pulando`);
               continue;
             }
+
+            // Reserva ANTES de gerar cupom e enviar: o índice único (loja, dia, pessoa) garante no máximo uma mensagem por dia,
+            // mesmo com duas configurações ativas ou duas execuções ao mesmo tempo. Falha libera a reserva (vira 'failed').
+            const reserve = await supabase.from('birthday_executions').insert({
+              tenant_id: tenantId, config_id: config.id, customer_name: customer.name, customer_phone: customer.phone, customer_email: customer.email,
+              customer_source: customer.source, action_type: 'birthday_message', status: 'pending', person_key: customerKey, run_day: brtDateAfter(0),
+            }).select('id').single();
+            if (reserve.error) {
+              if (reserve.error.code === '23505') { log.info(`[BIRTHDAY] ${customer.name}: já reservado hoje por outra configuração/execução, pulando`); processedKeys.add(customerKey); continue; }
+              throw reserve.error;
+            }
+            execId = reserve.data.id as string;
 
             // Cupom: loja integrada pelo emissor único (livro-razão, nova tentativa em 429, código sem colisão);
             // outras lojas seguem só com o código sorteado, como antes.
@@ -298,18 +314,7 @@ Deno.serve(async (req) => {
               });
               if (!issued.ok) {
                 log.error(`[BIRTHDAY] Failed to create coupon for ${customer.name}: ${issued.status} - ${issued.error}`);
-                await supabase.from('birthday_executions').insert({
-                  tenant_id: tenantId,
-                  config_id: config.id,
-                  customer_name: customer.name,
-                  customer_phone: customer.phone,
-                  customer_email: customer.email,
-                  customer_source: customer.source,
-                  coupon_code: couponCode,
-                  action_type: 'birthday_message',
-                  status: 'failed',
-                  error_message: `Coupon creation failed: ${issued.error}`,
-                });
+                await supabase.from('birthday_executions').update({ coupon_code: couponCode, status: 'failed', error_message: `Coupon creation failed: ${issued.error}` }).eq('id', execId);
                 continue;
               }
               couponCode = issued.code;
@@ -420,24 +425,18 @@ Deno.serve(async (req) => {
               });
             }
 
-            await supabase.from('birthday_executions').insert({
-              tenant_id: tenantId,
-              config_id: config.id,
-              customer_name: customer.name,
-              customer_phone: customer.phone,
-              customer_email: customer.email,
-              customer_source: customer.source,
+            // nenhum canal enviou e sem erro explícito (ex.: e-mail falhou): 'failed', senão a reserva ficaria 'pending' e travaria o dia inteiro
+            await supabase.from('birthday_executions').update({
               coupon_code: couponCode,
-              action_type: 'birthday_message',
-              status: sent ? 'sent' : (errorMsg ? 'failed' : 'pending'),
-              error_message: errorMsg,
+              status: sent ? 'sent' : 'failed',
+              error_message: sent ? null : (errorMsg ?? 'Nenhum canal enviou a mensagem'),
               tokens_used: sent ? BIRTHDAY_TOKEN_COST : 0,
               metadata: {
                 coupon_type: config.coupon_type, discount_percent: config.coupon_discount_percent, fixed_value: config.coupon_fixed_value,
                 cumulative: config.cumulative, personal: config.personal_coupon, min_order: config.min_order_value, max_discount: config.max_discount_value,
                 duration_days: config.coupon_duration_days,
               },
-            });
+            }).eq('id', execId);
 
             totalProcessed++;
             if (attempted < quota) await pauseBetweenSends(quota);
@@ -445,17 +444,9 @@ Deno.serve(async (req) => {
             const msg = custError instanceof Error ? custError.message : 'Unknown error';
             log.error(`[BIRTHDAY] Error processing ${customer.name}:`, msg);
             
-            await supabase.from('birthday_executions').insert({
-              tenant_id: tenantId,
-              config_id: config.id,
-              customer_name: customer.name,
-              customer_phone: customer.phone,
-              customer_email: customer.email,
-              customer_source: customer.source,
-              action_type: 'birthday_message',
-              status: 'failed',
-              error_message: msg,
-            });
+            // erro depois do envio pode ter sido tarde demais para saber se chegou: marca falha e deixa o limite diário de tentativas decidir
+            if (execId) await supabase.from('birthday_executions').update({ status: 'failed', error_message: msg }).eq('id', execId);
+            else await supabase.from('birthday_executions').insert({ tenant_id: tenantId, config_id: config.id, customer_name: customer.name, customer_phone: customer.phone, customer_email: customer.email, customer_source: customer.source, action_type: 'birthday_message', status: 'failed', error_message: msg });
           }
         }
       } catch (configError: unknown) {

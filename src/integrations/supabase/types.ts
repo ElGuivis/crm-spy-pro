@@ -733,6 +733,8 @@ export type Database = {
           error_message: string | null
           id: string
           metadata: Json | null
+          person_key: string | null
+          run_day: string | null
           status: string
           tenant_id: string
           tokens_used: number | null
@@ -749,6 +751,8 @@ export type Database = {
           error_message?: string | null
           id?: string
           metadata?: Json | null
+          person_key?: string | null
+          run_day?: string | null
           status?: string
           tenant_id: string
           tokens_used?: number | null
@@ -765,6 +769,8 @@ export type Database = {
           error_message?: string | null
           id?: string
           metadata?: Json | null
+          person_key?: string | null
+          run_day?: string | null
           status?: string
           tenant_id?: string
           tokens_used?: number | null
