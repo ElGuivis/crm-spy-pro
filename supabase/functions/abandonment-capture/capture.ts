@@ -151,13 +151,17 @@ async function markGone(supabase: Supabase, integrationId: string, kinds: FlowKi
 }
 
 /**
- * A loja só captura: todo disparo sai pelo CRM. Quem acabou de abandonar sai da automação nativa (e-mail ou telefone), antes de a loja
- * agir (primeira regra = 60 min; esta captura roda a cada 10). Independe de o nosso fluxo existir ou estar ligado.
+ * Tira da automação nativa quem acabou de abandonar (e-mail ou telefone), mas SÓ nos tipos em que o fluxo do CRM tem "tirar da nativa
+ * quem atendermos" ligado (abandonment_flows.opt_out_native). Sem isso a loja segue com as regras dela (ex.: e-mail da loja + WhatsApp do CRM).
+ * Obs.: a loja só enxerga o abandono quando a 1ª regra dispara (60 min), então o opt-out só barra as regras seguintes.
  */
 async function optOutPending(supabase: Supabase, integration: { id: string; tenant_id: string }, auth: string, errors: string[]): Promise<number> {
+  const { data: flows } = await supabase.from("abandonment_flows").select("kind").eq("tenant_id", integration.tenant_id).eq("opt_out_native", true);
+  const kinds = (flows ?? []).map((f) => f.kind as string).filter((k) => ["cart", "browse", "order"].includes(k));
+  if (!kinds.length) return 0;
   const { data: rows } = await supabase.from("li_abandonment_campaigns")
     .select("id, automation_id, recipient_email, recipient_phone")
-    .eq("integration_id", integration.id).in("kind", ["cart", "browse", "order"]).eq("flow_status", "open").is("gone_at", null).neq("li_status", "F")
+    .eq("integration_id", integration.id).in("kind", kinds).eq("flow_status", "open").is("gone_at", null).neq("li_status", "F")
     .is("native_optout_at", null).or("recipient_email.not.is.null,recipient_phone.not.is.null")
     .order("event_at", { ascending: false }).limit(OPTOUTS_PER_RUN);
   if (!rows?.length) return 0;

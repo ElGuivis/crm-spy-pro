@@ -18,7 +18,20 @@ export const DELAY_OPTIONS = [
   { minutes: 360, label: "6 horas" }, { minutes: 720, label: "12 horas" }, { minutes: 1440, label: "24 horas" }, { minutes: 2880, label: "48 horas" },
 ] as const;
 
-export const delayLabel = (minutes: number) => DELAY_OPTIONS.find((d) => d.minutes === minutes)?.label ?? `${minutes} min`;
+export const DELAY_UNITS = [{ id: "min", label: "minutos", minutes: 1 }, { id: "h", label: "horas", minutes: 60 }, { id: "d", label: "dias", minutes: 1440 }] as const;
+
+/** Escolhe a maior unidade que divide o tempo certinho (1440 → 1 dia; 90 → 90 minutos). */
+export function splitDelay(minutes: number): { value: number; unit: (typeof DELAY_UNITS)[number]["id"] } {
+  const m = Math.max(1, Math.round(minutes));
+  if (m % 1440 === 0) return { value: m / 1440, unit: "d" };
+  if (m % 60 === 0) return { value: m / 60, unit: "h" };
+  return { value: m, unit: "min" };
+}
+
+export const delayLabel = (minutes: number) => {
+  const { value, unit } = splitDelay(minutes);
+  return unit === "d" ? `${value} ${value === 1 ? "dia" : "dias"}` : unit === "h" ? `${value} ${value === 1 ? "hora" : "horas"}` : `${value} min`;
+};
 export const MAX_STEPS = 4;
 
 export interface RecoveryStep {
@@ -86,7 +99,8 @@ export function checkFlow(flow: RecoveryFlow, env: { storeUrl: string | null; em
   if (active.some((s) => s.email.enabled) && env.emailIntegrations === 0) err("Cadastre uma integração de e-mail em Integrações.");
   const delays = flow.steps.map((s) => s.delay_minutes);
   if (new Set(delays).size !== delays.length) warn("Duas etapas com o mesmo tempo de espera: elas saem em sequência, com 30 minutos de distância.");
-  if (flow.kind !== "welcome" && env.nativeOn && !flow.opt_out_native) warn("A automação nativa da Loja Integrada deste tipo está ligada: quem receber a nossa e a nativa receberá em dobro. Desligue a nativa ou ative a opção \"tirar da nativa quem atendermos\".");
+  if (flow.kind === "cart" && flow.steps.some((s) => s.delay_minutes < 75)) warn("A loja só nos avisa do abandono cerca de 70 minutos depois (quando dispara a primeira regra dela). Etapas com menos de 75 minutos saem de uma vez, assim que o abandono for detectado.");
+  if (flow.kind !== "welcome" && env.nativeOn && !flow.opt_out_native && active.some((s) => s.email.enabled)) warn("A automação nativa da Loja Integrada deste tipo está ligada: quem receber o nosso e-mail e o da loja receberá em dobro. Desligue a nativa ou ative a opção \"tirar da nativa quem atendermos\".");
   return out;
 }
 

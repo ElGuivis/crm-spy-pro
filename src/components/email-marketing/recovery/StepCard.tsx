@@ -5,8 +5,9 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { CouponConfigFields } from "../CouponConfigFields";
-import { DELAY_OPTIONS, type RecoveryStep } from "@/lib/recovery";
+import { splitDelay, DELAY_UNITS, type RecoveryStep } from "@/lib/recovery";
 
 interface Props {
   index: number;
@@ -30,14 +31,7 @@ export function StepCard({ index, step, onChange, onRemove, onEditEmail, usedDel
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm text-muted-foreground">Enviar depois de</span>
-              <Select value={String(step.delay_minutes)} onValueChange={(v) => onChange({ delay_minutes: Number(v) })}>
-                <SelectTrigger className="w-[150px] h-9"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {DELAY_OPTIONS.map((d) => (
-                    <SelectItem key={d.minutes} value={String(d.minutes)}>{d.label}{usedDelays.includes(d.minutes) && d.minutes !== step.delay_minutes ? " (já usado)" : ""}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <DelayField minutes={step.delay_minutes} used={usedDelays.includes(step.delay_minutes)} onChange={(m) => onChange({ delay_minutes: m })} />
               <span className="text-sm text-muted-foreground">do abandono</span>
             </div>
           </div>
@@ -84,5 +78,22 @@ export function StepCard({ index, step, onChange, onRemove, onEditEmail, usedDel
         />
       </CardContent>
     </Card>
+  );
+}
+
+/** Tempo livre: número + unidade (minutos, horas ou dias). Guarda sempre em minutos. */
+function DelayField({ minutes, used, onChange }: { minutes: number; used: boolean; onChange: (m: number) => void }) {
+  const { value, unit } = splitDelay(minutes);
+  const mult = DELAY_UNITS.find((u) => u.id === unit)!.minutes;
+  return (
+    <div className="flex items-center gap-2">
+      <Input type="number" min={1} step={1} className="w-[80px] h-9" aria-label="Tempo de espera" value={value}
+        onChange={(e) => { const n = Math.floor(Number(e.target.value)); if (n >= 1) onChange(Math.min(n * mult, 43200)); }} />
+      <Select value={unit} onValueChange={(u) => onChange(Math.min(value * DELAY_UNITS.find((x) => x.id === u)!.minutes, 43200))}>
+        <SelectTrigger className="w-[110px] h-9" aria-label="Unidade"><SelectValue /></SelectTrigger>
+        <SelectContent>{DELAY_UNITS.map((u) => <SelectItem key={u.id} value={u.id}>{u.label}</SelectItem>)}</SelectContent>
+      </Select>
+      {used && <span className="text-xs text-amber-600">já usado</span>}
+    </div>
   );
 }
