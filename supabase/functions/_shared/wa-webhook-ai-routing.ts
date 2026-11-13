@@ -14,6 +14,10 @@ export async function routeToAI(ctx: WaCtx): Promise<Response | null> {
       last_message_at: new Date().toISOString(),
       last_inbound_at: new Date().toISOString(),
     }).eq('id', conversation.id);
+    // Cliente respondeu a uma mensagem automática (dentro do prazo, senão a conversa já teria sido fechada): vai para o atendente humano.
+    // 'pending' sem responsável é o que a tela de atendimento e o alerta de repasse (useHandoffAlert) tratam como "precisa de humano".
+    await supabase.from('conversations').update({ status: 'pending', handoff_mode: true, ai_enabled: false })
+      .eq('id', conversation.id).eq('status', 'open').is('assigned_to', null);
     return new Response(JSON.stringify({ success: true, action: 'automation_conversation_no_bot', conversation_id: conversation.id, message_id: message.id }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

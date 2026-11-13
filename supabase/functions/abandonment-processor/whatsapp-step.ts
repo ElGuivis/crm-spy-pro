@@ -1,3 +1,4 @@
+import { ensureAutomationConversation } from "../_shared/automation-conversation.ts";
 import { replaceVariables } from "../_shared/email-variable-replacer.ts";
 import type { IssuedCoupon } from "../_shared/email-coupons.ts";
 import { buildCartVars, type FlowStep } from "../_shared/abandonment-render.ts";
@@ -46,6 +47,9 @@ export async function sendWhatsAppStep(ctx: Ctx, flow: Flow, step: FlowStep, can
     if (!res.ok) return { ok: false, error: `WhatsApp recusou (${res.status}): ${(await res.text()).slice(0, 160)}`, coupon: coupon.code || undefined };
   } catch (e) {
     return { ok: false, error: `Falha ao enviar WhatsApp: ${(e as Error).message}` };
+  }
+  if (flow.whatsapp_integration_id) {
+    await ensureAutomationConversation({ supabase: ctx.supabase, tenantId: flow.tenant_id, customerPhone: number, integrationId: flow.whatsapp_integration_id, messageContent: text, automationType: "abandonment_recovery", metadata: { customer_name: cand.recipient_name } });
   }
   await ctx.supabase.rpc("deduct_tokens", { _tenant_id: flow.tenant_id, _amount: TOKENS_PER_MESSAGE, _type: "abandonment_recovery", _description: `Recuperação (${flow.kind}) por WhatsApp`, _reference_id: cand.id });
   return { ok: true, coupon: coupon.code || undefined };

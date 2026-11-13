@@ -19,10 +19,14 @@ interface Conversation {
   integration_id: string | null;
   tenant_id: string;
   last_message_at: string;
+  last_inbound_at: string | null;
+  created_at: string;
   current_ai_agent_id: string | null;
   source: string | null;
   contacts: { phone: string; name: string | null };
 }
+
+const AUTOMATION_REPLY_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 interface TenantConfig {
   timeout: number;
@@ -59,6 +63,8 @@ serve(async (req) => {
         integration_id,
         tenant_id,
         last_message_at,
+        last_inbound_at,
+        created_at,
         current_ai_agent_id,
         source,
         contacts!inner(phone, name)
@@ -153,6 +159,15 @@ serve(async (req) => {
         const conversation = conv as unknown as Conversation;
         const tenantId = conversation.tenant_id;
         const lastMessageAt = new Date(conversation.last_message_at);
+
+        // Conversa de automação sem nenhuma resposta do cliente em 48h: fecha (sem aviso). Se ele respondeu, ela já está com o atendente.
+        if (conversation.source === 'automation' && !conversation.last_inbound_at && now.getTime() - lastMessageAt.getTime() > AUTOMATION_REPLY_WINDOW_MS) {
+          const { data: closedAuto } = await supabase.from('conversations')
+            .update({ status: 'closed', closed_at: new Date().toISOString(), assigned_to: null, kanban_column_id: await getClosedColumn(tenantId), pending_ai_response_at: null })
+            .eq('id', conversation.id).is('closed_at', null).is('last_inbound_at', null).select('id').maybeSingle();
+          if (closedAuto) { log.info('Automation conversation closed: no reply within 48h', { conversationId: conversation.id }); totalProcessed++; }
+          continue;
+        }
 
         // Determine inactivity settings - priority: agent > tenant global
         let timeoutMinutes: number | null = null;

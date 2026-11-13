@@ -8,6 +8,7 @@ import { isAmbiguousSendError, isPermanentRecipientError } from "../_shared/outb
 import { applyTracking, lookupTracking, normStatus } from "../_shared/order-notification-render.ts";
 import { nextWindowOpen } from "../_shared/send-window.ts";
 import { recordTouches } from "../_shared/contact-policy.ts";
+import { ensureAutomationConversation } from "../_shared/automation-conversation.ts";
 import { sendWhatsAppMessage as sharedSendWhatsApp, type WhatsAppConfig } from "../_shared/whatsapp-sender.ts";
 import type { MessageQueueRecord, EmailIntegrationRecord } from "../_shared/supabase-types.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
@@ -283,6 +284,10 @@ Deno.serve(async (req) => {
         if (msg.reference_type === 'order_notification') {
           await setExecution(sb, msg.metadata, msg.channel, { status: 'sent', tokens_used: 1 });
           await recordTouches(sb, msg.tenant_id, [{ target: msg.channel === 'email' ? { email: msg.recipient } : { phone: msg.recipient }, channel: msg.channel as 'email' | 'whatsapp', purpose: 'order_status', ref: msg.reference_id }]);
+          // A resposta do cliente a esta mensagem não pode cair no menu do bot: abre/reaproveita a conversa de automação (resposta vai para o atendente).
+          if (msg.channel === 'whatsapp' && msg.whatsapp_integration_id) {
+            await ensureAutomationConversation({ supabase: sb, tenantId: msg.tenant_id, customerPhone: msg.recipient, integrationId: msg.whatsapp_integration_id, messageContent: msg.message_content, automationType: 'order_notification', metadata: msg.metadata as Record<string, unknown> | undefined });
+          }
         }
 
         sent++;

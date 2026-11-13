@@ -6,6 +6,7 @@ import { liAuthHeader } from "../_shared/li-auth.ts";
 import { timingSafeEqual } from "../_shared/timing-safe.ts";
 import { publicCorsHeaders as corsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
+import { processOrderNotificationsInJob } from "../_shared/order-notifications.ts";
 
 const LI_API_BASE = 'https://api.awsli.com.br/v1';
 // logger de módulo: as funções de processamento (processOrder etc.) rodam fora do handler e também registram
@@ -270,6 +271,10 @@ async function processOrder(
     };
   });
 
+  // status anterior: a notificação só sai quando o pedido é novo ou mudou de status
+  const { data: prevOrder } = await supabase.from('li_orders').select('status_name')
+    .eq('integration_id', integrationId).eq('loja_integrada_order_id', order.id).maybeSingle();
+
   // Upsert order
   const { data: orderData } = await supabase.from('li_orders')
     .upsert({
@@ -309,6 +314,25 @@ async function processOrder(
   }
 
   // cashback, recuperação e atribuição reagem ao evento 'order_ingested' (gatilho em li_orders → domain-event-processor)
+
+  // Notificação de status ao cliente. Sem isto, pedido que chega JÁ no novo status pelo webhook nunca notificava:
+  // o polling de 5 min compara com o que está no banco e não via mudança. A reserva em order_notification_executions evita duplicar.
+  const situacaoNome = order.situacao?.nome || '';
+  if (orderData?.id && situacaoNome && prevOrder?.status_name !== situacaoNome) {
+    await processOrderNotificationsInJob(
+      supabase as never, order,
+      {
+        ...orderData, numero: order.numero,
+        cliente_nome: order.cliente?.nome || 'Cliente',
+        cliente_telefone: order.cliente?.telefone_celular || order.cliente?.telefone_principal || '',
+        cliente_email: order.cliente?.email || '',
+        codigo_rastreio: shippingJson.tracking_code || '', url_rastreio: shippingJson.tracking_url || '',
+        valor_total: order.valor_total ? parseFloat(order.valor_total) : 0,
+        created_at_remote: order.data_criacao || null, li_id: order.id,
+      },
+      situacaoNome, tenantId, integrationId,
+    );
+  }
 
   log.info(`[WEBHOOK] Order ${order.numero} upserted`);
 }
