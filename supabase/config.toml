@@ -440,6 +440,10 @@ verify_jwt = false
 # HYBRID — admin (JWT, conta do proprio tenant) ou cron via requireUserOrInternalAuth
 verify_jwt = false
 
+[functions.google-ads-offline-conversions]
+# HYBRID — admin (JWT, conta do proprio tenant) ou cron via requireUserOrInternalAuth
+verify_jwt = false
+
 [functions.google-ads-outcomes]
 # HYBRID — admin (JWT, conta do proprio tenant) ou cron via requireUserOrInternalAuth
 verify_jwt = false

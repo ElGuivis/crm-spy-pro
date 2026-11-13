@@ -84,6 +84,7 @@ Internal callers use `Authorization: Bearer <service_role_key>` or `x-cron-secre
 | google-ads-diagnose | tela Google Ads (usuario: 1 conta do proprio tenant) | cron `google-ads-diagnose` (service_role: todas as contas) |
 | google-ads-strategist | tela Google Ads (admin: 1 conta do proprio tenant) | — (so sob demanda; interno via service_role) |
 | google-ads-economics | tela Google Ads (admin: 1 conta do proprio tenant) | cron `google-ads-economics` (service_role: todas as contas) |
+| google-ads-offline-conversions | tela Google Ads (admin: 1 conta do proprio tenant) | cron `google-ads-offline-conversions` (service_role: todas as contas) |
 | google-ads-outcomes | tela Google Ads (admin: 1 conta do proprio tenant) | cron `google-ads-outcomes` (service_role: todas as contas) |
 | google-ads-insights | tela Google Ads (admin: 1 conta do proprio tenant) | cron `google-ads-insights` (service_role: todas as contas) |
 | google-ads-sync-deep | tela Google Ads (usuario: 1 conta do proprio tenant) | crons `google-ads-sync-deep-*` (service_role: todas as contas) |
