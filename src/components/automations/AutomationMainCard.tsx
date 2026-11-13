@@ -89,7 +89,7 @@ export function AutomationMainCard({
           <Button
             variant="outline"
             size="sm"
-            className="opacity-0 group-hover:opacity-100 transition-opacity gap-1"
+            className="hidden gap-1 opacity-0 transition-opacity group-hover:opacity-100 md:inline-flex"
             onClick={(e) => {
               e.stopPropagation();
               onCreate();
