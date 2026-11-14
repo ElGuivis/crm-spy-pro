@@ -483,3 +483,7 @@ verify_jwt = false
 [functions.order-notification-test]
 # Usuário admin autenticado (requireUserAuth + is_tenant_admin); manda 1 mensagem de teste
 verify_jwt = false
+
+[functions.r]
+# PÚBLICO (links curtos): só redireciona para o que está em short_links; limite de taxa por IP
+verify_jwt = false

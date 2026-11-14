@@ -21,3 +21,8 @@ Deno.test("cartUrl: sem itens identificados cai na tela do carrinho", () => {
   assertEquals(cartUrl("https://loja.com.br/"), "https://loja.com.br/carrinho/index");
   assertEquals(cartUrl("https://loja.com.br", [item(null, 1)]), "https://loja.com.br/carrinho/index");
 });
+
+Deno.test("buildCartVars: link curto informado substitui o link longo", async () => {
+  const { buildCartVars } = await import("../_shared/abandonment-render.ts");
+  assertEquals(buildCartVars([item(1, 1)], 10, "https://loja.com.br", "https://r.loja.com.br/abc").cart_url, "https://r.loja.com.br/abc");
+});

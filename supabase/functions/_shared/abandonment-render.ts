@@ -75,7 +75,7 @@ export function cartUrl(storeUrl: string, items: CartItem[] = []): string {
   return `${base}/carrinho/produto/adicionar?${query}&utm_source=crm&utm_medium=recuperacao&utm_campaign=carrinho-abandonado-crm`;
 }
 
-export function buildCartVars(items: CartItem[], value: number, storeUrl: string): CartVars {
+export function buildCartVars(items: CartItem[], value: number, storeUrl: string, cartLink?: string): CartVars {
   const first = items.find((i) => i.name);
   const total = cartTotal(items, value);
   const count = items.reduce((a, i) => a + i.quantity, 0);
@@ -84,7 +84,7 @@ export function buildCartVars(items: CartItem[], value: number, storeUrl: string
     cart_items_text: cartItemsText(items, storeUrl),
     cart_total: total > 0 ? brl(total) : "",
     cart_count: count > 0 ? String(count) : "",
-    cart_url: cartUrl(storeUrl, items),
+    cart_url: cartLink || cartUrl(storeUrl, items),
     product_name: first?.name ?? "",
     product_image: first?.image ?? "",
     product_url: first ? absoluteUrl(storeUrl, first.url) : storeUrl,

@@ -36,7 +36,7 @@ export async function sendWhatsAppStep(ctx: Ctx, flow: Flow, step: FlowStep, can
   const text = replaceVariables(step.whatsapp!.text, {
     first_name: first ? first[0].toUpperCase() + first.slice(1).toLowerCase() : "", email: cand.recipient_email ?? "", phone: cand.recipient_phone ?? "",
     coupon_code: coupon.code, coupon_value: coupon.discount, coupon_expires: coupon.expires,
-    ...buildCartVars(cand.items ?? [], cand.value, storeUrl),
+    ...buildCartVars(cand.items ?? [], cand.value, storeUrl, cand.cart_link),
   });
 
   try {

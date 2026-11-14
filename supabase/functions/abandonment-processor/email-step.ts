@@ -62,7 +62,7 @@ export async function sendEmailStep(ctx: Ctx, flow: Flow, step: FlowStep, cand: 
   const data = {
     first_name: titleCase(first[0] || ""), last_name: titleCase(first.slice(1).join(" ")), email, phone: cand.recipient_phone || "", company: "",
     coupon_code: coupon.code, coupon_value: coupon.discount, coupon_expires: coupon.expires, unsubscribe_url: unsubscribeUrl,
-    ...buildCartVars(cand.items ?? [], cand.value, storeUrl),
+    ...buildCartVars(cand.items ?? [], cand.value, storeUrl, cand.cart_link),
   };
   const html = replaceVariables(injectPreheader(campaign.content_html, campaign.preheader), data);
   const subject = replaceVariables(campaign.subject, data);

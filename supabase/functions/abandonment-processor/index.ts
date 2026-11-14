@@ -4,7 +4,8 @@ import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { liAuthHeader } from "../_shared/li-auth.ts";
 import { getAutomationConfig, optOutAutomation } from "../_shared/li-marketing.ts";
-import { inQuietHours, nextDueStep, stepChannels, type FlowStep } from "../_shared/abandonment-render.ts";
+import { cartUrl, inQuietHours, nextDueStep, stepChannels, type FlowStep } from "../_shared/abandonment-render.ts";
+import { shortLinkFor } from "../_shared/short-links.ts";
 import { closeEmailSessions, sendEmailStep } from "./email-step.ts";
 import { loadWhatsAppInstance, sendWhatsAppStep } from "./whatsapp-step.ts";
 import { issueStepCoupon, NO_COUPON } from "./coupon-step.ts";
@@ -87,6 +88,7 @@ async function processFlow(ctx: Ctx, flow: Flow): Promise<Record<string, unknown
 
   const { data: li } = await supabase.from("integrations").select("id, api_key, metadata").eq("tenant_id", flow.tenant_id).eq("type", "loja_integrada").eq("status", "connected").limit(1).maybeSingle();
   const storeUrl = (li?.metadata as { store_url?: string } | null)?.store_url;
+  const shortBase = (li?.metadata as { short_link_base?: string } | null)?.short_link_base ?? null;
   if (!li || !storeUrl) return { ...stats, note: "informe o endereço da loja em Integrações para montar os links" };
   if (inQuietHours(new Date(), flow.quiet_start, flow.quiet_end)) return { ...stats, note: "janela de silêncio" };
 
@@ -173,6 +175,9 @@ async function processFlow(ctx: Ctx, flow: Flow): Promise<Record<string, unknown
       willSend.push(channel);
     }
     if (!willSend.length) continue;
+
+    // link curto do carrinho (domínio curto da loja); sem ele, vai o link longo
+    cand.cart_link = await shortLinkFor(supabase, { tenantId: flow.tenant_id, seed: cand.id, target: cartUrl(storeUrl, cand.items ?? []), fallback: cartUrl(storeUrl), base: shortBase });
 
     const issued = await issueStepCoupon(ctx, flow, step, cand);
     if (issued.error) {
