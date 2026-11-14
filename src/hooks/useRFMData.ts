@@ -92,17 +92,13 @@ export function useRFMData(integrationId: string) {
   const { data: historyData } = useQuery({
     queryKey: ['rfm-history', integrationId],
     queryFn: async () => {
-      // Get all distinct reference dates
+      // Agregado no servidor (antes baixava ~200 mil linhas e esgotava o pool de conexoes)
       const { data: dates, error: datesErr } = await supabase
-        .from('customer_rfm_snapshots')
-        .select('reference_date, segment_name')
-        .eq('integration_id', integrationId)
-        .order('reference_date', { ascending: true });
+        .rpc('get_rfm_history', { p_integration_id: integrationId });
 
       if (datesErr) throw datesErr;
       if (!dates || dates.length === 0) return { history: [], segments: [] };
 
-      // Group by reference_date and segment_name
       const grouped = new Map<string, Record<string, number>>();
       const allSegments = new Set<string>();
 
@@ -111,8 +107,7 @@ export function useRFMData(integrationId: string) {
         const seg = row.segment_name || 'Outros';
         allSegments.add(seg);
         if (!grouped.has(date)) grouped.set(date, {});
-        const entry = grouped.get(date)!;
-        entry[seg] = (entry[seg] || 0) + 1;
+        grouped.get(date)![seg] = Number(row.total);
       }
 
       const history = Array.from(grouped.entries()).map(([date, segments]) => ({
@@ -129,16 +124,11 @@ export function useRFMData(integrationId: string) {
   const { data: migrationData } = useQuery({
     queryKey: ['rfm-migration', integrationId],
     queryFn: async () => {
-      // Get 2 most recent distinct dates
-      const { data: dates } = await supabase
-        .from('customer_rfm_snapshots')
-        .select('reference_date')
-        .eq('integration_id', integrationId)
-        .order('reference_date', { ascending: false });
+      // 2 datas mais recentes via agregado leve (nao baixa todas as linhas)
+      const { data: hist } = await supabase.rpc('get_rfm_history', { p_integration_id: integrationId });
+      if (!hist) return [];
 
-      if (!dates) return [];
-
-      const uniqueDates = [...new Set(dates.map((d) => d.reference_date))].slice(0, 2) as string[];
+      const uniqueDates = [...new Set(hist.map((d) => d.reference_date))].sort().reverse().slice(0, 2) as string[];
       if (uniqueDates.length < 2) return [];
 
       const [latestDate, previousDate] = uniqueDates;

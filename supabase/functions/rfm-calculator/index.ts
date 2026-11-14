@@ -153,7 +153,7 @@ Deno.serve(async (req) => {
         })
       }
     } else if (source_type === 'bling') {
-      const allLiOrders = await fetchAllRows('bling_orders', (from: Record<string, unknown>) =>
+      const orders = await fetchAllRows('bling_orders', (from: Record<string, unknown>) =>
         from.select('id, cliente_id, cliente_nome, cliente_email, cliente_telefone, cliente_cpf_cnpj, valor_total, situacao_nome, data_criacao')
           .eq('integration_id', integration_id).eq('tenant_id', tenantId)
       )

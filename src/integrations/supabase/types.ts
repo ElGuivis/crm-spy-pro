@@ -4804,6 +4804,7 @@ export type Database = {
           last_synced_at: string | null
           login_customer_id: string | null
           mode: string
+          offline_conversion_action_id: number | null
           optimization_score: number | null
           status: string
           tenant_id: string
@@ -4826,6 +4827,7 @@ export type Database = {
           last_synced_at?: string | null
           login_customer_id?: string | null
           mode?: string
+          offline_conversion_action_id?: number | null
           optimization_score?: number | null
           status?: string
           tenant_id: string
@@ -4848,6 +4850,7 @@ export type Database = {
           last_synced_at?: string | null
           login_customer_id?: string | null
           mode?: string
+          offline_conversion_action_id?: number | null
           optimization_score?: number | null
           status?: string
           tenant_id?: string
@@ -6344,6 +6347,78 @@ export type Database = {
           },
           {
             foreignKeyName: "google_ads_negatives_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      google_ads_offline_conversions: {
+        Row: {
+          account_id: string
+          attempts: number
+          campaign_id: number | null
+          conversion_time: string
+          created_at: string
+          gclid: string
+          id: string
+          last_error: string | null
+          li_status: string | null
+          order_number: string
+          retracted_at: string | null
+          status: string
+          tenant_id: string
+          updated_at: string
+          uploaded_at: string | null
+          value: number
+        }
+        Insert: {
+          account_id: string
+          attempts?: number
+          campaign_id?: number | null
+          conversion_time: string
+          created_at?: string
+          gclid: string
+          id?: string
+          last_error?: string | null
+          li_status?: string | null
+          order_number: string
+          retracted_at?: string | null
+          status?: string
+          tenant_id: string
+          updated_at?: string
+          uploaded_at?: string | null
+          value?: number
+        }
+        Update: {
+          account_id?: string
+          attempts?: number
+          campaign_id?: number | null
+          conversion_time?: string
+          created_at?: string
+          gclid?: string
+          id?: string
+          last_error?: string | null
+          li_status?: string | null
+          order_number?: string
+          retracted_at?: string | null
+          status?: string
+          tenant_id?: string
+          updated_at?: string
+          uploaded_at?: string | null
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_ads_offline_conversions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "google_ads_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_ads_offline_conversions_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -14006,6 +14081,14 @@ export type Database = {
           current_group: string
           email: string
           li_customer_id: number
+        }[]
+      }
+      get_rfm_history: {
+        Args: { p_integration_id: string }
+        Returns: {
+          reference_date: string
+          segment_name: string
+          total: number
         }[]
       }
       get_tenant_token_balance: {

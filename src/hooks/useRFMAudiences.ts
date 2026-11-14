@@ -138,10 +138,11 @@ export function useRFMAudiences(integrationId: string) {
       const totalRevenue = members.reduce((sum: number, m) => sum + Number(m.revenue_total || 0), 0);
 
       // Clear old members
-      await supabase
+      const { error: delError } = await supabase
         .from('rfm_audience_members')
         .delete()
         .eq('audience_id', audience.id);
+      if (delError) throw delError;
 
       // Insert new members in batches
       if (members.length > 0) {
@@ -151,14 +152,15 @@ export function useRFMAudiences(integrationId: string) {
           tenant_id: audience.tenant_id,
         }));
         for (let i = 0; i < rows.length; i += 500) {
-          await supabase
+          const { error: insError } = await supabase
             .from('rfm_audience_members')
             .insert(rows.slice(i, i + 500));
+          if (insError) throw insError;
         }
       }
 
       // Update audience stats
-      await supabase
+      const { error: updError } = await supabase
         .from('rfm_audiences')
         .update({
           member_count: members.length,
@@ -166,6 +168,7 @@ export function useRFMAudiences(integrationId: string) {
           last_calculated_at: new Date().toISOString(),
         })
         .eq('id', audience.id);
+      if (updError) throw updError;
 
       return { count: members.length, revenue: totalRevenue };
     },
