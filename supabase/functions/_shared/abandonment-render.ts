@@ -59,8 +59,21 @@ export interface CartVars {
   cart_url: string; product_name: string; product_image: string; product_url: string; store_url: string;
 }
 
-/** Link para voltar ao carrinho: o carrinho da loja vive no navegador da pessoa, então a página de carrinho é o melhor destino. */
-export const cartUrl = (storeUrl: string) => `${storeUrl.replace(/\/$/, "")}/carrinho/index`;
+/**
+ * Link para voltar ao carrinho. A loja tem um endereço que recoloca os itens no carrinho de quem abrir
+ * (`/carrinho/produto/adicionar?<id do produto>=<quantidade>`, o mesmo para o qual o link curto `/r/xxxx` da loja
+ * redireciona) e cai na tela do carrinho; sem itens identificados, vai direto à tela do carrinho.
+ */
+export function cartUrl(storeUrl: string, items: CartItem[] = []): string {
+  const base = storeUrl.replace(/\/$/, "");
+  const qty = new Map<number, number>();
+  for (const i of items) {
+    if (i.product_id && Number.isFinite(i.product_id)) qty.set(i.product_id, (qty.get(i.product_id) ?? 0) + Math.max(1, Math.round(i.quantity || 1)));
+  }
+  if (qty.size === 0) return `${base}/carrinho/index`;
+  const query = [...qty.entries()].map(([id, q]) => `${id}=${q}`).join("&");
+  return `${base}/carrinho/produto/adicionar?${query}&utm_source=crm&utm_medium=recuperacao&utm_campaign=carrinho-abandonado-crm`;
+}
 
 export function buildCartVars(items: CartItem[], value: number, storeUrl: string): CartVars {
   const first = items.find((i) => i.name);
@@ -71,7 +84,7 @@ export function buildCartVars(items: CartItem[], value: number, storeUrl: string
     cart_items_text: cartItemsText(items, storeUrl),
     cart_total: total > 0 ? brl(total) : "",
     cart_count: count > 0 ? String(count) : "",
-    cart_url: cartUrl(storeUrl),
+    cart_url: cartUrl(storeUrl, items),
     product_name: first?.name ?? "",
     product_image: first?.image ?? "",
     product_url: first ? absoluteUrl(storeUrl, first.url) : storeUrl,
