@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4'
 type ServiceClient = ReturnType<typeof createClient>;
 import { scoreRecency, scoreFrequency, scoreMonetary, determineSegment } from './rfm-scoring.ts'
 import { fetchByIds, fetchLiCategoryNames } from './rfm-fetch.ts'
+import { loadPreviousDay } from './rfm-history.ts'
 
 /** Pedido sem `customer_id`: o cálculo principal usa `li_<id do cliente na loja>`; aqui igual. */
 function liCustomerKey(rawJson: unknown): string | null {
@@ -45,12 +46,11 @@ export interface RfmBackgroundContext {
   cachedLiOrders: Record<string, unknown>[] | null
   cachedBlingPaidOrders: Record<string, unknown>[] | null
   log: Log
-  batchDelete: (table: string, integId: string, refDate: string) => Promise<void>
 }
 
 export async function runRfmBackground(ctx: RfmBackgroundContext): Promise<void> {
-  const { supabase, integration_id, source_type, tenantId, referenceDate, records, segmentSummary, now, customerMetrics, cachedLiOrders, cachedBlingPaidOrders, log, batchDelete } = ctx
-  const batchSize = 100
+  const { supabase, integration_id, source_type, tenantId, referenceDate, records, segmentSummary, now, customerMetrics, cachedLiOrders, cachedBlingPaidOrders, log } = ctx
+  const batchSize = 500
 
   try {
     // === PHASE 7: Category-level RFM ===
@@ -172,12 +172,15 @@ export async function runRfmBackground(ctx: RfmBackgroundContext): Promise<void>
           })
         }
 
-        await batchDelete('customer_rfm_category_snapshots', integration_id, referenceDate)
-
+        // upsert no lugar (1 linha por cliente+categoria); só limpa o que sobrou se tudo gravou
+        let catFailed = false
         for (let i = 0; i < catRecords.length; i += batchSize) {
           const batch = catRecords.slice(i, i + batchSize)
-          const { error: catInsertErr } = await supabase.from('customer_rfm_category_snapshots').insert(batch)
-          if (catInsertErr) log.error('[RFM] Category insert error:', catInsertErr)
+          const { error: catUpsertErr } = await supabase.from('customer_rfm_category_snapshots').upsert(batch, { onConflict: 'integration_id,customer_id,category_name' })
+          if (catUpsertErr) { catFailed = true; log.error('[RFM] Category upsert error:', catUpsertErr) }
+        }
+        if (!catFailed) {
+          await supabase.from('customer_rfm_category_snapshots').delete().eq('integration_id', integration_id).lt('reference_date', referenceDate)
         }
 
         categoryProcessed = catRecords.length
@@ -187,98 +190,54 @@ export async function runRfmBackground(ctx: RfmBackgroundContext): Promise<void>
       log.error('[RFM] Category RFM calculation error (non-fatal):', catErr)
     }
 
-    // === PHASE 5: Generate RFM Alerts ===
+    // === PHASE 5: Generate RFM Alerts (compara com o último dia do histórico leve) ===
     try {
-      const { data: prevDates } = await supabase
-        .from('customer_rfm_snapshots')
-        .select('reference_date')
-        .eq('integration_id', integration_id)
-        .neq('reference_date', referenceDate)
-        .order('reference_date', { ascending: false })
-        .limit(1)
+      const prev = await loadPreviousDay(supabase, integration_id, referenceDate)
+      if (prev && prev.total > 0) {
+        const alerts: Record<string, unknown>[] = []
 
-      if (prevDates && prevDates.length > 0) {
-        const prevDate = prevDates[0].reference_date
-        const { data: prevSnapshots } = await supabase
-          .from('customer_rfm_snapshots')
-          .select('customer_id, segment_name, revenue_total, churn_risk')
-          .eq('integration_id', integration_id)
-          .eq('reference_date', prevDate)
+        const prevChampions = prev.segments['Campeões'] || 0
+        const currChampions = segmentSummary['Campeões'] || 0
+        if (prevChampions > 0 && currChampions < prevChampions) {
+          const dropPct = Math.round(((prevChampions - currChampions) / prevChampions) * 100)
+          alerts.push({ tenant_id: tenantId, integration_id, alert_type: 'champions_drop', title: `Campeões caíram ${dropPct}%`, description: `De ${prevChampions} para ${currChampions} clientes campeões desde ${prev.date}.`, severity: dropPct >= 20 ? 'critical' : 'warning', reference_date: referenceDate, metadata: { prev_count: prevChampions, curr_count: currChampions, drop_pct: dropPct } })
+        }
 
-        if (prevSnapshots && prevSnapshots.length > 0) {
-          const prevSegments: Record<string, number> = {}
-          let prevHighValueAtRisk = 0
-          const prevRepurchase = prevSnapshots.filter(s => (s as Record<string, unknown>).orders_count > 1).length
+        const prevHighValueAtRisk = prev.segments['Alto Valor em Risco'] || 0
+        const currHighValueAtRisk = segmentSummary['Alto Valor em Risco'] || 0
+        if (currHighValueAtRisk > prevHighValueAtRisk && currHighValueAtRisk >= 3) {
+          alerts.push({ tenant_id: tenantId, integration_id, alert_type: 'high_value_at_risk', title: `${currHighValueAtRisk} clientes alto valor em risco`, description: `Aumento de ${prevHighValueAtRisk} para ${currHighValueAtRisk} clientes de alto valor em risco.`, severity: 'critical', reference_date: referenceDate, metadata: { prev_count: prevHighValueAtRisk, curr_count: currHighValueAtRisk } })
+        }
 
-          for (const s of prevSnapshots) {
-            const seg = s.segment_name || 'Outros'
-            prevSegments[seg] = (prevSegments[seg] || 0) + 1
-            if (seg === 'Alto Valor em Risco') prevHighValueAtRisk++
-          }
+        const currRepurchase = records.filter(r => (r.orders_count as number) > 1).length
+        const prevRate = prev.total > 0 ? (prev.repeat / prev.total * 100) : 0
+        const currRate = records.length > 0 ? (currRepurchase / records.length * 100) : 0
+        if (prevRate > 0 && currRate < prevRate - 3) {
+          alerts.push({ tenant_id: tenantId, integration_id, alert_type: 'repurchase_drop', title: `Taxa de recompra caiu ${(prevRate - currRate).toFixed(1)}%`, description: `Taxa de 2ª compra caiu de ${prevRate.toFixed(1)}% para ${currRate.toFixed(1)}%.`, severity: 'warning', reference_date: referenceDate, metadata: { prev_rate: prevRate, curr_rate: currRate } })
+        }
 
-          const alerts: Record<string, unknown>[] = []
-
-          const prevChampions = prevSegments['Campeões'] || 0
-          const currChampions = segmentSummary['Campeões'] || 0
-          if (prevChampions > 0 && currChampions < prevChampions) {
-            const dropPct = Math.round(((prevChampions - currChampions) / prevChampions) * 100)
-            alerts.push({ tenant_id: tenantId, integration_id, alert_type: 'champions_drop', title: `Campeões caíram ${dropPct}%`, description: `De ${prevChampions} para ${currChampions} clientes campeões desde ${prevDate}.`, severity: dropPct >= 20 ? 'critical' : 'warning', reference_date: referenceDate, metadata: { prev_count: prevChampions, curr_count: currChampions, drop_pct: dropPct } })
-          }
-
-          const currHighValueAtRisk = segmentSummary['Alto Valor em Risco'] || 0
-          if (currHighValueAtRisk > prevHighValueAtRisk && currHighValueAtRisk >= 3) {
-            alerts.push({ tenant_id: tenantId, integration_id, alert_type: 'high_value_at_risk', title: `${currHighValueAtRisk} clientes alto valor em risco`, description: `Aumento de ${prevHighValueAtRisk} para ${currHighValueAtRisk} clientes de alto valor em risco.`, severity: 'critical', reference_date: referenceDate, metadata: { prev_count: prevHighValueAtRisk, curr_count: currHighValueAtRisk } })
-          }
-
-          const currRepurchase = records.filter(r => r.orders_count > 1).length
-          const prevRate = prevSnapshots.length > 0 ? (prevRepurchase / prevSnapshots.length * 100) : 0
-          const currRate = records.length > 0 ? (currRepurchase / records.length * 100) : 0
-          if (prevRate > 0 && currRate < prevRate - 3) {
-            alerts.push({ tenant_id: tenantId, integration_id, alert_type: 'repurchase_drop', title: `Taxa de recompra caiu ${(prevRate - currRate).toFixed(1)}%`, description: `Taxa de 2ª compra caiu de ${prevRate.toFixed(1)}% para ${currRate.toFixed(1)}%.`, severity: 'warning', reference_date: referenceDate, metadata: { prev_rate: prevRate, curr_rate: currRate } })
-          }
-
-          if (alerts.length > 0) {
-            await supabase.from('rfm_alerts').delete().eq('integration_id', integration_id).eq('reference_date', referenceDate)
-            await supabase.from('rfm_alerts').insert(alerts)
-            log.info(`[RFM] Generated ${alerts.length} alerts`)
-          }
+        if (alerts.length > 0) {
+          await supabase.from('rfm_alerts').delete().eq('integration_id', integration_id).eq('reference_date', referenceDate)
+          await supabase.from('rfm_alerts').insert(alerts)
+          log.info(`[RFM] Generated ${alerts.length} alerts`)
         }
       }
     } catch (alertErr) {
       log.error('[RFM] Alert generation error (non-fatal):', alertErr)
     }
 
-    // === PHASE 6: Recalculate dynamic audiences ===
+    // === PHASE 6: renova os membros das audiências dinâmicas (no banco, com as mesmas regras da tela) ===
     try {
       const { data: audiences } = await supabase
         .from('rfm_audiences')
-        .select('id, tenant_id, rules')
+        .select('id')
         .eq('integration_id', integration_id)
         .eq('is_active', true)
 
-      if (audiences && audiences.length > 0) {
-        for (const aud of audiences) {
-          const rules = (aud.rules || {}) as Record<string, unknown>
-          let members = [...records]
-          if (rules.r_min) members = members.filter(r => r.r_score >= rules.r_min)
-          if (rules.r_max) members = members.filter(r => r.r_score <= rules.r_max)
-          if (rules.f_min) members = members.filter(r => r.f_score >= rules.f_min)
-          if (rules.f_max) members = members.filter(r => r.f_score <= rules.f_max)
-          if (rules.m_min) members = members.filter(r => r.m_score >= rules.m_min)
-          if (rules.m_max) members = members.filter(r => r.m_score <= rules.m_max)
-          if (rules.segment_name) members = members.filter(r => r.segment_name === rules.segment_name)
-          if (rules.churn_risk) members = members.filter(r => r.churn_risk === rules.churn_risk)
-          if (rules.min_revenue) members = members.filter(r => r.revenue_total >= rules.min_revenue)
-          if (rules.max_revenue) members = members.filter(r => r.revenue_total <= rules.max_revenue)
-          if (rules.min_orders) members = members.filter(r => r.orders_count >= rules.min_orders)
-          if (rules.max_orders) members = members.filter(r => r.orders_count <= rules.max_orders)
-          if (rules.min_aov) members = members.filter(r => r.aov >= rules.min_aov)
-          if (rules.max_aov) members = members.filter(r => r.aov <= rules.max_aov)
-
-          const totalRevenue = members.reduce((sum, m) => sum + (m.revenue_total as number), 0)
-          await supabase.from('rfm_audiences').update({ member_count: members.length, total_revenue: totalRevenue, last_calculated_at: new Date().toISOString() }).eq('id', aud.id)
-          log.info(`[RFM] Audience "${aud.id}" updated: ${members.length} members`)
-        }
+      for (const aud of (audiences || []) as { id: string }[]) {
+        const { error: audErr } = await supabase.rpc('rfm_refresh_audience', { p_audience_id: aud.id })
+        if (audErr) log.error(`[RFM] Audience ${aud.id} refresh error:`, audErr)
+        else log.info(`[RFM] Audience "${aud.id}" renovada`)
       }
     } catch (audErr) {
       log.error('[RFM] Audience recalc error (non-fatal):', audErr)

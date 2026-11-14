@@ -7,6 +7,7 @@ import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { scoreRecency, scoreFrequency, scoreMonetary, determineSegment, determineChurnRisk, predictRepurchase } from './rfm-scoring.ts'
 import { runRfmBackground } from './rfm-background.ts'
+import { loadExistingState, recordHistory } from './rfm-history.ts'
 import type { CustomerMetrics } from './rfm-background.ts'
 import { brtDate } from "../_shared/brt.ts"
 
@@ -257,47 +258,49 @@ Deno.serve(async (req) => {
       }
     })
 
-    async function batchDelete(table: string, integId: string, refDate: string) {
-      let totalDeleted = 0
-      while (true) {
-        const { data: ids, error: selErr } = await supabaseAdmin.from(table).select('id').eq('integration_id', integId).eq('reference_date', refDate).limit(200)
-        if (selErr) { log.error(`[RFM] batchDelete select error on ${table}:`, selErr); throw selErr }
-        if (!ids || ids.length === 0) break
-        const idList = ids.map((r: Record<string, unknown>) => r.id)
-        const { error: delErr } = await supabaseAdmin.from(table).delete().in('id', idList)
-        if (delErr) { log.error(`[RFM] batchDelete delete error on ${table}:`, delErr); throw delErr }
-        totalDeleted += idList.length
-      }
-      log.info(`[RFM] Deleted ${totalDeleted} rows from ${table}`)
-    }
+    // Situação atual guardada: base para detectar mudança de segmento e para desfazer em caso de falha
+    const before = await loadExistingState(supabaseAdmin, integration_id)
 
-    log.info(`[RFM] Starting delete of old snapshots...`)
-    await batchDelete('customer_rfm_snapshots', integration_id, referenceDate)
-    log.info(`[RFM] Starting insert of ${records.length} records...`)
-
-    const batchSize = 100
+    // Upsert no lugar (1 linha por cliente; o id fica estável e os públicos continuam apontando certo)
+    log.info(`[RFM] Upsert de ${records.length} clientes...`)
+    const batchSize = 500
     try {
       for (let i = 0; i < records.length; i += batchSize) {
         const batch = records.slice(i, i + batchSize)
         // pool de conexões do banco pode estar cheio por alguns segundos (PGRST003): tenta de novo antes de desistir
-        let insertErr: unknown = null
+        let upsertErr: unknown = null
         for (let attempt = 1; attempt <= 4; attempt++) {
-          const res = await supabaseAdmin.from('customer_rfm_snapshots').insert(batch)
-          insertErr = res.error
-          if (!insertErr) break
-          log.warn(`[RFM] Insert batch ${i} falhou (tentativa ${attempt}/4):`, insertErr)
+          const res = await supabaseAdmin.from('customer_rfm_snapshots').upsert(batch, { onConflict: 'integration_id,customer_id' })
+          upsertErr = res.error
+          if (!upsertErr) break
+          log.warn(`[RFM] Upsert lote ${i} falhou (tentativa ${attempt}/4):`, upsertErr)
           await new Promise((r) => setTimeout(r, attempt * 2000))
         }
-        if (insertErr) { log.error(`[RFM] Insert error at batch ${i}:`, insertErr); throw insertErr }
+        if (upsertErr) { log.error(`[RFM] Erro no upsert do lote ${i}:`, upsertErr); throw upsertErr }
       }
+      // quem deixou de qualificar (sem pedido válido) sai da tabela atual
+      const { error: staleErr } = await supabaseAdmin.from('customer_rfm_snapshots').delete().eq('integration_id', integration_id).lt('reference_date', referenceDate)
+      if (staleErr) log.error('[RFM] Erro ao remover clientes antigos:', staleErr)
     } catch (err) {
-      // não deixa um snapshot parcial do dia: as telas leem a data mais recente e mostrariam só parte dos clientes
-      log.warn('[RFM] Falha na gravação: removendo snapshot parcial de hoje para as telas voltarem ao dia anterior')
-      try { await batchDelete('customer_rfm_snapshots', integration_id, referenceDate) } catch (_) { /* melhor esforço */ }
+      // as telas leem a data mais recente: devolve as linhas já gravadas hoje para a data anterior (ou remove, se for a 1ª vez)
+      log.warn('[RFM] Falha na gravação: revertendo a data das linhas gravadas hoje')
+      try {
+        if (before.prevDate && before.prevDate !== referenceDate) {
+          await supabaseAdmin.from('customer_rfm_snapshots').update({ reference_date: before.prevDate }).eq('integration_id', integration_id).eq('reference_date', referenceDate)
+        } else if (!before.prevDate) {
+          await supabaseAdmin.from('customer_rfm_snapshots').delete().eq('integration_id', integration_id).eq('reference_date', referenceDate)
+        }
+      } catch (_) { /* melhor esforço */ }
       throw err
     }
 
-    log.info(`[RFM] Inserted ${records.length} snapshots successfully`)
+    log.info(`[RFM] ${records.length} clientes gravados`)
+
+    try {
+      await recordHistory(supabaseAdmin, { tenantId, integrationId: integration_id, referenceDate, records: records as never, before, log })
+    } catch (histErr) {
+      log.error('[RFM] Histórico (não fatal):', histErr)
+    }
 
     const segmentSummary: Record<string, number> = {}
     for (const r of records) {
@@ -306,7 +309,7 @@ Deno.serve(async (req) => {
 
     const backgroundWork = () => runRfmBackground({
       supabase: supabaseAdmin, integration_id, source_type, tenantId, referenceDate,
-      records, segmentSummary, now, customerMetrics, cachedLiOrders, cachedBlingPaidOrders, log, batchDelete,
+      records, segmentSummary, now, customerMetrics, cachedLiOrders, cachedBlingPaidOrders, log,
     })
 
     if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {

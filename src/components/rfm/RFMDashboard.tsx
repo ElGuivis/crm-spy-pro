@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -44,6 +44,17 @@ export function RFMDashboard({ integrationId, sourceType, integrationName }: RFM
     migrations,
   } = useRFMData(integrationId);
 
+  // Primeira vez: calcula sozinho (uma tentativa por sessao); depois o cálculo diário mantém tudo atualizado
+  useEffect(() => {
+    if (isLoading || isCalculating || totalClients > 0 || !integrationId) return;
+    const key = `rfm-auto-${integrationId}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, '1');
+    } catch { /* sem sessionStorage: segue sem a trava */ }
+    calculateRFM({ sourceType });
+  }, [isLoading, isCalculating, totalClients, integrationId, sourceType, calculateRFM]);
+
   const [segmentFilter, setSegmentFilter] = useState<string | null>(null);
   const [activeHeatmapCell, setActiveHeatmapCell] = useState<{ r: number; f: number } | null>(null);
 
@@ -62,14 +73,20 @@ export function RFMDashboard({ integrationId, sourceType, integrationName }: RFM
           <h1 className="text-2xl font-bold text-foreground">Matriz RFM</h1>
           <p className="text-muted-foreground">{integrationName}</p>
         </div>
-        <Button
-          onClick={() => calculateRFM({ sourceType })}
-          disabled={isCalculating}
-          className="gap-2"
-        >
-          {isCalculating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
-          {isCalculating ? 'Calculando...' : 'Calcular RFM'}
-        </Button>
+        <div className="flex flex-col items-end gap-1">
+          <Button
+            onClick={() => calculateRFM({ sourceType })}
+            disabled={isCalculating}
+            variant={totalClients > 0 ? 'outline' : 'default'}
+            className="gap-2"
+          >
+            {isCalculating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calculator className="h-4 w-4" />}
+            {isCalculating ? 'Calculando...' : totalClients > 0 ? 'Recalcular agora' : 'Calcular RFM'}
+          </Button>
+          {totalClients > 0 && (
+            <span className="text-xs text-muted-foreground">Atualiza sozinho todo dia às 04h</span>
+          )}
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -110,7 +127,7 @@ export function RFMDashboard({ integrationId, sourceType, integrationName }: RFM
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {lastCalculation ? format(new Date(lastCalculation), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
+              {lastCalculation ? format(new Date(`${lastCalculation}T12:00:00`), 'dd/MM/yyyy', { locale: ptBR }) : '—'}
             </div>
           </CardContent>
         </Card>
@@ -244,7 +261,7 @@ export function RFMDashboard({ integrationId, sourceType, integrationName }: RFM
             <Calculator className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">Nenhum dado RFM disponível</h3>
             <p className="text-muted-foreground mb-4">
-              Clique em "Calcular RFM" para analisar seus clientes com base em todo o histórico de pedidos.
+              O cálculo roda sozinho na primeira vez e depois todo dia. Se preferir, clique em "Calcular RFM" para analisar seus clientes com base em todo o histórico de pedidos.
             </p>
           </CardContent>
         </Card>

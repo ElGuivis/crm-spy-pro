@@ -45,7 +45,7 @@ export function RFMSegmentMigration({ migrations }: RFMSegmentMigrationProps) {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground text-center py-8">
-            É necessário ter pelo menos 2 snapshots RFM para comparar migrações.
+            Nenhuma mudança de segmento nos últimos 30 dias.
           </p>
         </CardContent>
       </Card>

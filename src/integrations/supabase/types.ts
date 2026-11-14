@@ -12677,6 +12677,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "rfm_audience_members_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "customer_rfm_latest"
+            referencedColumns: ["snapshot_id"]
+          },
+          {
+            foreignKeyName: "rfm_audience_members_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "customer_rfm_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "rfm_audience_members_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
@@ -12738,6 +12752,99 @@ export type Database = {
           },
           {
             foreignKeyName: "rfm_audiences_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rfm_history_daily: {
+        Row: {
+          customers: number
+          integration_id: string
+          reference_date: string
+          repeat_customers: number
+          revenue: number
+          segment_name: string
+          tenant_id: string
+        }
+        Insert: {
+          customers?: number
+          integration_id: string
+          reference_date: string
+          repeat_customers?: number
+          revenue?: number
+          segment_name: string
+          tenant_id: string
+        }
+        Update: {
+          customers?: number
+          integration_id?: string
+          reference_date?: string
+          repeat_customers?: number
+          revenue?: number
+          segment_name?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rfm_history_daily_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rfm_history_daily_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rfm_segment_changes: {
+        Row: {
+          changed_on: string
+          customer_id: string
+          from_segment: string
+          id: number
+          integration_id: string
+          revenue_total: number
+          tenant_id: string
+          to_segment: string
+        }
+        Insert: {
+          changed_on: string
+          customer_id: string
+          from_segment: string
+          id?: never
+          integration_id: string
+          revenue_total?: number
+          tenant_id: string
+          to_segment: string
+        }
+        Update: {
+          changed_on?: string
+          customer_id?: string
+          from_segment?: string
+          id?: never
+          integration_id?: string
+          revenue_total?: number
+          tenant_id?: string
+          to_segment?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rfm_segment_changes_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rfm_segment_changes_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -14091,6 +14198,15 @@ export type Database = {
           total: number
         }[]
       }
+      get_rfm_migration: {
+        Args: { p_days?: number; p_integration_id: string }
+        Returns: {
+          customers: number
+          from_segment: string
+          revenue: number
+          to_segment: string
+        }[]
+      }
       get_tenant_token_balance: {
         Args: { _tenant_id: string }
         Returns: number
@@ -14274,6 +14390,13 @@ export type Database = {
         Returns: number
       }
       retry_dead_letter: { Args: { p_id: string }; Returns: boolean }
+      rfm_refresh_audience: {
+        Args: { p_audience_id: string }
+        Returns: {
+          member_count: number
+          total_revenue: number
+        }[]
+      }
       rollup_instagram_metrics: { Args: { p_date?: string }; Returns: Json }
       schedule_bulk_campaigns: { Args: never; Returns: Json }
       schedule_email_campaigns: { Args: never; Returns: Json }

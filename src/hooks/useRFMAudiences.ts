@@ -97,80 +97,11 @@ export function useRFMAudiences(integrationId: string) {
 
   const recalculateAudience = useMutation({
     mutationFn: async (audience: RFMAudience) => {
-      // Get latest snapshot date
-      const { data: latestDate } = await supabase
-        .from('customer_rfm_snapshots')
-        .select('reference_date')
-        .eq('integration_id', integrationId)
-        .order('reference_date', { ascending: false })
-        .limit(1)
-        .single();
-
-      if (!latestDate) throw new Error('Nenhum snapshot RFM encontrado');
-
-      // Build query with filters from rules
-      let query = supabase
-        .from('customer_rfm_snapshots')
-        .select('id, revenue_total')
-        .eq('integration_id', integrationId)
-        .eq('reference_date', latestDate.reference_date);
-
-      const rules = audience.rules;
-      if (rules.r_min) query = query.gte('r_score', rules.r_min);
-      if (rules.r_max) query = query.lte('r_score', rules.r_max);
-      if (rules.f_min) query = query.gte('f_score', rules.f_min);
-      if (rules.f_max) query = query.lte('f_score', rules.f_max);
-      if (rules.m_min) query = query.gte('m_score', rules.m_min);
-      if (rules.m_max) query = query.lte('m_score', rules.m_max);
-      if (rules.segment_name) query = query.eq('segment_name', rules.segment_name);
-      if (rules.churn_risk) query = query.eq('churn_risk', rules.churn_risk);
-      if (rules.min_revenue) query = query.gte('revenue_total', rules.min_revenue);
-      if (rules.max_revenue) query = query.lte('revenue_total', rules.max_revenue);
-      if (rules.min_orders) query = query.gte('orders_count', rules.min_orders);
-      if (rules.max_orders) query = query.lte('orders_count', rules.max_orders);
-      if (rules.min_aov) query = query.gte('aov', rules.min_aov);
-      if (rules.max_aov) query = query.lte('aov', rules.max_aov);
-
-      const { data: matchingSnapshots, error } = await query;
+      // Recalculo no servidor: uma chamada so (antes eram centenas de requisicoes do navegador)
+      const { data, error } = await supabase.rpc('rfm_refresh_audience', { p_audience_id: audience.id });
       if (error) throw error;
-
-      const members = matchingSnapshots || [];
-      const totalRevenue = members.reduce((sum: number, m) => sum + Number(m.revenue_total || 0), 0);
-
-      // Clear old members
-      const { error: delError } = await supabase
-        .from('rfm_audience_members')
-        .delete()
-        .eq('audience_id', audience.id);
-      if (delError) throw delError;
-
-      // Insert new members in batches
-      if (members.length > 0) {
-        const rows = members.map((m) => ({
-          audience_id: audience.id,
-          snapshot_id: m.id,
-          tenant_id: audience.tenant_id,
-        }));
-        for (let i = 0; i < rows.length; i += 500) {
-          const { error: insError } = await supabase
-            .from('rfm_audience_members')
-            .insert(rows.slice(i, i + 500));
-          if (insError) throw insError;
-        }
-      }
-
-      // Update audience stats
-      const { error: updError } = await supabase
-        .from('rfm_audiences')
-        .update({
-          member_count: members.length,
-          total_revenue: totalRevenue,
-          last_calculated_at: new Date().toISOString(),
-        })
-        .eq('id', audience.id);
-      if (updError) throw updError;
-
-      return { count: members.length, revenue: totalRevenue };
+      const row = Array.isArray(data) ? data[0] : data;
+      return { count: Number(row?.member_count ?? 0), revenue: Number(row?.total_revenue ?? 0) };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['rfm-audiences', integrationId] });

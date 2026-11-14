@@ -120,60 +120,13 @@ export function useRFMData(integrationId: string) {
     enabled: !!integrationId,
   });
 
-  // Migration data (compare latest vs previous snapshot)
+  // Migracao entre segmentos: mudancas registradas nos ultimos 30 dias (rfm_segment_changes)
   const { data: migrationData } = useQuery({
     queryKey: ['rfm-migration', integrationId],
     queryFn: async () => {
-      // 2 datas mais recentes via agregado leve (nao baixa todas as linhas)
-      const { data: hist } = await supabase.rpc('get_rfm_history', { p_integration_id: integrationId });
-      if (!hist) return [];
-
-      const uniqueDates = [...new Set(hist.map((d) => d.reference_date))].sort().reverse().slice(0, 2) as string[];
-      if (uniqueDates.length < 2) return [];
-
-      const [latestDate, previousDate] = uniqueDates;
-
-      // Fetch both snapshots
-      const [{ data: latest }, { data: previous }] = await Promise.all([
-        supabase
-          .from('customer_rfm_snapshots')
-          .select('customer_id, segment_name, revenue_total')
-          .eq('integration_id', integrationId)
-          .eq('reference_date', latestDate),
-        supabase
-          .from('customer_rfm_snapshots')
-          .select('customer_id, segment_name, revenue_total')
-          .eq('integration_id', integrationId)
-          .eq('reference_date', previousDate),
-      ]);
-
-      if (!latest || !previous) return [];
-
-      // Build previous map
-      const prevMap = new Map<string, { segment: string; revenue: number }>();
-      for (const s of previous) {
-        prevMap.set(s.customer_id, { segment: s.segment_name || 'Outros', revenue: Number(s.revenue_total || 0) });
-      }
-
-      // Compare
-      const flows = new Map<string, { count: number; revenue: number }>();
-      for (const s of latest) {
-        const prev = prevMap.get(s.customer_id);
-        if (!prev) continue;
-        const from = prev.segment;
-        const to = s.segment_name || 'Outros';
-        if (from === to) continue;
-        const key = `${from}→${to}`;
-        const existing = flows.get(key) || { count: 0, revenue: 0 };
-        existing.count++;
-        existing.revenue += Number(s.revenue_total || 0);
-        flows.set(key, existing);
-      }
-
-      return Array.from(flows.entries()).map(([key, data]) => {
-        const [from, to] = key.split('→');
-        return { from, to, count: data.count, revenue: data.revenue };
-      });
+      const { data, error } = await supabase.rpc('get_rfm_migration', { p_integration_id: integrationId, p_days: 30 });
+      if (error) throw error;
+      return (data || []).map((r) => ({ from: r.from_segment, to: r.to_segment, count: Number(r.customers), revenue: Number(r.revenue) }));
     },
     enabled: !!integrationId,
   });
@@ -241,6 +194,7 @@ export function useRFMData(integrationId: string) {
   const rfmChannelInstanceId = useId();
   useEffect(() => {
     if (!integrationId) return;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 
     const channel = supabase
       .channel(`rfm-snapshots-${integrationId}-${rfmChannelInstanceId}`)
@@ -253,15 +207,19 @@ export function useRFMData(integrationId: string) {
           filter: `integration_id=eq.${integrationId}`,
         },
         () => {
-          // Silently refresh all RFM queries
-          queryClient.invalidateQueries({ queryKey: ['rfm-snapshots', integrationId] });
-          queryClient.invalidateQueries({ queryKey: ['rfm-history', integrationId] });
-          queryClient.invalidateQueries({ queryKey: ['rfm-migration', integrationId] });
+          // O calculo grava milhares de linhas: junta os eventos e atualiza uma vez so
+          if (refreshTimer) clearTimeout(refreshTimer);
+          refreshTimer = setTimeout(() => {
+            queryClient.invalidateQueries({ queryKey: ['rfm-snapshots', integrationId] });
+            queryClient.invalidateQueries({ queryKey: ['rfm-history', integrationId] });
+            queryClient.invalidateQueries({ queryKey: ['rfm-migration', integrationId] });
+          }, 4000);
         }
       )
       .subscribe();
 
     return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
       supabase.removeChannel(channel);
     };
   }, [integrationId, queryClient, rfmChannelInstanceId]);
