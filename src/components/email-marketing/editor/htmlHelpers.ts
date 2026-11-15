@@ -49,6 +49,16 @@ export function pxNumber(value: string | undefined): number | null {
   return m ? Number(m[1]) : null;
 }
 
+/**
+ * Largura de imagem que encolhe no celular. `width: 300px; max-width: 100%` NÃO encolhe dentro de tabela
+ * (o layout automático da tabela usa os 300px como largura mínima: dois cartões = ~650px e o e-mail inteiro
+ * vaza da tela no celular). `width: 100%; max-width: 300px` dá o mesmo tamanho no PC e cabe no celular;
+ * o atributo width="300" continua para o Outlook.
+ */
+export function fluidWidth(px: number | null, raw: string): string {
+  return px ? `width: 100%; max-width: ${px}px;` : `width: ${raw}; max-width: 100%;`;
+}
+
 export function getBaseStyles(block: { backgroundColor?: string; padding?: string; margin?: string; borderRadius?: string; fontFamily?: string }): string {
   const styles: string[] = [];
   if (block.backgroundColor) styles.push(`background-color: ${block.backgroundColor}`);

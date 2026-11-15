@@ -2,7 +2,7 @@ import type {
   Alignment, BannerBlock, ButtonBlock, CartItemsBlock, Columns2Block, Columns3Block, DividerBlock, EmailBlock, FooterBlock,
   HeaderBlock, HeadingBlock, ImageBlock, LegalBlock, SocialBlock, SpacerBlock, TextBlock, UnsubscribeBlock,
 } from './types';
-import { alignOf, blockMargin, bulletproofButton, esc, getBaseStyles, inlineFormat, pxNumber, safeUrl } from './htmlHelpers';
+import { alignOf, blockMargin, bulletproofButton, esc, getBaseStyles, inlineFormat, fluidWidth, pxNumber, safeUrl } from './htmlHelpers';
 import { generateCouponHTML, generateImageTextHTML, generateProductHTML } from './htmlProductBlocks';
 
 export { getBaseStyles } from './htmlHelpers';
@@ -84,7 +84,7 @@ function generateImageHTML(block: ImageBlock): string {
   const align = alignOf(block.alignment, 'center');
   const width = block.width || '100%';
   const px = pxNumber(width);
-  const img = `<img src="${esc(block.url || 'https://via.placeholder.com/600x300')}" alt="${esc(block.alt || 'Imagem')}" width="${px ?? '100%'}" style="display: block; width: ${px ? `${px}px` : width}; max-width: 100%; height: auto; margin: ${blockMargin(align)};${block.borderRadius ? ` border-radius: ${block.borderRadius};` : ''}">`;
+  const img = `<img src="${esc(block.url || 'https://via.placeholder.com/600x300')}" alt="${esc(block.alt || 'Imagem')}" width="${px ?? '100%'}" style="display: block; ${fluidWidth(px, width)} height: auto; margin: ${blockMargin(align)};${block.borderRadius ? ` border-radius: ${block.borderRadius};` : ''}">`;
   return `
   <tr>
     <td style="${getBaseStyles({ ...block, borderRadius: undefined })}; text-align: ${align}; padding: ${block.padding || '20px'};">

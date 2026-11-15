@@ -1,5 +1,5 @@
 import type { Alignment, CouponBlock, ImageTextBlock, ProductBlock } from './types';
-import { alignOf, blockMargin, bulletproofButton, esc, getBaseStyles, inlineFormat, pxNumber, safeUrl } from './htmlHelpers';
+import { alignOf, blockMargin, bulletproofButton, esc, getBaseStyles, inlineFormat, fluidWidth, pxNumber, safeUrl } from './htmlHelpers';
 
 /** Bloco de produto: tudo configurável (alinhamento, cores, tamanhos, botão) e com título/imagem levando ao link. */
 export function generateProductHTML(block: ProductBlock): string {
@@ -10,7 +10,7 @@ export function generateProductHTML(block: ProductBlock): string {
 
   const imgWidth = block.imageWidth || '300px';
   const imgPx = pxNumber(imgWidth);
-  const img = `<img src="${esc(block.imageUrl || 'https://via.placeholder.com/300x300')}" alt="${esc(block.name || 'Produto')}"${imgPx ? ` width="${imgPx}"` : ''} style="display: block; width: ${imgPx ? `${imgPx}px` : imgWidth}; max-width: 100%; height: auto; margin: ${blockMargin(align)};${block.imageRadius ? ` border-radius: ${block.imageRadius};` : ''}">`;
+  const img = `<img src="${esc(block.imageUrl || 'https://via.placeholder.com/300x300')}" alt="${esc(block.name || 'Produto')}"${imgPx ? ` width="${imgPx}"` : ''} style="display: block; ${fluidWidth(imgPx, imgWidth)} height: auto; margin: ${blockMargin(align)};${block.imageRadius ? ` border-radius: ${block.imageRadius};` : ''}">`;
 
   const nameStyle = `margin: 0 0 8px; font-size: ${block.nameSize || '20px'}; font-weight: ${block.nameWeight || 'bold'}; color: ${block.nameColor || '#333333'}; line-height: 1.3;`;
   const priceSize = block.priceSize || '24px';

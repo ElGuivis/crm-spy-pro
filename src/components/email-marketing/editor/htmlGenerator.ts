@@ -1,5 +1,6 @@
 import { EmailContent } from './types';
 import { generateBlockHTML } from './htmlBlockGenerators';
+import { pxNumber } from './htmlHelpers';
 
 export function generateEmailHTML(content: EmailContent, preheader?: string): string {
   const { blocks, globalStyles = {} } = content;
@@ -84,9 +85,11 @@ export function generateEmailHTML(content: EmailContent, preheader?: string): st
   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 0; padding: 0;">
     <tr>
       <td style="padding: 20px 0;">
-        <table role="presentation" cellspacing="0" cellpadding="0" border="0" class="email-container" style="margin: 0 auto; width: ${contentWidth}; max-width: ${contentWidth}; background-color: ${contentBackground}; font-family: ${fontFamily};">
+        <!--[if mso]><table role="presentation" cellspacing="0" cellpadding="0" border="0" width="${pxNumber(contentWidth) ?? 600}" align="center"><tr><td><![endif]-->
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" class="email-container" style="margin: 0 auto; width: 100%; max-width: ${contentWidth}; background-color: ${contentBackground}; font-family: ${fontFamily};">
           ${blocksHTML}
         </table>
+        <!--[if mso]></td></tr></table><![endif]-->
       </td>
     </tr>
   </table>
