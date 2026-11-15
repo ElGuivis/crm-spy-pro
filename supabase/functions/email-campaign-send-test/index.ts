@@ -108,7 +108,7 @@ serve(async (req) => {
 
     // E-mails de recuperação usam o carrinho da pessoa: no teste mostra um carrinho de exemplo com produtos reais da loja
     let cartSample = {};
-    if (/\{\{\s*(cart_|product_)/.test(htmlContent)) {
+    if (/\{\{\s*(cart_|product_|store_url)/.test(htmlContent)) {
       const { data: li } = await supabase.from("integrations").select("id, metadata").eq("tenant_id", tenantId).eq("type", "loja_integrada").limit(1).maybeSingle();
       const storeUrl = (li?.metadata as { store_url?: string } | null)?.store_url || "https://www.sualoja.com.br";
       const { data: prods } = li ? await supabase.from("li_products").select("loja_integrada_product_id, name, price, promotional_price, image_url, raw_json")
