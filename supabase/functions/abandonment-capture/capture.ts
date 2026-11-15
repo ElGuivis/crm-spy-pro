@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import {
-  extractCartItems, getAutomationConfig, getCampaignDetails, KIND_BY_IDENTIFIER, listAutomations, listCampaigns, normalizeCampaign, optOutAutomation,
+  AUTOMATION_ID_BY_KIND, extractCartItems, getAutomationConfig, getCampaignDetails, KIND_BY_IDENTIFIER, listAutomations, listCampaigns, normalizeCampaign, optOutAutomation,
   type FlowKind, type LiCampaign,
 } from "../_shared/li-marketing.ts";
 
@@ -66,7 +66,10 @@ export interface CaptureResult { integration: string; seen: number; upserted: nu
 
 export async function captureIntegration(supabase: Supabase, integration: { id: string; tenant_id: string }, auth: string): Promise<CaptureResult> {
   const result: CaptureResult = { integration: integration.id, seen: 0, upserted: 0, details: 0, gone: 0, optouts: 0, errors: [] };
-  const automations = await listAutomations(auth);
+  // ativas + as conhecidas por id (no modo manual a automação não aparece como ativa, mas tem os abandonos)
+  const active = await listAutomations(auth);
+  const automations = [...active, ...Object.values(AUTOMATION_ID_BY_KIND)
+    .filter((k) => !active.some((a) => a.id === k.id)).map((k) => ({ id: k.id, identifier: k.identifier, title: "" }))];
   const cutoff = Date.now() - MAX_AGE_DAYS * 86_400_000;
   const startedAt = new Date().toISOString();
   const completeKinds: FlowKind[] = [];

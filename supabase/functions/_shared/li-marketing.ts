@@ -16,6 +16,15 @@ export const KIND_BY_IDENTIFIER: Record<string, FlowKind> = {
   AbandonedBrowsingAutomation: "browse",
   AbandonedOrderAutomation: "order",
 };
+/**
+ * Ids fixos das automações nativas. No modo "Envio manual" do painel a automação some de /automations/active, mas a loja
+ * segue registrando o abandono NA HORA (status "F", ruleId 0, sem envio): por isso a captura lista por id, ativa ou não.
+ */
+export const AUTOMATION_ID_BY_KIND: Record<FlowKind, { id: number; identifier: string }> = {
+  cart: { id: 6, identifier: "AbandonedCartAutomation" },
+  browse: { id: 7, identifier: "AbandonedBrowsingAutomation" },
+  order: { id: 2, identifier: "AbandonedOrderAutomation" },
+};
 /** chave aceita por POST /rules/toggle */
 export const TOGGLE_KEY: Record<FlowKind, string> = { cart: "abandoned-cart", browse: "abandoned-product", order: "cancelled-order" };
 
