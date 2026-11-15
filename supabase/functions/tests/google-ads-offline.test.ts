@@ -54,3 +54,44 @@ Deno.test("classifyUploadError e parsePartialFailure", () => {
   assertEquals(m.get(0)?.code, "CONVERSION_NOT_FOUND");
   assertEquals(parsePartialFailure({}).size, 0);
 });
+
+// ---- Data Manager (sem gclid: e-mail/celular em SHA-256) ----
+import { buildDmEvent, buildDmRequest, formatEventTimestamp, normalizeEmail, normalizePhoneBR, sha256Hex } from "../_shared/google-ads-offline-dm.ts";
+
+Deno.test("normalizeEmail: minusculas, gmail sem pontos e sem +sufixo, invalido -> null", () => {
+  assertEquals(normalizeEmail("  Joao.Silva+loja@GMAIL.com "), "joaosilva@gmail.com");
+  assertEquals(normalizeEmail("Maria.Souza@hotmail.com"), "maria.souza@hotmail.com");
+  assertEquals(normalizeEmail("sem-arroba"), null);
+  assertEquals(normalizeEmail(null), null);
+});
+
+Deno.test("normalizePhoneBR: E.164 com +55", () => {
+  assertEquals(normalizePhoneBR("(11) 98765-4321"), "+5511987654321");
+  assertEquals(normalizePhoneBR("5511987654321"), "+5511987654321");
+  assertEquals(normalizePhoneBR("1133334444"), "+551133334444");
+  assertEquals(normalizePhoneBR("123"), null);
+});
+
+Deno.test("sha256Hex / formatEventTimestamp", async () => {
+  assertEquals(await sha256Hex("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+  assertEquals(formatEventTimestamp(new Date("2026-11-15T02:59:36Z")), "2026-11-14T23:59:36-03:00");
+});
+
+Deno.test("buildDmEvent: so hashes, sem dado em texto; sem identificador -> null", async () => {
+  const ev = await buildDmEvent({ orderNumber: "9940", value: 74.31, time: new Date("2026-11-15T02:59:36Z"), email: "a@b.com", phone: "11987654321" });
+  const s = JSON.stringify(ev);
+  assertEquals(s.includes("a@b.com") || s.includes("987654321"), false);
+  assertEquals((ev as { transactionId: string }).transactionId, "9940");
+  assertEquals((ev as { userData: { userIdentifiers: unknown[] } }).userData.userIdentifiers.length, 2);
+  assertEquals("adIdentifiers" in (ev as object), false);
+  assertEquals(await buildDmEvent({ orderNumber: "1", value: 1, time: new Date(), email: "x", phone: "1" }), null);
+  const g = await buildDmEvent({ orderNumber: "2", value: 1, time: new Date(), gclid: GCLID });
+  assertEquals((g as { adIdentifiers: { gclid: string } }).adIdentifiers.gclid, GCLID);
+});
+
+Deno.test("buildDmRequest: destino = conta + MCC + acao", () => {
+  const r = buildDmRequest({ customerId: "5220063897", loginCustomerId: "9667440809", actionId: 7901902681, events: [], validateOnly: true });
+  assertEquals(r.destinations[0].productDestinationId, "7901902681");
+  assertEquals(r.destinations[0].loginAccount?.accountId, "9667440809");
+  assertEquals(r.encoding, "HEX");
+});
