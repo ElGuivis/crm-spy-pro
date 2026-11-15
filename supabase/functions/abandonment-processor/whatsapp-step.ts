@@ -21,6 +21,29 @@ export async function loadWhatsAppInstance(ctx: Ctx, integrationId: string): Pro
   return data?.status === "connected" && name ? name : null;
 }
 
+/**
+ * O número tem WhatsApp? Consulta a Evolution (`/chat/whatsappNumbers`) ANTES de criar cupom e enviar.
+ * true/false = resposta da Evolution; null = não deu para conferir (segue o envio normal, que já trata `exists:false`).
+ */
+export async function hasWhatsApp(instance: string, phone: string): Promise<boolean | null> {
+  const evolutionUrl = Deno.env.get("EVOLUTION_API_URL");
+  const evolutionKey = Deno.env.get("EVOLUTION_API_KEY");
+  const number = formatPhone(phone);
+  if (!number) return false;
+  if (!evolutionUrl || !evolutionKey) return null;
+  try {
+    const res = await fetch(`${evolutionUrl.replace(/\/$/, "")}/chat/whatsappNumbers/${instance}`, {
+      method: "POST", headers: { apikey: evolutionKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ numbers: [number] }), signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return null;
+    const list = await res.json() as { exists?: boolean }[];
+    return Array.isArray(list) && typeof list[0]?.exists === "boolean" ? list[0].exists : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Mensagem de WhatsApp de uma etapa. A cobrança de tokens acontece só depois do envio aceito. */
 export async function sendWhatsAppStep(ctx: Ctx, flow: Flow, step: FlowStep, cand: Candidate, storeUrl: string, instance: string, coupon: IssuedCoupon): Promise<SendOutcome> {
   const evolutionUrl = Deno.env.get("EVOLUTION_API_URL");

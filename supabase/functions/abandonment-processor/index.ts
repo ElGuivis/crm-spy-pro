@@ -7,7 +7,7 @@ import { getAutomationConfig, optOutAutomation } from "../_shared/li-marketing.t
 import { cartUrl, inQuietHours, nextDueStep, stepChannels, type FlowStep } from "../_shared/abandonment-render.ts";
 import { shortLinkFor } from "../_shared/short-links.ts";
 import { closeEmailSessions, sendEmailStep } from "./email-step.ts";
-import { loadWhatsAppInstance, sendWhatsAppStep } from "./whatsapp-step.ts";
+import { hasWhatsApp, loadWhatsAppInstance, sendWhatsAppStep } from "./whatsapp-step.ts";
 import { issueStepCoupon, NO_COUPON } from "./coupon-step.ts";
 import { canContact, recordTouches, REASON_TEXT, type TouchPurpose } from "../_shared/contact-policy.ts";
 import {
@@ -68,11 +68,22 @@ async function suppressedSet(supabase: Supabase, tenantId: string, emails: strin
   return out;
 }
 
-/** Já falamos com esta pessoa há pouco (mesmo fluxo; navegação também respeita carrinho/pedido, que têm mais intenção)? */
+/**
+ * Já falamos com esta pessoa há pouco (mesmo fluxo; navegação também respeita carrinho/pedido, que têm mais intenção)?
+ * Reconhece a pessoa pelo e-mail OU pelo telefone (variações de formato do telefone: com/sem 55).
+ */
 async function recentlyContacted(supabase: Supabase, flow: Flow, cand: Candidate): Promise<boolean> {
-  if (flow.cooldown_days <= 0 || !cand.recipient_email) return false;
+  if (flow.cooldown_days <= 0) return false;
+  const conds: string[] = [];
+  if (cand.recipient_email) conds.push(`recipient_email.eq.${JSON.stringify(cand.recipient_email)}`);
+  const digits = (cand.recipient_phone ?? "").replace(/\D/g, "").replace(/^0/, "");
+  if (digits.length >= 10) {
+    const local = digits.startsWith("55") && digits.length >= 12 ? digits.slice(2) : digits;
+    for (const v of new Set([cand.recipient_phone!, local, `55${local}`])) conds.push(`recipient_phone.eq.${JSON.stringify(v)}`);
+  }
+  if (!conds.length) return false;
   const kinds: Kind[] = flow.kind === "browse" ? ["browse", "cart", "order"] : [flow.kind];
-  const { data: others } = await supabase.from("li_abandonment_campaigns").select("id").eq("tenant_id", flow.tenant_id).eq("recipient_email", cand.recipient_email).in("kind", kinds).neq("id", cand.id).limit(50);
+  const { data: others } = await supabase.from("li_abandonment_campaigns").select("id").eq("tenant_id", flow.tenant_id).or(conds.join(",")).in("kind", kinds).neq("id", cand.id).limit(50);
   const ids = (others ?? []).map((o) => o.id as string);
   if (!ids.length) return false;
   const since = new Date(Date.now() - flow.cooldown_days * 86_400_000).toISOString();
@@ -171,6 +182,10 @@ async function processFlow(ctx: Ctx, flow: Flow): Promise<Record<string, unknown
         if (rule.permanent) { await record(channel, "skipped", { reason: REASON_TEXT[rule.reason] ?? rule.reason }); stats.skipped++; }
         else stats.note = `adiado: ${REASON_TEXT[rule.reason] ?? rule.reason}`;
         continue;
+      }
+      // número sem WhatsApp: pula ANTES de criar o cupom (senão o cupom fica criado na loja sem uso)
+      if (channel === "whatsapp" && await hasWhatsApp(instance!, cand.recipient_phone!) === false) {
+        await record("whatsapp", "skipped", { reason: "número sem WhatsApp" }); stats.skipped++; continue;
       }
       willSend.push(channel);
     }
