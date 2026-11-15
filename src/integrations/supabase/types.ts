@@ -6361,7 +6361,7 @@ export type Database = {
           campaign_id: number | null
           conversion_time: string
           created_at: string
-          gclid: string
+          gclid: string | null
           id: string
           last_error: string | null
           li_status: string | null
@@ -6379,7 +6379,7 @@ export type Database = {
           campaign_id?: number | null
           conversion_time: string
           created_at?: string
-          gclid: string
+          gclid?: string | null
           id?: string
           last_error?: string | null
           li_status?: string | null
@@ -6397,7 +6397,7 @@ export type Database = {
           campaign_id?: number | null
           conversion_time?: string
           created_at?: string
-          gclid?: string
+          gclid?: string | null
           id?: string
           last_error?: string | null
           li_status?: string | null
@@ -9732,6 +9732,7 @@ export type Database = {
           recovered_order_id: string | null
           recovered_total: number | null
           recovered_via: string | null
+          released_at: string | null
           rule_id: number | null
           tenant_id: string
           value: number
@@ -9762,6 +9763,7 @@ export type Database = {
           recovered_order_id?: string | null
           recovered_total?: number | null
           recovered_via?: string | null
+          released_at?: string | null
           rule_id?: number | null
           tenant_id: string
           value?: number
@@ -9792,6 +9794,7 @@ export type Database = {
           recovered_order_id?: string | null
           recovered_total?: number | null
           recovered_via?: string | null
+          released_at?: string | null
           rule_id?: number | null
           tenant_id?: string
           value?: number
@@ -12852,6 +12855,47 @@ export type Database = {
           },
         ]
       }
+      short_links: {
+        Row: {
+          clicks: number
+          code: string
+          created_at: string
+          expires_at: string
+          fallback_url: string | null
+          last_click_at: string | null
+          target_url: string
+          tenant_id: string
+        }
+        Insert: {
+          clicks?: number
+          code: string
+          created_at?: string
+          expires_at?: string
+          fallback_url?: string | null
+          last_click_at?: string | null
+          target_url: string
+          tenant_id: string
+        }
+        Update: {
+          clicks?: number
+          code?: string
+          created_at?: string
+          expires_at?: string
+          fallback_url?: string | null
+          last_click_at?: string | null
+          target_url?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "short_links_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tags: {
         Row: {
           color: string
@@ -14347,6 +14391,7 @@ export type Database = {
         Args: { p_integration_id: string }
         Returns: number
       }
+      release_abandonment: { Args: { p_id: string }; Returns: boolean }
       release_bot_lock: {
         Args: { _conversation_id: string }
         Returns: undefined
@@ -14425,6 +14470,13 @@ export type Database = {
       set_active_tenant: {
         Args: { _tenant_id: string; _user_id: string }
         Returns: boolean
+      }
+      short_link_hit: {
+        Args: { p_code: string }
+        Returns: {
+          expired: boolean
+          url: string
+        }[]
       }
       store_cron_secret: { Args: { _secret: string }; Returns: undefined }
       trigger_rfm_calculations: { Args: never; Returns: Json }

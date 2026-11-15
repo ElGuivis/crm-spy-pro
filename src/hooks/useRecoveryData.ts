@@ -31,21 +31,27 @@ export interface CapturedRow {
   sends: { step_id: string; channel: string; status: string; reason: string | null; sent_at: string | null }[];
   /** Por que o fluxo NÃO vai atender este abandono (mesmas regras do abandonment-processor); null = pode atender. */
   hold: string | null;
+  /** o motivo pode ser contornado liberando o abandono (release_abandonment) */
+  releasable: boolean;
+  released_at: string | null;
 }
 
 interface FlowRule { kind: string; enabled: boolean; enabled_at: string | null; max_event_age_hours: number; min_value: number }
 
 /** Espelha o filtro de candidatos do abandonment-processor (index.ts): ligado, depois de enabled_at, idade, saiu da loja, contato, valor. */
-function holdReason(r: { kind: string; event_at: string | null; gone_at: string | null; value: number; recipient_email: string | null; recipient_phone: string | null; flow_status: string }, hasSends: boolean, flow: FlowRule | undefined): string | null {
+const RELEASABLE = new Set(["Abandono anterior à ativação do fluxo", "Antigo demais para o fluxo"]);
+
+function holdReason(r: { kind: string; released_at: string | null; event_at: string | null; gone_at: string | null; value: number; recipient_email: string | null; recipient_phone: string | null; flow_status: string }, hasSends: boolean, flow: FlowRule | undefined): string | null {
   if (r.flow_status !== "open") return null;
+  const released = !!r.released_at;
   if (!flow || !flow.enabled) return "Sem fluxo ligado para este tipo";
   if (!r.event_at) return null;
   const at = Date.parse(r.event_at);
-  if (flow.enabled_at && at < Date.parse(flow.enabled_at)) return "Abandono anterior à ativação do fluxo";
+  if (!released && flow.enabled_at && at < Date.parse(flow.enabled_at)) return "Abandono anterior à ativação do fluxo";
   if (!r.recipient_email && !r.recipient_phone) return "Sem e-mail nem telefone";
   if (r.gone_at) return "Carrinho saiu da loja (comprou ou esvaziou)";
   if (r.kind !== "browse" && r.kind !== "welcome" && flow.min_value > 0 && r.value < flow.min_value) return "Abaixo do valor mínimo do fluxo";
-  if (!hasSends && Date.now() - at > flow.max_event_age_hours * 3_600_000) return "Antigo demais para o fluxo";
+  if (!released && !hasSends && Date.now() - at > flow.max_event_age_hours * 3_600_000) return "Antigo demais para o fluxo";
   return null;
 }
 
@@ -58,7 +64,7 @@ export function useCapturedAbandonments(kind: RecoveryKind | "all", limit = 100)
     refetchInterval: 30_000,
     queryFn: async () => {
       let q = supabase.from("li_abandonment_campaigns")
-        .select("id, kind, value, items, recipient_email, recipient_name, recipient_phone, event_at, gone_at, flow_status, recovered_via, recovered_total, li_status")
+        .select("id, kind, value, items, recipient_email, recipient_name, recipient_phone, event_at, gone_at, released_at, flow_status, recovered_via, recovered_total, li_status")
         .eq("tenant_id", tenantId!).order("event_at", { ascending: false }).limit(limit);
       if (kind !== "all") q = q.eq("kind", kind);
       const [{ data, error }, { data: flows }] = await Promise.all([
@@ -74,9 +80,10 @@ export function useCapturedAbandonments(kind: RecoveryKind | "all", limit = 100)
       return (data ?? []).map((r) => {
         const own = sends.filter((s) => s.abandonment_id === r.id);
         const value = Number(r.value);
+        const hold = holdReason({ ...r, value }, own.length > 0, flowByKind.get(r.kind));
         return {
           ...r, kind: r.kind as RecoveryKind, value, items: (Array.isArray(r.items) ? r.items : []) as CapturedRow["items"],
-          sends: own, hold: holdReason({ ...r, value }, own.length > 0, flowByKind.get(r.kind)),
+          sends: own, hold, releasable: !!hold && RELEASABLE.has(hold),
         };
       }) as CapturedRow[];
     },
@@ -124,5 +131,19 @@ export function useToggleNative() {
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["li-native", tenantId] }); },
     onError: (e: Error & { needsAck?: boolean }) => { if (!e.needsAck) toast.error(e.message); },
+  });
+}
+
+/** Inclui no fluxo um abandono que ficou de fora (anterior à ativação ou antigo demais): RPC release_abandonment. */
+export function useReleaseAbandonment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.rpc("release_abandonment", { p_id: id });
+      if (error) throw error;
+      if (!data) throw new Error("Este abandono não pode mais ser incluído (já comprou, saiu da loja ou já foi incluído).");
+    },
+    onSuccess: () => { toast.success("Incluído no fluxo: a 1ª etapa sai no próximo minuto (fora da janela de silêncio)."); qc.invalidateQueries({ queryKey: ["recovery-captured"] }); },
+    onError: (e: Error) => toast.error(e.message),
   });
 }

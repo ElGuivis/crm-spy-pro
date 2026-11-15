@@ -3,13 +3,15 @@ import { Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useCapturedAbandonments, type CapturedRow } from "@/hooks/useRecoveryData";
+import { useCapturedAbandonments, useReleaseAbandonment, type CapturedRow } from "@/hooks/useRecoveryData";
+import { Button } from "@/components/ui/button";
 import { RECOVERY_KINDS, type RecoveryKind } from "@/lib/recovery";
 
 const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "–");
 
 function Status({ r }: { r: CapturedRow }) {
+  if (r.released_at && r.flow_status === "open" && !r.hold) return <Badge variant="secondary">Incluído à mão · em andamento</Badge>;
   if (r.flow_status === "recovered") return <Badge className="bg-emerald-600">{r.recovered_via === "ours" ? "Recuperado (nosso)" : "Comprou"}{r.recovered_total ? ` · ${brl(r.recovered_total)}` : ""}</Badge>;
   if (r.flow_status === "excluded") return <Badge variant="outline">Pulado (já contatado)</Badge>;
   if (r.flow_status === "done") return <Badge variant="secondary">Sequência concluída</Badge>;
@@ -24,6 +26,7 @@ const SEND_LABEL: Record<string, string> = { sent: "enviado", failed: "falhou", 
 export function CapturedList() {
   const [kind, setKind] = useState<RecoveryKind | "all">("all");
   const { data, isLoading } = useCapturedAbandonments(kind);
+  const release = useReleaseAbandonment();
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
@@ -52,7 +55,17 @@ export function CapturedList() {
                   <TableCell className="text-xs"><div className="font-medium">{r.recipient_name || "–"}</div><div className="text-muted-foreground">{r.recipient_email || r.recipient_phone || "sem contato"}</div></TableCell>
                   <TableCell className="text-xs max-w-[240px] truncate" title={r.items.map((i) => `${i.quantity}x ${i.name ?? "item"}`).join(", ")}>{r.items.length ? r.items.map((i) => i.name ?? "item").slice(0, 2).join(", ") + (r.items.length > 2 ? ` +${r.items.length - 2}` : "") : "–"}</TableCell>
                   <TableCell className="text-right text-xs whitespace-nowrap">{r.value > 0 ? brl(r.value) : "–"}</TableCell>
-                  <TableCell><Status r={r} /></TableCell>
+                  <TableCell>
+                    <div className="flex flex-col items-start gap-1">
+                      <Status r={r} />
+                      {r.releasable && (
+                        <Button size="sm" variant="outline" className="h-7 text-xs" disabled={release.isPending}
+                          onClick={() => { if (window.confirm(`Incluir ${r.recipient_name || "esta pessoa"} no fluxo? A 1ª etapa sai no próximo minuto (fora da janela de silêncio) e as demais seguem o intervalo normal.`)) release.mutate(r.id); }}>
+                          Incluir no fluxo
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">
                       {r.sends.length === 0 && <span className="text-xs text-muted-foreground">nenhum</span>}

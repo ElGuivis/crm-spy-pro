@@ -19,6 +19,8 @@ export interface Candidate {
   id: string; tenant_id: string; integration_id: string; kind: Kind; automation_id: number;
   value: number; items: CartItem[]; recipient_email: string | null; recipient_name: string | null; recipient_phone: string | null;
   event_at: string; native_optout_at: string | null;
+  /** liberado à mão na tela (release_abandonment): entra mesmo antes da ativação/antigo */
+  released_at?: string | null;
   /** link curto do carrinho (preenchido pelo processador antes do envio) */
   cart_link?: string;
 }

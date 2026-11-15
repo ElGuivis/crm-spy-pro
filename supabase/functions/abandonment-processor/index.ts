@@ -108,12 +108,17 @@ async function processFlow(ctx: Ctx, flow: Flow): Promise<Record<string, unknown
 
   const since = new Date(Math.max(flow.enabled_at ? Date.parse(flow.enabled_at) : Date.now(), Date.now() - flow.max_event_age_hours * 3_600_000)).toISOString();
   let query = supabase.from("li_abandonment_campaigns")
-    .select("id, tenant_id, integration_id, kind, automation_id, value, items, recipient_email, recipient_name, recipient_phone, event_at, native_optout_at")
-    .eq("tenant_id", flow.tenant_id).eq("kind", flow.kind).eq("flow_status", "open").is("gone_at", null).gte("event_at", since)
-    .or("recipient_email.not.is.null,recipient_phone.not.is.null").order("event_at", { ascending: true }).limit(300);
+    .select("id, tenant_id, integration_id, kind, automation_id, value, items, recipient_email, recipient_name, recipient_phone, event_at, native_optout_at, released_at")
+    .eq("tenant_id", flow.tenant_id).eq("kind", flow.kind).eq("flow_status", "open").is("gone_at", null)
+    // corte por data OU liberado à mão na tela (release_abandonment)
+    .or(`event_at.gte.${since},released_at.not.is.null`).order("event_at", { ascending: true }).limit(300);
   if (flow.kind !== "browse" && flow.kind !== "welcome" && flow.min_value > 0) query = query.gte("value", flow.min_value);
   const { data: cands } = await query;
-  const candidates = (cands ?? []) as Candidate[];
+  const firstDelayMs = Math.min(...steps.map((s) => s.delay_minutes)) * 60_000;
+  const candidates = ((cands ?? []) as Candidate[])
+    .filter((c) => !!(c.recipient_email || c.recipient_phone))
+    // liberado: as etapas contam a partir da liberação (1a etapa na hora, as outras no intervalo normal), não do abandono antigo
+    .map((c) => c.released_at ? { ...c, event_at: new Date(Math.max(Date.parse(c.event_at), Date.parse(c.released_at) - firstDelayMs)).toISOString() } : c);
   stats.candidates = candidates.length;
   if (!candidates.length) return stats;
 
