@@ -29,6 +29,24 @@ export interface CapturedRow {
   recipient_email: string | null; recipient_name: string | null; recipient_phone: string | null;
   event_at: string | null; flow_status: string; recovered_via: string | null; recovered_total: number | null; li_status: string | null;
   sends: { step_id: string; channel: string; status: string; reason: string | null; sent_at: string | null }[];
+  /** Por que o fluxo NÃO vai atender este abandono (mesmas regras do abandonment-processor); null = pode atender. */
+  hold: string | null;
+}
+
+interface FlowRule { kind: string; enabled: boolean; enabled_at: string | null; max_event_age_hours: number; min_value: number }
+
+/** Espelha o filtro de candidatos do abandonment-processor (index.ts): ligado, depois de enabled_at, idade, saiu da loja, contato, valor. */
+function holdReason(r: { kind: string; event_at: string | null; gone_at: string | null; value: number; recipient_email: string | null; recipient_phone: string | null; flow_status: string }, hasSends: boolean, flow: FlowRule | undefined): string | null {
+  if (r.flow_status !== "open") return null;
+  if (!flow || !flow.enabled) return "Sem fluxo ligado para este tipo";
+  if (!r.event_at) return null;
+  const at = Date.parse(r.event_at);
+  if (flow.enabled_at && at < Date.parse(flow.enabled_at)) return "Abandono anterior à ativação do fluxo";
+  if (!r.recipient_email && !r.recipient_phone) return "Sem e-mail nem telefone";
+  if (r.gone_at) return "Carrinho saiu da loja (comprou ou esvaziou)";
+  if (r.kind !== "browse" && r.kind !== "welcome" && flow.min_value > 0 && r.value < flow.min_value) return "Abaixo do valor mínimo do fluxo";
+  if (!hasSends && Date.now() - at > flow.max_event_age_hours * 3_600_000) return "Antigo demais para o fluxo";
+  return null;
 }
 
 /** Abandonos capturados da loja (mais recentes primeiro) com o que já foi enviado a cada um. */
@@ -40,19 +58,27 @@ export function useCapturedAbandonments(kind: RecoveryKind | "all", limit = 100)
     refetchInterval: 30_000,
     queryFn: async () => {
       let q = supabase.from("li_abandonment_campaigns")
-        .select("id, kind, value, items, recipient_email, recipient_name, recipient_phone, event_at, flow_status, recovered_via, recovered_total, li_status")
+        .select("id, kind, value, items, recipient_email, recipient_name, recipient_phone, event_at, gone_at, flow_status, recovered_via, recovered_total, li_status")
         .eq("tenant_id", tenantId!).order("event_at", { ascending: false }).limit(limit);
       if (kind !== "all") q = q.eq("kind", kind);
-      const { data, error } = await q;
+      const [{ data, error }, { data: flows }] = await Promise.all([
+        q,
+        supabase.from("abandonment_flows").select("kind, enabled, enabled_at, max_event_age_hours, min_value").eq("tenant_id", tenantId!),
+      ]);
       if (error) throw error;
+      const flowByKind = new Map((flows ?? []).map((f) => [f.kind, { ...f, min_value: Number(f.min_value) || 0 } as FlowRule]));
       const ids = (data ?? []).map((r) => r.id);
       const sends = ids.length
         ? (await supabase.from("abandonment_flow_sends").select("abandonment_id, step_id, channel, status, reason, sent_at").in("abandonment_id", ids)).data ?? []
         : [];
-      return (data ?? []).map((r) => ({
-        ...r, kind: r.kind as RecoveryKind, value: Number(r.value), items: (Array.isArray(r.items) ? r.items : []) as CapturedRow["items"],
-        sends: sends.filter((s) => s.abandonment_id === r.id),
-      })) as CapturedRow[];
+      return (data ?? []).map((r) => {
+        const own = sends.filter((s) => s.abandonment_id === r.id);
+        const value = Number(r.value);
+        return {
+          ...r, kind: r.kind as RecoveryKind, value, items: (Array.isArray(r.items) ? r.items : []) as CapturedRow["items"],
+          sends: own, hold: holdReason({ ...r, value }, own.length > 0, flowByKind.get(r.kind)),
+        };
+      }) as CapturedRow[];
     },
   });
 }

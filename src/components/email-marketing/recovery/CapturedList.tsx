@@ -13,6 +13,7 @@ function Status({ r }: { r: CapturedRow }) {
   if (r.flow_status === "recovered") return <Badge className="bg-emerald-600">{r.recovered_via === "ours" ? "Recuperado (nosso)" : "Comprou"}{r.recovered_total ? ` · ${brl(r.recovered_total)}` : ""}</Badge>;
   if (r.flow_status === "excluded") return <Badge variant="outline">Pulado (já contatado)</Badge>;
   if (r.flow_status === "done") return <Badge variant="secondary">Sequência concluída</Badge>;
+  if (r.hold) return <Badge variant="outline" className="text-muted-foreground" title={r.hold}>Fora do fluxo: {r.hold.charAt(0).toLowerCase() + r.hold.slice(1)}</Badge>;
   return <Badge variant="secondary">Em andamento</Badge>;
 }
 
