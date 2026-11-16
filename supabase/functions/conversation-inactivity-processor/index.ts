@@ -26,7 +26,7 @@ interface Conversation {
   contacts: { phone: string; name: string | null };
 }
 
-const AUTOMATION_REPLY_WINDOW_MS = 48 * 60 * 60 * 1000;
+const AUTOMATION_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 interface TenantConfig {
   timeout: number;
@@ -160,12 +160,12 @@ serve(async (req) => {
         const tenantId = conversation.tenant_id;
         const lastMessageAt = new Date(conversation.last_message_at);
 
-        // Conversa de automação sem nenhuma resposta do cliente em 48h: fecha (sem aviso). Se ele respondeu, ela já está com o atendente.
+        // Conversa de automação sem nenhuma resposta do cliente em 24h: fecha (sem aviso). Se ele respondeu, ela já está com o atendente.
         if (conversation.source === 'automation' && !conversation.last_inbound_at && now.getTime() - lastMessageAt.getTime() > AUTOMATION_REPLY_WINDOW_MS) {
           const { data: closedAuto } = await supabase.from('conversations')
             .update({ status: 'closed', closed_at: new Date().toISOString(), assigned_to: null, kanban_column_id: await getClosedColumn(tenantId), pending_ai_response_at: null })
             .eq('id', conversation.id).is('closed_at', null).is('last_inbound_at', null).select('id').maybeSingle();
-          if (closedAuto) { log.info('Automation conversation closed: no reply within 48h', { conversationId: conversation.id }); totalProcessed++; }
+          if (closedAuto) { log.info('Automation conversation closed: no reply within 24h', { conversationId: conversation.id }); totalProcessed++; }
           continue;
         }
 
