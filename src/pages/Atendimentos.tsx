@@ -45,10 +45,15 @@ export default function Atendimentos() {
   useConversationsRealtime();
   const { conversations } = useConversations(selectedInboxId, {});
   
-  const selectedConversation = useMemo(() => 
-    conversations.find(c => c.id === selectedConversationId) || null,
-    [conversations, selectedConversationId]
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
+  // Um card por número: se o cliente abrir um atendimento novo, a conversa aberta na tela segue o número.
+  const selectedConversation = useMemo(() =>
+    conversations.find(c => c.id === selectedConversationId)
+      || (selectedContactId ? conversations.find(c => c.contact_id === selectedContactId) : undefined)
+      || null,
+    [conversations, selectedConversationId, selectedContactId]
   );
+  const activeConversationId = selectedConversation?.id ?? selectedConversationId;
 
   const channelInfo = useMemo(() => {
     if (!selectedConversation?.channel_id) return { status: null, provider: null, wabaId: null, phoneNumberId: null, integrationId: null };
@@ -66,6 +71,7 @@ export default function Atendimentos() {
 
   const handleSelectConversation = (id: string) => {
     setSelectedConversationId(id);
+    setSelectedContactId(conversations.find(c => c.id === id)?.contact_id ?? null);
     if (isMobile) setMobileView('chat');
   };
 
@@ -147,7 +153,7 @@ export default function Atendimentos() {
             )}>
               <ConversationList
                 inboxId={selectedInboxId}
-                selectedConversationId={selectedConversationId}
+                selectedConversationId={activeConversationId}
                 onSelectConversation={handleSelectConversation}
               />
             </div>
@@ -157,7 +163,7 @@ export default function Atendimentos() {
           {(!isMobile || mobileView === 'chat') && (
             <div className="flex-1 flex flex-col min-h-0 bg-background">
               <ChatWindow
-                conversationId={selectedConversationId}
+                conversationId={activeConversationId}
                 conversation={selectedConversation}
                 channelStatus={channelInfo.status}
                 channelProvider={channelInfo.provider}

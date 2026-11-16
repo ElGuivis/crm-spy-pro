@@ -1,5 +1,7 @@
 import { useEffect, useRef, useMemo, useState, useCallback, forwardRef } from "react";
-import { useMessages, useSendMessage, Conversation } from "@/hooks/useAtendimentos";
+import { useSendMessage, Conversation } from "@/hooks/useAtendimentos";
+import { useConversationTimeline } from "@/hooks/useConversationTimeline";
+import { SessionDivider } from "./SessionDivider";
 import { MessageBubble } from "./MessageBubble";
 import { ChatComposer } from "./ChatComposer";
 import { HandoffControls } from "./HandoffControls";
@@ -28,7 +30,8 @@ interface ChatWindowProps {
 }
 
 export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(function ChatWindow({ conversationId, conversation, channelStatus, channelProvider, channelWabaId, channelPhoneNumberId, integrationId, onTogglePanel, isPanelOpen, onBack }: ChatWindowProps, ref) {
-  const { messages, isLoading } = useMessages(conversationId);
+  const { messages, sessions, isLoading } = useConversationTimeline(conversationId, conversation?.contact_id);
+  const sessionById = useMemo(() => new Map(sessions.map((s) => [s.id, s])), [sessions]);
   const sendMessage = useSendMessage();
   const bottomRef = useRef<HTMLDivElement>(null);
   const [showSearch, setShowSearch] = useState(false);
@@ -285,9 +288,16 @@ export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(function C
         ) : messages.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground text-sm">Nenhuma mensagem ainda</div>
         ) : (
-          messages.map((msg) => (
+          messages.map((msg, i) => {
+            const prev = i > 0 ? messages[i - 1] : null;
+            const newSession = sessions.length > 1 && (!prev || prev.conversation_id !== msg.conversation_id);
+            const prevSession = prev && newSession ? sessionById.get(prev.conversation_id) : undefined;
+            const session = newSession ? sessionById.get(msg.conversation_id) : undefined;
+            return (
+            <div key={msg.id}>
+            {prevSession?.closed_at && <SessionDivider session={prevSession} kind="end" />}
+            {session && <SessionDivider session={session} kind="start" />}
             <div
-              key={msg.id}
               id={`msg-${msg.id}`}
               className={cn(
                 "transition-all duration-300",
@@ -296,7 +306,9 @@ export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(function C
             >
               <MessageBubble message={msg} />
             </div>
-          ))
+            </div>
+            );
+          })
         )}
         <div ref={bottomRef} />
       </ScrollArea>

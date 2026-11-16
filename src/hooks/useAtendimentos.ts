@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect } from "react";
 import type { Json } from "@/integrations/supabase/types";
+import { onePerContact } from "./useConversationTimeline";
 
 export interface Contact {
   id: string;
@@ -128,7 +129,7 @@ export function useConversations(inboxId: string | null, filters?: ConversationF
         .select('id, tenant_id, contact_id, channel_id, inbox_id, status, priority, assigned_to, handoff_mode, ai_enabled, bot_state_json, kanban_column_id, current_ai_agent_id, last_message_at, last_inbound_at, last_outbound_at, last_incoming_message_id, ai_sentiment, integration_id, verification_data, verification_state, lead_capture_state, lead_capture_data, source, created_at, updated_at, contact:contacts(id, tenant_id, phone, name, email, metadata, li_customer_id, created_at, updated_at)')
         .eq('tenant_id', tenantId)
         .order('last_message_at', { ascending: false, nullsFirst: false })
-        .limit(100);
+        .limit(200);
 
       if (searchOr) query = query.or(searchOr);
 
@@ -164,74 +165,14 @@ export function useConversations(inboxId: string | null, filters?: ConversationF
         contact: c.contact || { id: c.contact_id, name: null as string | null, phone: 'Desconhecido', avatar_url: null as string | null },
       })) as unknown as Conversation[];
 
-      return result;
+      // um card por número: o histórico de todos os atendimentos aparece junto na conversa (useConversationTimeline)
+      return onePerContact(result);
     },
     enabled: !!tenantId,
     refetchInterval: 15000,
   });
 
   return { conversations, isLoading };
-}
-
-export function useMessages(conversationId: string | null) {
-  const queryClient = useQueryClient();
-  const queryKey = ['atendimentos-messages', conversationId];
-
-  const { data: messages = [], isLoading, refetch } = useQuery({
-    queryKey,
-    queryFn: async () => {
-      if (!conversationId) return [];
-      const { data, error } = await supabase
-        .from('messages')
-        .select('id, conversation_id, content, content_type, sender_type, direction, type, status, media_url, provider_message_id, error_json, created_at')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      // As 200 MAIS RECENTES, na ordem de leitura (antes vinham as 200 mais antigas e conversa longa perdia o fim).
-      return ((data || []) as unknown as Message[]).reverse();
-    },
-    enabled: !!conversationId,
-    staleTime: 1000 * 60 * 5,
-    gcTime: 1000 * 60 * 30,
-  });
-
-  // Realtime for new messages
-  useEffect(() => {
-    if (!conversationId) return;
-
-    const channel = supabase
-      .channel(`atendimentos-msg-${conversationId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
-        (payload) => {
-          const newMsg = payload.new as unknown as Message;
-          queryClient.setQueryData<Message[]>(queryKey, (prev = []) => {
-            if (prev.some(m => m.id === newMsg.id)) return prev;
-            return [...prev, newMsg];
-          });
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
-        (payload) => {
-          const updated = payload.new as unknown as Message;
-          queryClient.setQueryData<Message[]>(queryKey, (prev = []) =>
-            prev.map(m => m.id === updated.id ? updated : m)
-          );
-        }
-      )
-      .subscribe((status) => {
-        // Ao (re)conectar, busca de novo: mensagem que chegou com a conexao caida nao aparecia ate trocar de conversa.
-        if (status === 'SUBSCRIBED') queryClient.invalidateQueries({ queryKey });
-      });
-
-    return () => { supabase.removeChannel(channel); };
-  }, [conversationId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  return { messages, isLoading, refetch };
 }
 
 export function useSendMessage() {
