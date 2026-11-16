@@ -53,7 +53,8 @@ export async function findOrCreateContact(ctx: WaCtx): Promise<Response | null> 
   }
 
   // Mesmo celular com/sem o nono dígito (o WhatsApp manda números antigos sem o 9)
-  if (!contact && !isLidContact) {
+  // (vale também para LID quando o número real veio junto: aí `phone` já é o número real)
+  if (!contact && (!isLidContact || realPhoneFromAlt)) {
     const alt = brPhoneVariants(phone).filter((v) => v !== phone);
     if (alt.length) {
       const { data: altContacts } = await supabase
