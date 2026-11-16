@@ -7,6 +7,7 @@ import { runNewsletter } from "./newsletter.ts";
 import { runWaitlist } from "./waitlist.ts";
 import { runOutbox } from "./outbox.ts";
 import { runGroups } from "./groups.ts";
+import { runGrades } from "./grades.ts";
 
 /**
  * Jobs agendados da área de Marketing da Loja Integrada (um cron por job):
@@ -14,6 +15,7 @@ import { runGroups } from "./groups.ts";
  *  { job: "outbox" }     descadastro em duas vias: tira da newsletter/automações da loja quem saiu aqui (5 min)
  *  { job: "waitlist" }   retrato diário da lista de espera
  *  { job: "groups" }     alterações de grupo de clientes em andamento (1 min)
+ *  { job: "grades" }     nomes das variações de grade (Tamanho/Cor) para o catálogo WhatsApp (diário)
  */
 Deno.serve(async (req) => {
   const corsHeaders = getRestrictedCorsHeaders(req);
@@ -25,7 +27,7 @@ Deno.serve(async (req) => {
     await requireInternalAuth(req);
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const { job } = await req.json().catch(() => ({})) as { job?: string };
-    if (!job || !["newsletter", "outbox", "waitlist", "groups"].includes(job)) return json({ success: false, error: "job inválido" }, 400);
+    if (!job || !["newsletter", "outbox", "waitlist", "groups", "grades"].includes(job)) return json({ success: false, error: "job inválido" }, 400);
 
     if (job === "outbox") return json({ success: true, ...(await runOutbox(supabase, log)) });
     if (job === "groups") return json({ success: true, ...(await runGroups(supabase, log)) });
@@ -36,7 +38,9 @@ Deno.serve(async (req) => {
     for (const integ of integrations ?? []) {
       try {
         const auth = liAuthHeader(integ.api_key);
-        results.push(job === "newsletter" ? await runNewsletter(supabase, integ, auth, log) : await runWaitlist(supabase, integ, auth));
+        results.push(job === "newsletter" ? await runNewsletter(supabase, integ, auth, log)
+          : job === "grades" ? await runGrades(supabase, integ, auth)
+          : await runWaitlist(supabase, integ, auth));
       } catch (e) {
         log.error(`[LI-JOBS] ${job} integração ${integ.id}: ${(e as Error).message}`);
         results.push({ integration: integ.id, error: (e as Error).message });

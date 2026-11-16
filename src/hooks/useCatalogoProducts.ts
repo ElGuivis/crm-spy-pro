@@ -1,20 +1,39 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useDeferredValue } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  type CatalogProduct, normalizeBlingProducts, normalizeLiProducts,
-  buildFilterOptions, filterCatalogProducts,
+  type CatalogProduct, type BlingProductRow, type LiCatalogRow, normalizeBlingProducts, normalizeLiCatalogRows,
 } from "@/components/catalogo/catalogoHelpers";
+import {
+  type CatalogFilterState, DEFAULT_CATALOG_FILTERS, applyCatalogFilters, baseCatalog, buildCatalogFilterOptions,
+} from "@/components/catalogo/catalogFilters";
 
+const BLING_PAGE = 1000; // limite de linhas por resposta do PostgREST
+
+async function fetchAllBling(integrationId: string): Promise<BlingProductRow[]> {
+  const all: BlingProductRow[] = [];
+  for (let from = 0; ; from += BLING_PAGE) {
+    const { data, error } = await supabase.from("bling_products")
+      .select("id, nome, preco, estoque_atual, imagem_url, imagens, codigo, variacoes, created_at")
+      .eq("integration_id", integrationId).is("produto_pai_id", null)
+      .order("id").range(from, from + BLING_PAGE - 1);
+    if (error) throw error;
+    all.push(...((data ?? []) as BlingProductRow[]));
+    if (!data || data.length < BLING_PAGE) return all;
+  }
+}
+
+/** Catálogo WhatsApp (página e envio pelo atendimento): produtos, filtros e seleção. */
 export function useCatalogoProducts(integrationId: string, enabled = true) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [onlyInStock, setOnlyInStock] = useState(true);
+  const [filters, setFilters] = useState<CatalogFilterState>(DEFAULT_CATALOG_FILTERS);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   /** fotos escolhidas por produto (ordem do envio); sem escolha vale a principal */
   const [photoChoice, setPhotoChoice] = useState<Record<string, string[]>>({});
-  const [colorFilter, setColorFilter] = useState("");
-  const [sizeFilter, setSizeFilter] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
+
+  const setFilter = useCallback(<K extends keyof CatalogFilterState>(key: K, value: CatalogFilterState[K]) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+  }, []);
+  const resetFilters = useCallback(() => setFilters(prev => ({ ...DEFAULT_CATALOG_FILTERS, sort: prev.sort })), []);
 
   const { data: integration } = useQuery({
     queryKey: ["catalogo-integration", integrationId],
@@ -27,52 +46,55 @@ export function useCatalogoProducts(integrationId: string, enabled = true) {
 
   const isBling = integration?.type === "bling";
 
-  const { data: liProducts, isLoading: liLoading } = useQuery({
+  // Loja Integrada: já agrupado no banco (pai + variações em estoque + fotos); ler li_products direto esbarrava no limite de 1000 linhas
+  const { data: liProducts, isLoading: liLoading, error: liError } = useQuery({
     queryKey: ["catalogo-li-products", integrationId],
     queryFn: async () => {
-      const { data } = await supabase.from("li_products")
-        .select("id, name, price, promotional_price, stock, image_url, sku, variations_json, raw_json, loja_integrada_product_id")
-        .eq("integration_id", integrationId).eq("active", true);
-      return data || [];
+      const { data, error } = await supabase.rpc("get_catalog_products", { p_integration_id: integrationId });
+      if (error) throw error;
+      return normalizeLiCatalogRows((data ?? []) as LiCatalogRow[]);
     },
-    enabled: enabled && !!integrationId && !isBling,
+    enabled: enabled && !!integration && !isBling,
+    staleTime: 60_000,
   });
 
-  const { data: blingProducts, isLoading: blingLoading } = useQuery({
+  const { data: blingProducts, isLoading: blingLoading, error: blingError } = useQuery({
     queryKey: ["catalogo-bling-products", integrationId],
-    queryFn: async () => {
-      const { data } = await supabase.from("bling_products")
-        .select("id, nome, preco, estoque_atual, imagem_url, imagens, codigo, variacoes")
-        .eq("integration_id", integrationId).is("produto_pai_id", null);
-      return data || [];
-    },
-    enabled: enabled && !!integrationId && isBling === true,
+    queryFn: async () => normalizeBlingProducts(await fetchAllBling(integrationId)),
+    enabled: enabled && !!integration && isBling,
+    staleTime: 60_000,
   });
 
-  const products: CatalogProduct[] = useMemo(() => {
-    if (isBling && blingProducts) return normalizeBlingProducts(blingProducts);
-    if (!isBling && liProducts) return normalizeLiProducts(liProducts);
-    return [];
-  }, [isBling, liProducts, blingProducts]);
-
-  const filterOptions = useMemo(() => buildFilterOptions(products), [products]);
-
-  const filtered = useMemo(
-    () => filterCatalogProducts(products, { onlyInStock, searchQuery, colorFilter, sizeFilter, categoryFilter }),
-    [products, onlyInStock, searchQuery, colorFilter, sizeFilter, categoryFilter]
+  const products: CatalogProduct[] = useMemo(
+    () => (isBling ? blingProducts : liProducts) ?? [],
+    [isBling, liProducts, blingProducts],
   );
 
-  const toggleSelect = (id: string) => {
+  const base = useMemo(
+    () => baseCatalog(products, { onlyInStock: filters.onlyInStock, includeOffSite: filters.includeOffSite }),
+    [products, filters.onlyInStock, filters.includeOffSite],
+  );
+  const filterOptions = useMemo(() => buildCatalogFilterOptions(base.visible), [base.visible]);
+
+  const deferredFilters = useDeferredValue(filters);
+  const filtered = useMemo(() => applyCatalogFilters(base.visible, deferredFilters), [base.visible, deferredFilters]);
+
+  const toggleSelect = useCallback((id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
-  };
+  }, []);
 
+  /** marca todos os produtos visíveis; se já estão todos marcados, desmarca só eles */
+  const allFilteredSelected = filtered.length > 0 && filtered.every(p => selectedIds.has(p.id));
   const selectAll = () => {
-    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
-    else setSelectedIds(new Set(filtered.map(p => p.id)));
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      for (const p of filtered) { if (allFilteredSelected) next.delete(p.id); else next.add(p.id); }
+      return next;
+    });
   };
 
   const clearSelection = () => { setSelectedIds(new Set()); setPhotoChoice({}); };
@@ -80,16 +102,20 @@ export function useCatalogoProducts(integrationId: string, enabled = true) {
   const setPhotos = (id: string, urls: string[]) => setPhotoChoice(prev => ({ ...prev, [id]: urls }));
   const photoCount = (p: CatalogProduct) => photoChoice[p.id]?.length ?? (p.imageUrl ? 1 : 0);
 
-  const selectedProducts: CatalogProduct[] = filtered
+  // a seleção vale para o catálogo inteiro (mudar filtro não tira produto já marcado do envio)
+  const selectedProducts: CatalogProduct[] = useMemo(() => products
     .filter(p => selectedIds.has(p.id))
-    .map(p => ({ ...p, sendImages: photoChoice[p.id]?.length ? photoChoice[p.id] : (p.imageUrl ? [p.imageUrl] : []) }));
+    .map(p => ({ ...p, sendImages: photoChoice[p.id]?.length ? photoChoice[p.id] : (p.imageUrl ? [p.imageUrl] : []) })),
+  [products, selectedIds, photoChoice]);
 
   return {
-    integration, isLoading: liLoading || blingLoading,
+    integration, isLoading: liLoading || blingLoading, error: liError ?? blingError,
     products, filtered, filterOptions, selectedProducts,
-    searchQuery, setSearchQuery, onlyInStock, setOnlyInStock,
-    colorFilter, setColorFilter, sizeFilter, setSizeFilter, categoryFilter, setCategoryFilter,
-    selectedIds, toggleSelect, selectAll, clearSelection,
+    filters, setFilter, resetFilters,
+    hiddenWithoutPhoto: base.withoutPhoto, offSiteCount: base.offSite,
+    selectedIds, toggleSelect, selectAll, allFilteredSelected, clearSelection,
     photoChoice, setPhotos, photoCount,
   };
 }
+
+export type CatalogoState = ReturnType<typeof useCatalogoProducts>;

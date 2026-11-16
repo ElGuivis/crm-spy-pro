@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Package, ImageOff, Images } from "lucide-react";
 import { type CatalogProduct, formatCatalogCurrency, MAX_CATALOG_PHOTOS } from "@/components/catalogo/catalogoHelpers";
+import { CatalogCardBits } from "@/components/catalogo/CatalogCardBits";
 
 interface Props {
   isLoading: boolean;
@@ -55,6 +56,7 @@ export function CatalogPickerGrid({ isLoading, products, selectedIds, onToggleSe
                   <div className="p-2 space-y-0.5">
                     <p className="text-xs font-medium line-clamp-2 leading-tight">{product.name}</p>
                     <p className="text-sm font-bold text-primary">{formatCatalogCurrency(product.price)}</p>
+                    <CatalogCardBits product={product} compact />
                 {selected && product.images.length > 1 && onEditPhotos && (
                   <button type="button" onClick={(e) => { e.stopPropagation(); onEditPhotos(product); }} className="mt-1 inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1 text-xs font-medium text-primary hover:bg-muted">
                     <Images className="h-3 w-3" />Fotos {photoCount?.(product) ?? 1}/{MAX_CATALOG_PHOTOS}

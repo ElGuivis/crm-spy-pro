@@ -4,6 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Package, ImageOff, Images } from "lucide-react";
 import { type CatalogProduct, formatCatalogCurrency, MAX_CATALOG_PHOTOS } from "./catalogoHelpers";
+import { CatalogCardBits } from "./CatalogCardBits";
 
 interface Props {
   isLoading: boolean;
@@ -66,16 +67,7 @@ export function CatalogoProductGrid({ isLoading, products, selectedIds, onToggle
                     <Images className="h-3 w-3" />Fotos {photoCount?.(product) ?? 1}/{MAX_CATALOG_PHOTOS}
                   </button>
                 )}
-                {product.variations.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {product.variations.slice(0, 3).map((v, i) => (
-                      <Badge key={i} variant="outline" className="text-[10px] px-1 py-0">{v}</Badge>
-                    ))}
-                    {product.variations.length > 3 && (
-                      <Badge variant="outline" className="text-[10px] px-1 py-0">+{product.variations.length - 3}</Badge>
-                    )}
-                  </div>
-                )}
+                <CatalogCardBits product={product} />
               </div>
             </CardContent>
           </Card>

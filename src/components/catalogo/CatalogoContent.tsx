@@ -53,22 +53,7 @@ export function CatalogoContent({ integrationId }: Props) {
         )}
       </div>
 
-      <CatalogoFilters
-        searchQuery={c.searchQuery}
-        onSearchChange={c.setSearchQuery}
-        filterOptions={c.filterOptions}
-        colorFilter={c.colorFilter}
-        onColorChange={c.setColorFilter}
-        sizeFilter={c.sizeFilter}
-        onSizeChange={c.setSizeFilter}
-        categoryFilter={c.categoryFilter}
-        onCategoryChange={c.setCategoryFilter}
-        onlyInStock={c.onlyInStock}
-        onOnlyInStockChange={c.setOnlyInStock}
-        filteredCount={c.filtered.length}
-        selectedCount={c.selectedIds.size}
-        onSelectAll={c.selectAll}
-      />
+      <CatalogoFilters c={c} />
 
       <CatalogoProductGrid
         isLoading={c.isLoading}

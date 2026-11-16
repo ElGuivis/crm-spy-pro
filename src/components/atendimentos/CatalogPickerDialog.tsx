@@ -44,24 +44,11 @@ export function CatalogPickerDialog({ open, onOpenChange, integrationId, contact
         </DialogHeader>
 
         <CatalogPickerFilters
-          searchQuery={c.searchQuery}
-          onSearchChange={c.setSearchQuery}
-          filterOptions={c.filterOptions}
-          colorFilter={c.colorFilter}
-          onColorChange={c.setColorFilter}
-          sizeFilter={c.sizeFilter}
-          onSizeChange={c.setSizeFilter}
-          categoryFilter={c.categoryFilter}
-          onCategoryChange={c.setCategoryFilter}
-          onlyInStock={c.onlyInStock}
-          onOnlyInStockChange={c.setOnlyInStock}
+          c={c}
           includePrice={sender.includePrice}
           onIncludePriceChange={sender.setIncludePrice}
           joinPhotos={sender.joinPhotos}
           onJoinPhotosChange={sender.setJoinPhotos}
-          filteredCount={c.filtered.length}
-          selectedCount={c.selectedIds.size}
-          onSelectAll={c.selectAll}
         />
 
         <CatalogPickerGrid

@@ -1,7 +1,4 @@
-import { bestLiImageUrl, hdImageUrl } from "@/lib/product-images";
-import { jsonAs } from "@/lib/json-access";
-
-/** Campos do `raw_json` da Loja Integrada que o catálogo lê. */
+/** Campos do `raw_json` da Loja Integrada lidos fora do catálogo (ex.: NotificationDropdown). */
 export interface LiProductRaw {
   tipo?: string;
   pai?: string | null;
@@ -10,17 +7,17 @@ export interface LiProductRaw {
   imagens?: { caminho?: string | null; grande?: string | null; posicao?: number }[];
 }
 
-/** Linha de `li_products` como o catálogo a consulta. */
-export interface LiProductRow {
+/** Linha da RPC `get_catalog_products` (produto da Loja Integrada já agrupado com as variações em estoque). */
+export interface LiCatalogRow {
   id: string;
   name: string | null;
   price: number | null;
-  promotional_price: number | null;
   stock: number | null;
-  image_url: string | null;
+  on_site: boolean | null;
   sku: string | null;
-  raw_json: unknown;
-  loja_integrada_product_id: number | null;
+  images: string[] | null;
+  created_at: string | null;
+  variants: unknown;
 }
 
 /** Linha de `bling_products` como o catálogo a consulta. */
@@ -33,12 +30,18 @@ export interface BlingProductRow {
   imagens: unknown;
   codigo: string | null;
   variacoes: unknown;
+  created_at?: string | null;
 }
-
-const liRawOf = (p: LiProductRow) => jsonAs<LiProductRaw>(p.raw_json);
 
 /** Quantas fotos de um mesmo produto podem ir numa só remessa (igual a supabase/functions/_shared/catalog-images.ts). */
 export const MAX_CATALOG_PHOTOS = 3;
+
+/** Variação com estoque: atributos nomeados ({ Tamanho: "M", Cor: "Preto" }). */
+export interface CatalogVariant {
+  attrs: Record<string, string>;
+  stock: number;
+}
+
 export interface CatalogProduct {
   id: string;
   name: string;
@@ -50,58 +53,34 @@ export interface CatalogProduct {
   /** fotos escolhidas para enviar (na ordem do envio); sem escolha vale a principal */
   sendImages?: string[];
   sku: string | null;
+  /** rótulos das variações em estoque ("M · Preto"), enviados junto ao produto */
   variations: string[];
-  parsedAttributes: Record<string, string[]>;
+  variants: CatalogVariant[];
+  /** false = produto desativado na loja (não aparece no site), mas ainda com estoque */
+  onSite: boolean;
+  createdAt: string | null;
   source: "li" | "bling";
 }
 
-/** Parse variation strings like "Tamanho:M;Cor:Preto" into { Tamanho: ["M"], Cor: ["Preto"] } */
-export function parseVariationAttributes(variations: string[]): Record<string, string[]> {
-  const attrs: Record<string, string[]> = {};
-  for (const v of variations) {
-    for (const part of v.split(";")) {
-      const [key, val] = part.split(":").map(s => s.trim());
-      if (key && val) {
-        if (!attrs[key]) attrs[key] = [];
-        if (!attrs[key].includes(val)) attrs[key].push(val);
-      }
-    }
+/** "Tamanho:M;Cor:Preto" -> { Tamanho: "M", Cor: "Preto" } */
+export function parseVariationString(v: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const part of v.split(";")) {
+    const i = part.indexOf(":");
+    if (i <= 0) continue;
+    const key = part.slice(0, i).trim().split(/\s+/).pop() ?? "";
+    const val = part.slice(i + 1).trim();
+    if (key && val) out[key] = val;
   }
-  return attrs;
+  return out;
 }
 
-export const getProductType = (name: string): string => {
-  const firstWord = name.trim().split(/\s+/)[0];
-  return firstWord ? firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase() : "";
-};
+export const variantLabel = (attrs: Record<string, string>) => Object.values(attrs).join(" · ");
 
 export const formatCatalogCurrency = (value: number | null) => {
   if (!value) return "-";
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 };
-
-export function normalizeBlingProducts(blingProducts: BlingProductRow[]): CatalogProduct[] {
-  return blingProducts.map(p => {
-    const imagens = p.imagens as Array<{ link: string }> | null;
-    const variacoes = p.variacoes as Array<{ nome?: string; estoque?: { saldoVirtualTotal?: number } }> | null;
-    const variationNames = variacoes?.map(v => v.nome || "").filter(Boolean) || [];
-    const inlineStock = variacoes?.reduce((sum, v) => sum + (v.estoque?.saldoVirtualTotal || 0), 0) || 0;
-    return {
-      id: p.id,
-      name: p.nome,
-      price: p.preco,
-      stock: (p.estoque_atual || 0) + inlineStock,
-      imageUrl: (imagens && imagens[0]?.link) || p.imagem_url || null,
-      images: [...new Set([(imagens && imagens[0]?.link) || p.imagem_url, ...(imagens ?? []).map(i => i?.link)].filter((u): u is string => !!u))].slice(0, 10),
-      sku: p.codigo,
-      variations: variationNames,
-      parsedAttributes: parseVariationAttributes(variationNames),
-      source: "bling" as const,
-    };
-  });
-}
-
-const liImageUrl = bestLiImageUrl;
 
 /** Miniatura da CDN da loja (380x380) para a grade de escolha; outras origens ficam como estão. */
 export function thumbUrl(url: string): string {
@@ -109,143 +88,55 @@ export function thumbUrl(url: string): string {
   return m ? `${m[1]}/380x380/${m[2]}` : url;
 }
 
-/** LI: principal primeiro e depois as demais fotos do produto na ordem da loja (sem repetir). */
-export function liImageList(raw: LiProductRaw | null | undefined, fallback: string | null | undefined): string[] {
-  const out: string[] = [];
-  const add = (u: string | null | undefined) => { if (u && !out.includes(u)) out.push(u); };
-  add(liImageUrl(raw, fallback));
-  const list = Array.isArray(raw?.imagens) ? [...raw.imagens] : [];
-  list.sort((a, b) => Number(a?.posicao ?? 0) - Number(b?.posicao ?? 0));
-  for (const im of list) add(im?.caminho ? `https://cdn.awsli.com.br/${im.caminho}` : hdImageUrl(im?.grande));
-  return out.slice(0, 10);
-}
-
-export function normalizeLiProducts(liProducts: LiProductRow[]): CatalogProduct[] {
-  const parents = liProducts.filter(p => {
-    const tipo = liRawOf(p)?.tipo;
-    return tipo === "atributo" || tipo === "simples" || !tipo;
-  });
-  const children = liProducts.filter(p => liRawOf(p)?.tipo === "atributo_opcao");
-
-  const childrenByParentLiId = new Map<number, typeof children>();
-  for (const child of children) {
-    const paiUrl = liRawOf(child)?.pai;
-    const match = paiUrl?.match(/\/produto\/(\d+)$/);
-    if (match) {
-      const parentLiId = parseInt(match[1], 10);
-      if (!childrenByParentLiId.has(parentLiId)) childrenByParentLiId.set(parentLiId, []);
-      childrenByParentLiId.get(parentLiId)!.push(child);
-    }
-  }
-
-  const aggregatedChildIds = new Set<string>();
-
-  const parentProducts: CatalogProduct[] = parents.map(p => {
-    const raw = liRawOf(p);
-    const liId = p.loja_integrada_product_id;
-    const myChildren = liId ? (childrenByParentLiId.get(liId) || []) : [];
-    myChildren.forEach(c => aggregatedChildIds.add(c.id));
-
-    const childrenStock = myChildren.reduce((sum, c) => {
-      const cStock = liRawOf(c)?.estoque_quantidade;
-      return sum + (typeof cStock === "number" ? Math.max(cStock, 0) : Math.max(c.stock || 0, 0));
-    }, 0);
-    const ownStock = typeof raw?.estoque_quantidade === "number" ? Math.max(raw.estoque_quantidade, 0) : Math.max(p.stock || 0, 0);
-    const totalStock = myChildren.length > 0 ? childrenStock : ownStock;
-
-    const variationNames: string[] = [];
-    for (const child of myChildren) {
-      const cStock = liRawOf(child)?.estoque_quantidade;
-      if (typeof cStock === "number" && cStock > 0) {
-        const suffix = (child.name || "").replace(p.name || "", "").trim();
-        if (suffix) variationNames.push(suffix);
-      }
-    }
-
+export function normalizeLiCatalogRows(rows: LiCatalogRow[]): CatalogProduct[] {
+  return rows.map(r => {
+    const name = r.name ?? "";
+    const rawVariants = Array.isArray(r.variants) ? r.variants as { name?: string; attrs?: Record<string, string>; stock?: number }[] : [];
+    const variants: CatalogVariant[] = rawVariants.map(v => {
+      // nomes vêm do mapa de grades; sem ele, do sufixo do nome da variação ("<nome do pai> Tamanho:M;Cor:Preto")
+      const attrs = v.attrs && Object.keys(v.attrs).length ? v.attrs : parseVariationString((v.name ?? "").replace(name, ""));
+      return { attrs, stock: Number(v.stock) || 0 };
+    });
+    const images = (r.images ?? []).filter(Boolean);
     return {
-      id: p.id,
-      name: p.name,
-      price: (p.promotional_price as number) || p.price,
-      stock: totalStock,
-      imageUrl: liImageUrl(raw, p.image_url),
-      images: liImageList(raw, p.image_url),
-      sku: p.sku,
-      variations: variationNames,
-      parsedAttributes: parseVariationAttributes(variationNames),
+      id: r.id,
+      name,
+      price: r.price == null ? null : Number(r.price),
+      stock: Number(r.stock) || 0,
+      imageUrl: images[0] ?? null,
+      images,
+      sku: r.sku,
+      variations: variants.map(v => variantLabel(v.attrs)).filter(Boolean),
+      variants,
+      onSite: r.on_site !== false,
+      createdAt: r.created_at,
       source: "li" as const,
     };
   });
-
-  const standaloneChildren: CatalogProduct[] = children
-    .filter(c => !aggregatedChildIds.has(c.id))
-    .map(p => {
-      const raw = liRawOf(p);
-      const rawStock = raw?.estoque_quantidade;
-      const stock = typeof rawStock === "number" ? Math.max(rawStock, 0) : Math.max(p.stock || 0, 0);
-      return {
-        id: p.id,
-        name: p.name,
-        price: (p.promotional_price as number) || p.price,
-        stock,
-        imageUrl: liImageUrl(raw, p.image_url),
-        images: liImageList(raw, p.image_url),
-        sku: p.sku,
-        variations: [] as string[],
-        parsedAttributes: {},
-        source: "li" as const,
-      };
-    });
-
-  return [...parentProducts, ...standaloneChildren];
 }
 
-const COLOR_KEYS = ["Cor", "cor", "Color", "color"];
-const SIZE_KEYS = ["Tamanho", "tamanho", "Size", "size"];
-
-export function buildFilterOptions(products: CatalogProduct[]) {
-  const colors = new Set<string>();
-  const sizes = new Set<string>();
-  const productTypes = new Set<string>();
-  products.forEach(p => {
-    for (const [key, vals] of Object.entries(p.parsedAttributes)) {
-      if (COLOR_KEYS.includes(key)) vals.forEach(v => colors.add(v));
-      else if (SIZE_KEYS.includes(key)) vals.forEach(v => sizes.add(v));
-    }
-    const type = getProductType(p.name);
-    if (type) productTypes.add(type);
-  });
-  return {
-    colors: Array.from(colors).sort(),
-    sizes: Array.from(sizes).sort(),
-    productTypes: Array.from(productTypes).sort(),
-  };
-}
-
-interface FilterState {
-  onlyInStock: boolean;
-  searchQuery: string;
-  colorFilter: string;
-  sizeFilter: string;
-  categoryFilter: string;
-}
-
-export function filterCatalogProducts(products: CatalogProduct[], f: FilterState): CatalogProduct[] {
-  return products.filter(p => {
-    if (f.onlyInStock && p.stock <= 0) return false;
-    if (f.searchQuery && !p.name.toLowerCase().includes(f.searchQuery.toLowerCase()) && !(p.sku && p.sku.toLowerCase().includes(f.searchQuery.toLowerCase()))) return false;
-    if (!p.imageUrl) return false;
-
-    if (f.colorFilter && f.colorFilter !== "all") {
-      const productColors = Object.entries(p.parsedAttributes).filter(([k]) => COLOR_KEYS.includes(k)).flatMap(([, v]) => v);
-      if (!productColors.includes(f.colorFilter)) return false;
-    }
-    if (f.sizeFilter && f.sizeFilter !== "all") {
-      const productSizes = Object.entries(p.parsedAttributes).filter(([k]) => SIZE_KEYS.includes(k)).flatMap(([, v]) => v);
-      if (!productSizes.includes(f.sizeFilter)) return false;
-    }
-    if (f.categoryFilter && f.categoryFilter !== "all") {
-      if (getProductType(p.name) !== f.categoryFilter) return false;
-    }
-    return true;
+export function normalizeBlingProducts(blingProducts: BlingProductRow[]): CatalogProduct[] {
+  return blingProducts.map(p => {
+    const imagens = p.imagens as Array<{ link: string }> | null;
+    const variacoes = p.variacoes as Array<{ nome?: string; estoque?: { saldoVirtualTotal?: number } }> | null;
+    const variants: CatalogVariant[] = (variacoes ?? [])
+      .map(v => ({ attrs: parseVariationString(v.nome || ""), stock: Math.max(v.estoque?.saldoVirtualTotal || 0, 0) }))
+      .filter(v => v.stock > 0 && Object.keys(v.attrs).length > 0);
+    const inlineStock = variacoes?.reduce((sum, v) => sum + Math.max(v.estoque?.saldoVirtualTotal || 0, 0), 0) || 0;
+    const first = (imagens && imagens[0]?.link) || p.imagem_url || null;
+    return {
+      id: p.id,
+      name: p.nome,
+      price: p.preco,
+      stock: Math.max(p.estoque_atual || 0, 0) + inlineStock,
+      imageUrl: first,
+      images: [...new Set([first, ...(imagens ?? []).map(i => i?.link)].filter((u): u is string => !!u))].slice(0, 10),
+      sku: p.codigo,
+      variations: variants.map(v => variantLabel(v.attrs)),
+      variants,
+      onSite: true,
+      createdAt: p.created_at ?? null,
+      source: "bling" as const,
+    };
   });
 }

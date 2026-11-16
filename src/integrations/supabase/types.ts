@@ -9876,6 +9876,44 @@ export type Database = {
           },
         ]
       }
+      li_grade_variations: {
+        Row: {
+          grade_id: number
+          grade_name: string
+          integration_id: string
+          name: string
+          tenant_id: string
+          updated_at: string
+          variation_id: number
+        }
+        Insert: {
+          grade_id: number
+          grade_name: string
+          integration_id: string
+          name: string
+          tenant_id: string
+          updated_at?: string
+          variation_id: number
+        }
+        Update: {
+          grade_id?: number
+          grade_name?: string
+          integration_id?: string
+          name?: string
+          tenant_id?: string
+          updated_at?: string
+          variation_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "li_grade_variations_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       li_group_job_items: {
         Row: {
           done_at: string | null
@@ -13987,6 +14025,20 @@ export type Database = {
           display_status: string
         }[]
       }
+      get_catalog_products: {
+        Args: { p_integration_id: string }
+        Returns: {
+          created_at: string
+          id: string
+          images: string[]
+          name: string
+          on_site: boolean
+          price: number
+          sku: string
+          stock: number
+          variants: Json
+        }[]
+      }
       get_catalog_summary: { Args: never; Returns: Json }
       get_contact_blockers: {
         Args: {
@@ -14191,6 +14243,13 @@ export type Database = {
           revenue: number
           touches: number
           whatsapp_touches: number
+        }[]
+      }
+      get_missing_li_grade_variations: {
+        Args: { p_integration_id: string }
+        Returns: {
+          grade_id: number
+          variation_id: number
         }[]
       }
       get_reactivation_results: {
