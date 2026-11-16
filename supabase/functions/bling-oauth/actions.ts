@@ -30,6 +30,18 @@ function getBasicAuthHeader(): string {
   return `Basic ${btoa(credentials)}`;
 }
 
+// O Bling devolve erro como {"error":{"type","message","description"}} (formato novo) ou {"error","error_description"} (antigo)
+function blingErrorMessage(data: unknown, fallback: string): string {
+  if (!data || typeof data !== 'object') return fallback;
+  const d = data as Record<string, unknown>;
+  const e = d.error;
+  if (e && typeof e === 'object') {
+    const o = e as Record<string, unknown>;
+    return String(o.description || o.message || o.type || fallback);
+  }
+  return String(d.error_description || e || fallback);
+}
+
 // Generate OAuth URL and create state record
 export async function getAuthUrl(supabase: ServiceClient, body: { tenant_id: string; user_id: string; frontend_url?: string }, ctx: BlingOAuthContext) {
   const { log, corsHeaders } = ctx;
@@ -140,7 +152,7 @@ export async function exchangeCode(supabase: ServiceClient, body: { code: string
 
     if (tokenData.error || !tokenData.access_token) {
       log.error('Token exchange error:', tokenData);
-      throw new Error(tokenData.error_description || tokenData.error || 'Falha ao trocar código por tokens');
+      throw new Error(blingErrorMessage(tokenData, 'Falha ao trocar código por tokens'));
     }
 
     log.info('Token exchange successful');
@@ -293,7 +305,7 @@ export async function refreshToken(supabase: ServiceClient, body: { tenant_id: s
         .eq('tenant_id', tenant_id)
         .eq('type', 'bling');
 
-      throw new Error(tokenData.error_description || 'Falha ao renovar token');
+      throw new Error(blingErrorMessage(tokenData, 'Falha ao renovar token'));
     }
 
     const expiresIn = tokenData.expires_in || 21600;
