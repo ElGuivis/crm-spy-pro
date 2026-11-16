@@ -205,6 +205,13 @@ O `ai-chat` só sabe o que está no banco **do tenant da conversa**; nada de nic
 
 - Webhook do WhatsApp: dedup por `provider_message_id` (indice unico) e corrida de contato/conversa tratada no 23505 (reaproveita o que ja existe). Fila de saida/mensagens/buffer da IA: sempre reivindicar por RPC atomica. Numero sem WhatsApp (Evolution 400 `exists:false`) e falha definitiva e NAO conta no disjuntor (`_shared/outbound-errors.ts`). Mensagem do bot/automacao SEMPRE com `direction:'outbound'`. Auditoria semanal automatica: cron da VPS segunda 04h roda `/opt/spypro-audit/run.sh` (log em `/var/log/audit-atendimento.log`). Alerta de repasse para humano: `useHandoffAlert` (toast, bip, contador no titulo). Inatividade fecha primeiro (condicional) e so depois avisa; conversa de automacao fecha sem aviso.
 
+## Atendimento: número, automação e histórico (16/11/2026)
+
+- **Nono dígito**: celular com e sem o 9 é o MESMO contato (`_shared/br-phone.ts`: `brPhoneVariants`, `pickExactFirst`). O WhatsApp entrega números antigos sem o 9 e a loja grava com o 9. Usado em `wa-webhook-contact-manager.ts` (antes de criar contato, inclusive LID com número real) e `automation-conversation.ts`. Código novo que procura contato por telefone DEVE usar as variantes.
+- **Resposta a automação**: conversa `source='automation'` que recebe resposta vai para `pending` + `handoff_mode` (`wa-webhook-ai-routing.ts`); sem resposta em **24h** (`AUTOMATION_REPLY_WINDOW_MS` no `conversation-inactivity-processor`, conta da última mensagem enviada) fecha sem aviso; depois disso o cliente cai no fluxo normal.
+- **Histórico unificado**: cada atendimento continua uma linha em `conversations` (CSAT, tempo de resposta e relatórios por atendimento), mas a tela mostra **um card por contato** (`onePerContact`) e a conversa lê as mensagens de TODOS os atendimentos do contato (`hooks/useConversationTimeline.ts`, separadores em `SessionDivider.tsx`). Não reabrir/reaproveitar linha de conversa encerrada.
+- **Bling**: a API v3 só aceita `https://api.bling.com.br/Api/v3/...` (`www.bling.com.br` devolve 403). App no portal do Bling: redirecionamento `https://spypro.com.br/auth/bling/callback`, webhook `https://api.spypro.com.br/functions/v1/bling-webhooks`.
+
 ## Skills instaladas: uso obrigatório
 
 Skills globais (`~/.claude/skills`): `vercel-react-best-practices`, `web-design-guidelines`, `frontend-design`, `supabase-postgres-best-practices`, `supabase`, `playwright-cli`, `playwright-best-practices`, `find-skills`. **Carregar a skill ANTES de mexer na área dela** (não depois, não só se lembrar):
