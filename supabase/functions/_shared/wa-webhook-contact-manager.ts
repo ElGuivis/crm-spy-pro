@@ -1,5 +1,6 @@
 import type { WaCtx } from "./wa-webhook-types.ts";
 import { CONTACT_COLUMNS } from "./select-columns.ts";
+import { brPhoneVariants } from "./br-phone.ts";
 
 /** Find an existing contact or create a new one, handling LID merge logic.
  *  Mutates ctx.contact on success. Returns null to continue pipeline. */
@@ -48,6 +49,20 @@ export async function findOrCreateContact(ctx: WaCtx): Promise<Response | null> 
         .eq('id', lidContact.id);
       contact = { ...lidContact, phone: realPhoneFromAlt };
       contactError = null;
+    }
+  }
+
+  // Mesmo celular com/sem o nono dígito (o WhatsApp manda números antigos sem o 9)
+  if (!contact && !isLidContact) {
+    const alt = brPhoneVariants(phone).filter((v) => v !== phone);
+    if (alt.length) {
+      const { data: altContacts } = await supabase
+        .from('contacts').select(CONTACT_COLUMNS).eq('tenant_id', tenantId).in('phone', alt).limit(1);
+      if (altContacts?.[0]) {
+        log.info('📱 Contato encontrado pelo número com/sem o nono dígito:', altContacts[0].id, altContacts[0].phone);
+        contact = altContacts[0];
+        contactError = null;
+      }
     }
   }
 

@@ -5,6 +5,7 @@
  * This prevents the bot from responding when the customer replies to an automation message.
  */
 
+import { brPhoneVariants, pickExactFirst } from "./br-phone.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
 interface AutomationConversationParams {
@@ -40,12 +41,13 @@ export async function ensureAutomationConversation({
     }
 
     // Find contact by phone
-    const { data: contact } = await supabase
+    // com e sem o nono dígito: o contato pode ter sido criado pelo WhatsApp sem o 9
+    const { data: phoneMatches } = await supabase
       .from('contacts')
-      .select('id')
+      .select('id, phone')
       .eq('tenant_id', tenantId)
-      .eq('phone', normalizedPhone)
-      .maybeSingle();
+      .in('phone', brPhoneVariants(normalizedPhone));
+    const contact = pickExactFirst(phoneMatches as { id: string; phone: string }[] | null, normalizedPhone);
 
     if (!contact) {
       // Create contact
