@@ -3,6 +3,19 @@ import type { ChangelogEntry } from './types';
 /** Novembro de 2026. Mais recente primeiro. */
 export const NOVEMBER_CHANGELOG: ChangelogEntry[] = [
   {
+    version: '4.7.0',
+    date: '16 Nov 2026',
+    items: [
+      { type: 'feature', text: 'Histórico completo por cliente no Atendimento: um card só por número, e ao abrir a conversa aparecem as mensagens de todos os atendimentos daquele cliente, com marcas de "Mensagem automática", "Novo atendimento" e "Atendimento encerrado"' },
+      { type: 'improvement', text: 'Cliente que responde uma mensagem automática em até 24 horas vai direto para um atendente, sem receber o menu; sem resposta em 24 horas a conversa fecha sozinha (antes 48 horas) e, se ele chamar depois, segue o fluxo normal' },
+      { type: 'fix', text: 'Celular com e sem o nono dígito agora é reconhecido como o mesmo cliente: a resposta de quem tem número antigo no WhatsApp não vira mais um contato novo nem cai no menu' },
+      { type: 'fix', text: 'Catálogo WhatsApp mostra todos os produtos disponíveis (antes aparecia só uma parte), inclusive os de produto simples, e tamanhos e cores com nome correto mesmo quando a loja não informa' },
+      { type: 'feature', text: 'Filtros do catálogo refeitos, na página e no envio pela conversa: busca por nome ou SKU, tipo, cor e tamanho na mesma variação, ordenação, só com estoque e opção de incluir produtos fora do site' },
+      { type: 'improvement', text: 'A seleção do catálogo vale para todos os produtos: trocar o filtro não tira do envio o que você já marcou; produtos sem foto na loja são avisados em vez de sumirem sem explicação' },
+      { type: 'fix', text: 'Bling: conexão e sincronização de produtos voltaram a funcionar; todo o módulo (produtos, pedidos, clientes e lojas) passou a usar o novo endereço oficial da API do Bling, e o erro real do Bling aparece na tela quando algo falha' },
+    ],
+  },
+  {
     version: '4.6.0',
     date: '10 Nov 2026',
     items: [
