@@ -8,7 +8,7 @@ import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
 const log = createLogger("get-store-statuses", "shared"); // usado pelas funcoes auxiliares (o handler tem o proprio, com correlation id)
 
-const BLING_API_BASE = 'https://www.bling.com.br/Api/v3';
+const BLING_API_BASE = 'https://api.bling.com.br/Api/v3';
 const CACHE_TTL_HOURS = 24;
 
 async function ensureValidToken(supabase: ServiceClient, connection: Record<string, unknown>): Promise<string> {

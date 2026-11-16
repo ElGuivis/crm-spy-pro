@@ -8,7 +8,7 @@ import { createLogger } from "./correlation.ts";
 const log = createLogger("bling-sync-helpers", "shared");
 
 
-export const BLING_API_BASE = 'https://www.bling.com.br/Api/v3';
+export const BLING_API_BASE = 'https://api.bling.com.br/Api/v3';
 export const PAGE_SIZE = 100;
 export const RATE_LIMIT_DELAY = 350;
 export const DETAIL_FETCH_DELAY = 400;

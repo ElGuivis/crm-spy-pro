@@ -5,7 +5,7 @@ import type { ServiceClient } from "../_shared/supabase-types.ts";
 
 type Log = ReturnType<typeof createLogger>;
 
-export const BLING_API_BASE = 'https://www.bling.com.br/Api/v3';
+export const BLING_API_BASE = 'https://api.bling.com.br/Api/v3';
 export const RATE_LIMIT_DELAY = 400;
 
 export const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));

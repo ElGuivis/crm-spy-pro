@@ -20,9 +20,9 @@ const BLING_CLIENT_ID = Deno.env.get('BLING_CLIENT_ID')!;
 const BLING_CLIENT_SECRET = Deno.env.get('BLING_CLIENT_SECRET')!;
 
 // Bling OAuth endpoints
-const BLING_AUTH_URL = 'https://www.bling.com.br/Api/v3/oauth/authorize';
-const BLING_TOKEN_URL = 'https://www.bling.com.br/Api/v3/oauth/token';
-const BLING_REVOKE_URL = 'https://www.bling.com.br/Api/v3/oauth/revoke';
+const BLING_AUTH_URL = 'https://api.bling.com.br/Api/v3/oauth/authorize';
+const BLING_TOKEN_URL = 'https://api.bling.com.br/Api/v3/oauth/token';
+const BLING_REVOKE_URL = 'https://api.bling.com.br/Api/v3/oauth/revoke';
 
 // Helper to create Basic Auth header
 function getBasicAuthHeader(): string {

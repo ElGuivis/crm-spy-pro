@@ -4,7 +4,7 @@ import { ensureBlingToken } from "../_shared/bling-token-refresh.ts";
 
 export type Log = { info: (...a: unknown[]) => void; warn: (...a: unknown[]) => void; error: (...a: unknown[]) => void };
 
-export const BLING_API_BASE = 'https://www.bling.com.br/Api/v3';
+export const BLING_API_BASE = 'https://api.bling.com.br/Api/v3';
 export const PAGE_SIZE = 100;
 export const UPSERT_CHUNK_SIZE = 25;
 export const RATE_LIMIT_DELAY = 400;

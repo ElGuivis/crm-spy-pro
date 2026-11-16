@@ -5,7 +5,7 @@ import type { BlingConnectionRecord, ServiceClient } from "../_shared/supabase-t
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 
-const BLING_API_BASE = 'https://www.bling.com.br/Api/v3';
+const BLING_API_BASE = 'https://api.bling.com.br/Api/v3';
 
 async function ensureValidToken(supabase: ServiceClient, connection: BlingConnectionRecord): Promise<string> {
   return ensureBlingToken(supabase, connection, '[bling-stores]');
