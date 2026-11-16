@@ -9,7 +9,7 @@ CRM/ERP multi-tenant em produção (https://spypro.com.br) com integrações de 
 - **Frontend**: Vite 5 + React 18 + TypeScript + shadcn/ui (Radix) + Tailwind + React Router 7 + TanStack Query 5. Build: `vite build`. Dev: `npm run dev`.
 - **Backend**: Supabase auto-hospedado (Postgres 17 + Auth + REST + Realtime + Storage + Edge Functions Deno). 105 edge functions, 170 tabelas com RLS, 404 policies, 40 cron jobs.
 - **Deploy**: frontend via EasyPanel (Dockerfile + nginx, Build Args `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`). **O deploy é feito pelo Claude (desde 12/11/2026):** frontend = `curl` no gatilho de implantação do EasyPanel depois do push no `main` (URL em `reference_secrets.md` na auto memory, NUNCA neste arquivo); resposta "Deploying...". Edge functions: `powershell scripts/deploy-functions-vps.ps1 [-Only <nome>]` (copia para a VPS e reinicia o runtime; `supabase functions deploy` NÃO se aplica ao servidor novo).
-- **Owner / login dev**: `usechronic@gmail.com` (único usuário; cadastros bloqueados por trigger + `DISABLE_SIGNUP`).
+- **Owner / login dev**: `usechronic@gmail.com` (cadastros bloqueados por trigger + `DISABLE_SIGNUP`). Segunda conta (16/11/2026): `outback@spypro.com.br`, tenant próprio "Outback". Criar conta: desligar `block_new_signups` com `psql -U supabase_admin` (postgres não é dono de auth.users), POST `/auth/v1/admin/users` com `user_metadata.company_name` (o gatilho `handle_new_user` cria profile + tenant + admin) e religar.
 
 ## Supabase ativo (auto-hospedado na VPS)
 
@@ -105,7 +105,7 @@ docs/, sql/, scripts/    # docs internos, snippets SQL ad-hoc, scripts utilitár
 
 ## Tenants e dados
 
-- Tenant único: **Use Chronic** (o banco foi zerado em 2026-10-03; todos os demais usuários/tenants de teste foram apagados).
+- Tenants: **Use Chronic** (principal; o banco foi zerado em 2026-10-03) e **Outback** (criado em 16/11/2026, vazio, sem integrações).
 - Loja Integrada reconectada com Personal Token (expira em 03/01/2027); dados reimportados (≈15,8 mil clientes, 7,3 mil produtos, 9,8 mil pedidos).
 - Melhor Envio, Instagram (3 canais), WhatsApp (instâncias Evolution), SMTP e credenciais de IA: **a reconectar** (Fase 5 do plano).
 - Antes do reset (histórico): WhatsApp `useokok`/`outback` ok, `hazetabacria` a reconectar.
