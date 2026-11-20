@@ -202,7 +202,7 @@ export async function updateOrderStatuses(
               shipping_json: order.shipping_json || null,
               raw_json: order.raw_json || null,
             },
-            apiStatusNome, tenantId, order.integration_id,
+            apiStatusNome, tenantId, order.integration_id, { statusChange: true },
           );
         } else if (statusChanged) {
           log.info(`[ORDER-NOTIFICATION] Skipped for order #${order.order_number} - missing tenantId=${!!tenantId}, integrationId=${!!order.integration_id}`);

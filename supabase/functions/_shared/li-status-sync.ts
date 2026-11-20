@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { createLogger } from "./correlation.ts";
 import { liAuthHeader } from "./li-auth.ts";
+import { processOrderNotificationsInJob } from "./order-notifications.ts";
 const log = createLogger("li-status-sync", "shared");
 
 
@@ -16,6 +17,28 @@ const ME_TO_LI_STATUS: Record<string, { codigo: string; status_name: string }> =
     status_name: "Pedido Entregue",
   },
 };
+
+async function notifyStatusChange(
+  supabase: ReturnType<typeof createClient>, order: Record<string, unknown>, statusName: string, tenantId: string, integrationId: string,
+): Promise<void> {
+  const raw = (order.raw_json || {}) as { cliente?: Record<string, string>; codigo_rastreio?: string; url_rastreio?: string };
+  const cliente = raw.cliente || {};
+  await processOrderNotificationsInJob(
+    supabase, { id: order.loja_integrada_order_id, cliente },
+    {
+      ...order,
+      numero: order.order_number,
+      cliente_nome: cliente.nome || "Cliente",
+      cliente_telefone: cliente.telefone_celular || cliente.telefone_principal || "",
+      cliente_email: cliente.email || "",
+      codigo_rastreio: raw.codigo_rastreio || "",
+      url_rastreio: raw.url_rastreio || "",
+      valor_total: (order.totals_json as { total?: number } | null)?.total || 0,
+      li_id: order.loja_integrada_order_id,
+    },
+    statusName, tenantId, integrationId, { statusChange: true },
+  );
+}
 
 const MAX_RETRIES = 2;
 const RATE_LIMIT_PAUSE_MS = 60000;
@@ -105,17 +128,22 @@ export async function syncStatusToLojaIntegrada(
 
     log.info(`[li-status-sync] Pedido ${liOrderNumero} atualizado na LI para "${mapping.status_name}"`);
 
-    if (liOrderId) {
+    const orderQuery = supabase.from("li_orders")
+      .select("id, order_number, status_name, integration_id, loja_integrada_order_id, created_at_remote, totals_json, shipping_json, raw_json");
+    const { data: before } = await (liOrderId
+      ? orderQuery.eq("id", liOrderId)
+      : orderQuery.eq("tenant_id", tenantId).eq("order_number", liOrderNumero)).maybeSingle();
+
+    if (before?.id) {
       await supabase
         .from("li_orders")
         .update({ status_name: mapping.status_name, updated_at_local: new Date().toISOString() })
-        .eq("id", liOrderId);
-    } else {
-      await supabase
-        .from("li_orders")
-        .update({ status_name: mapping.status_name, updated_at_local: new Date().toISOString() })
-        .eq("tenant_id", tenantId)
-        .eq("order_number", liOrderNumero);
+        .eq("id", before.id);
+      // Aviso ao cliente: como o status local já fica igual ao da loja, o polling não vê mudança de nome
+      // (só pelo status_id, e pedido encerrado é conferido 1x por dia). A reserva em order_notification_executions evita duplicar.
+      if (before.status_name !== mapping.status_name) {
+        await notifyStatusChange(supabase, before as Record<string, unknown>, mapping.status_name, tenantId, String(before.integration_id || liIntegration.id));
+      }
     }
 
     return {

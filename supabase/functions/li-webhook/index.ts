@@ -330,7 +330,7 @@ async function processOrder(
         valor_total: order.valor_total ? parseFloat(order.valor_total) : 0,
         created_at_remote: order.data_criacao || null, li_id: order.id,
       },
-      situacaoNome, tenantId, integrationId,
+      situacaoNome, tenantId, integrationId, { statusChange: !!prevOrder },
     );
   }
 

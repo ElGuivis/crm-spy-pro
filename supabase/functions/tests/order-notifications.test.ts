@@ -105,6 +105,22 @@ Deno.test("pedido no status da regra enfileira 1 WhatsApp com 55 e registra a ex
   assertEquals((q.metadata as Row).execution_id, db.tables.order_notification_executions[0].id);
 });
 
+Deno.test("pedido NOVO com mais de 7 dias não notifica (reimportação)", async () => {
+  const db = fakeDb(baseSeed());
+  await run(db, dbOrder({ created_at_remote: new Date(Date.now() - 8 * 86_400_000).toISOString() }));
+  assertEquals(db.tables.message_queue.length, 0);
+});
+
+Deno.test("mudança de status de pedido com 8 dias notifica (entrega demora mais de 7 dias); acima de 60 não", async () => {
+  const api = { id: 55, cliente: { nome: "Maria Souza", telefone_celular: "11999998888", email: "" } };
+  const db = fakeDb(baseSeed());
+  await processOrderNotificationsInJob(db.client, api, dbOrder({ created_at_remote: new Date(Date.now() - 8 * 86_400_000).toISOString() }), "Pedido Pago", TENANT, INTEG, { statusChange: true });
+  assertEquals(db.tables.message_queue.length, 1);
+  const db2 = fakeDb(baseSeed());
+  await processOrderNotificationsInJob(db2.client, api, dbOrder({ created_at_remote: new Date(Date.now() - 61 * 86_400_000).toISOString() }), "Pedido Pago", TENANT, INTEG, { statusChange: true });
+  assertEquals(db2.tables.message_queue.length, 0);
+});
+
 Deno.test("chamar de novo para o mesmo pedido/status não duplica", async () => {
   const db = fakeDb(baseSeed());
   await run(db); await run(db); await run(db);

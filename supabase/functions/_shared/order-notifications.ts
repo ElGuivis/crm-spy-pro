@@ -10,8 +10,11 @@ const log = createLogger("order-notifications", "shared");
 type Supabase = ReturnType<typeof createClient>;
 type Row = Record<string, unknown>;
 
-/** Pedido mais velho que isto nunca notifica (evita disparo em massa ao reimportar). */
+/** Pedido NOVO (chegou agora no banco) mais velho que isto não notifica (evita disparo em massa ao reimportar). */
 const MAX_ORDER_AGE_DAYS = 7;
+/** Mudança de status de pedido já existente: a entrega costuma passar de 7 dias da compra (pedido 9920, 16/11/2026),
+ * então aqui o limite é maior; a reimportação não passa por este caminho (só pedido novo). */
+const MAX_STATUS_CHANGE_AGE_DAYS = 60;
 /** Quando o texto usa o rastreio e ele ainda não existe, a 1ª tentativa de envio espera isto (min). */
 const TRACKING_FIRST_WAIT_MIN = 10;
 
@@ -108,11 +111,16 @@ async function queueChannel(supabase: Supabase, ctx: Ctx, config: Config, rule: 
 /** Pedido entrou ou mudou de status: enfileira as mensagens das regras que combinam com o status. */
 export async function processOrderNotificationsInJob(
   supabase: Supabase, apiOrder: Row, dbOrder: Row, statusName: string, tenantId: string, integrationId: string,
+  opts: { statusChange?: boolean } = {},
 ): Promise<void> {
   try {
     if (!dbOrder?.id) { log.warn(`[ORDER-NOTIFICATION] pedido #${dbOrder?.numero} sem id: ignorado`); return; }
     const created = (dbOrder.created_at_remote || dbOrder.created_at) as string | undefined;
-    if (created && new Date(created).getTime() < Date.now() - MAX_ORDER_AGE_DAYS * 86_400_000) return;
+    const maxAgeDays = opts.statusChange ? MAX_STATUS_CHANGE_AGE_DAYS : MAX_ORDER_AGE_DAYS;
+    if (created && new Date(created).getTime() < Date.now() - maxAgeDays * 86_400_000) {
+      log.info(`[ORDER-NOTIFICATION] pedido #${dbOrder.numero} criado há mais de ${maxAgeDays} dias: "${statusName}" não notificado`);
+      return;
+    }
 
     const { data: configs } = await supabase.from("order_notification_configs")
       .select("id, whatsapp_integration_id, email_integration_id, send_via_whatsapp, send_via_email, send_window_enabled, send_window_start, send_window_end")
