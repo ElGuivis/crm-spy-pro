@@ -92,7 +92,9 @@ Deno.serve(async (req) => {
       // Mark as processing
       await supabase.from('message_queue').update({ status: 'processing' }).eq('id', msg.id);
 
-      // GUARD: Skip order notifications for old orders (created more than 7 days ago)
+      // GUARD: rede de segurança contra disparo em massa. O limite fino (7 dias p/ pedido novo, 60 p/ mudança de status) já é
+      // aplicado ao enfileirar (_shared/order-notifications.ts); aqui só barra pedido com mais de 60 dias. Com 7 dias aqui,
+      // "Pedido Entregue" de pedido com mais de uma semana era cancelado na fila (pedido 9920, 20/11/2026).
       if (msg.reference_type === 'order_notification' && msg.reference_id) {
         const { data: orderAge } = await supabase
           .from('li_orders')
@@ -102,8 +104,8 @@ Deno.serve(async (req) => {
         
         if (orderAge?.created_at_remote) {
           const orderDate = new Date(orderAge.created_at_remote);
-          const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-          if (orderDate < sevenDaysAgo) {
+          const maxAgeAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+          if (orderDate < maxAgeAgo) {
             log.info(`[MESSAGE-QUEUE-PROCESSOR] ⏭️ Message ${msg.id} CANCELLED - order too old (${orderAge.created_at_remote})`);
             await supabase.from('message_queue').update({
               status: 'cancelled',

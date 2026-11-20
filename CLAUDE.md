@@ -41,7 +41,7 @@ O stack usa **chaves assimétricas ES256** (mais as legadas HS256). Por compatib
 
 **CORS:** o gateway Envoy foi restrito a `spypro.com.br`, `studio` e `api` (o padrão do compose oficial refletia qualquer origem). Reaplicar em `volumes/api/envoy/lds.template.yaml` se rodar `update.sh`.
 
-**URL das funções em SQL:** nunca escrever o domínio em cron/função; usar `public.functions_base_url() || '/functions/v1/<fn>'` (setting `app.settings.functions_url` ou padrão do servidor).
+**URL das funções em SQL:** nunca escrever o domínio em cron/função; usar `public.functions_base_url() || '/functions/v1/<fn>'` (setting `app.settings.functions_url` ou padrão do servidor). Desde 20/11/2026 o setting é `http://supabase-gateway:8000` (rede interna do Docker; acabou com os timeouts de DNS dos crons). Aplicado com `psql -U supabase_admin` (`ALTER DATABASE postgres SET ...`; o usuário postgres não tem permissão); desfazer com `ALTER DATABASE postgres RESET app.settings.functions_url`.
 
 **Falha segura (05/10/2026):** as comparações de segredo do guard são em tempo constante e um segredo ausente ou vazio nunca autoriza (antes, sem `SUPABASE_SERVICE_ROLE_KEY` no ambiente, uma requisição sem cabeçalho passava como interna: `undefined === undefined`). Testes unitários em `supabase/functions/tests/auth-guard-unit.test.ts` (12 casos).
 
