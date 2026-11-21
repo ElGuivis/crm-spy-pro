@@ -1,7 +1,7 @@
 // Descadastro pelo WhatsApp: o cliente manda só "SAIR" (ou PARAR/STOP/DESCADASTRAR) e para de receber mensagens automáticas.
 // Grava em contact_blocks (source = 'optout'), que get_contact_blockers consulta em TODO envio de marketing/automação
 // (_shared/contact-policy.ts) e o message-queue-processor confere antes de enviar o que já estava na fila.
-// Conversas com o atendente/IA continuam funcionando: o bloqueio só vale para envios automáticos.
+// Conversas com o atendente/IA continuam funcionando e os avisos do próprio pedido continuam saindo (migration 20261121000002).
 // Voltar a receber: o atendente remove o contato em Atendimentos → Descadastros ("voltar" já é palavra do menu do bot).
 import type { WaCtx } from "./wa-webhook-types.ts";
 import { sendTextWithTokenCharge } from "./whatsapp-sender.ts";
@@ -54,10 +54,11 @@ export async function handleOptout(ctx: WaCtx): Promise<Response | null> {
     return null; // sem gravar, não confirma ao cliente
   }
 
-  // O que já estava na fila para esse número não sai mais.
+  // O que já estava na fila para esse número não sai mais, menos os avisos do próprio pedido (pagamento, envio, entrega).
   const variants = brPhoneVariants(key);
   await supabase.from("message_queue").update({ status: "cancelled", last_error: "Contato pediu para sair (SAIR)" })
-    .eq("tenant_id", tenantId).eq("channel", "whatsapp").eq("status", "pending").in("recipient", variants);
+    .eq("tenant_id", tenantId).eq("channel", "whatsapp").eq("status", "pending").in("recipient", variants)
+    .or("reference_type.is.null,reference_type.neq.order_notification");
 
   const sent = await sendTextWithTokenCharge(whatsAppConfig, phone, OPTOUT_REPLY, supabase, tenantId, "receptionist", "Descadastro: confirmação de SAIR", conversation.id);
   await supabase.from("messages").insert({

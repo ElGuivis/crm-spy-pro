@@ -92,10 +92,12 @@ Deno.serve(async (req) => {
       // Mark as processing
       await supabase.from('message_queue').update({ status: 'processing' }).eq('id', msg.id);
 
-      // Número que pediu para sair (SAIR) ou foi bloqueado depois de enfileirar: não envia. Falha na consulta não barra o envio.
+      // Bloqueado depois de enfileirar: não envia. Quem só pediu para sair (SAIR) ainda recebe o aviso do próprio pedido
+      // (get_contact_blockers libera order_status para source='optout'); cashback na fila respeita o SAIR. Falha na consulta não barra.
       if (msg.channel === 'whatsapp' && msg.recipient) {
         const { data: blockers } = await supabase.rpc('get_contact_blockers', {
-          p_tenant_id: msg.tenant_id, p_emails: [], p_phones: [normPhone(msg.recipient) ?? msg.recipient], p_purpose: 'order_status',
+          p_tenant_id: msg.tenant_id, p_emails: [], p_phones: [normPhone(msg.recipient) ?? msg.recipient],
+          p_purpose: msg.reference_type === 'order_notification' ? 'order_status' : 'cashback',
         });
         if (((blockers ?? []) as Array<{ reason: string }>).some((b) => b.reason === 'blocked')) {
           await supabase.from('message_queue').update({ status: 'cancelled', last_error: 'Contato bloqueado ou pediu para sair (SAIR)' }).eq('id', msg.id);

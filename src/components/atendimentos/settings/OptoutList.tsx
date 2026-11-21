@@ -50,8 +50,9 @@ export function OptoutList() {
           <CardTitle className="flex items-center gap-2 text-lg"><UserX className="h-5 w-5 text-primary" /> Descadastros</CardTitle>
           <CardDescription>
             Quem responde <strong>SAIR</strong> (ou PARAR, STOP, DESCADASTRAR) no WhatsApp entra aqui na hora e para de receber
-            as mensagens automáticas: pedidos, carrinho abandonado, aniversário, reativação, cashback e disparos em massa.
-            O atendimento normal continua funcionando. Para a pessoa voltar a receber, use <strong>Reativar envios</strong>.
+            as mensagens automáticas de marketing: carrinho abandonado, aniversário, reativação, cashback e disparos em massa.
+            Os avisos do próprio pedido (pagamento, envio e entrega) e o atendimento normal continuam funcionando.
+            Contato <strong>bloqueado pelo atendente</strong> não recebe nada. Para voltar a enviar, use <strong>Reativar envios</strong>.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
