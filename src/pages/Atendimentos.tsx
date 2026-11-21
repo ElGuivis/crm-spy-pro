@@ -12,7 +12,8 @@ import { AtendimentoReports } from "@/components/atendimentos/settings/Atendimen
 import { ChatbotBuilder } from "@/components/atendimentos/settings/ChatbotBuilder";
 import { AIAgentBuilder } from "@/components/atendimentos/settings/AIAgentBuilder";
 import { ChatbotFlowManager } from "@/components/chatbot-flow/ChatbotFlowManager";
-import { Headset, MessageSquare, Inbox, Bot, Smartphone, BarChart3, Brain, Workflow, Menu } from "lucide-react";
+import { OptoutList } from "@/components/atendimentos/settings/OptoutList";
+import { Headset, MessageSquare, Inbox, Bot, Smartphone, BarChart3, Brain, Workflow, UserX } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -29,6 +30,7 @@ const SECTIONS: AtendimentosSection[] = [
   { value: "canais", label: "Canais", icon: <Smartphone className="h-5 w-5" /> },
   { value: "flows", label: "Flows", icon: <Workflow className="h-5 w-5" /> },
   { value: "relatorios", label: "Relatórios", icon: <BarChart3 className="h-5 w-5" /> },
+  { value: "descadastros", label: "Descadastros", icon: <UserX className="h-5 w-5" /> },
 ];
 
 export default function Atendimentos() {
@@ -126,6 +128,10 @@ export default function Atendimentos() {
               <TabsTrigger value="relatorios" className="gap-1 text-xs h-7 px-2 md:px-2.5">
                 <BarChart3 className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Relatórios</span>
+              </TabsTrigger>
+              <TabsTrigger value="descadastros" className="gap-1 text-xs h-7 px-2 md:px-2.5">
+                <UserX className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Descadastros</span>
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -236,6 +242,12 @@ export default function Atendimentos() {
       {activeTab === "relatorios" && (
         <div className="flex-1 overflow-y-auto p-4 md:p-6">
           <AtendimentoReports />
+        </div>
+      )}
+
+      {activeTab === "descadastros" && (
+        <div className="flex-1 overflow-y-auto p-4 md:p-6">
+          <OptoutList />
         </div>
       )}
     </div>

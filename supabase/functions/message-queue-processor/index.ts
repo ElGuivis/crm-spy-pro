@@ -7,7 +7,7 @@ import { unsubscribeFor, withHtmlFooter, type SystemEmailKind } from "../_shared
 import { isAmbiguousSendError, isPermanentRecipientError } from "../_shared/outbound-errors.ts";
 import { applyTracking, lookupTracking, normStatus } from "../_shared/order-notification-render.ts";
 import { nextWindowOpen } from "../_shared/send-window.ts";
-import { recordTouches } from "../_shared/contact-policy.ts";
+import { normPhone, recordTouches } from "../_shared/contact-policy.ts";
 import { ensureAutomationConversation } from "../_shared/automation-conversation.ts";
 import { sendWhatsAppMessage as sharedSendWhatsApp, type WhatsAppConfig } from "../_shared/whatsapp-sender.ts";
 import type { MessageQueueRecord, EmailIntegrationRecord } from "../_shared/supabase-types.ts";
@@ -91,6 +91,19 @@ Deno.serve(async (req) => {
     for (const msg of messages) {
       // Mark as processing
       await supabase.from('message_queue').update({ status: 'processing' }).eq('id', msg.id);
+
+      // Número que pediu para sair (SAIR) ou foi bloqueado depois de enfileirar: não envia. Falha na consulta não barra o envio.
+      if (msg.channel === 'whatsapp' && msg.recipient) {
+        const { data: blockers } = await supabase.rpc('get_contact_blockers', {
+          p_tenant_id: msg.tenant_id, p_emails: [], p_phones: [normPhone(msg.recipient) ?? msg.recipient], p_purpose: 'order_status',
+        });
+        if (((blockers ?? []) as Array<{ reason: string }>).some((b) => b.reason === 'blocked')) {
+          await supabase.from('message_queue').update({ status: 'cancelled', last_error: 'Contato bloqueado ou pediu para sair (SAIR)' }).eq('id', msg.id);
+          await setExecution(sb, msg.metadata, msg.channel, { status: 'cancelled', error_message: 'Contato bloqueado ou pediu para sair' });
+          failed++;
+          continue;
+        }
+      }
 
       // GUARD: rede de segurança contra disparo em massa. O limite fino (7 dias p/ pedido novo, 60 p/ mudança de status) já é
       // aplicado ao enfileirar (_shared/order-notifications.ts); aqui só barra pedido com mais de 60 dias. Com 7 dias aqui,

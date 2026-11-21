@@ -14,6 +14,12 @@ export function brPhoneVariants(phone: string): string[] {
   return [p];
 }
 
+/** Chave única do celular (sempre com o nono dígito). Igual à função SQL `br_phone_key` (migration 20261121000001). */
+export function brPhoneKey(phone: string): string {
+  const p = (phone || '').replace(/\D/g, '');
+  return /^55\d{2}[6-9]\d{7}$/.test(p) ? p.slice(0, 4) + '9' + p.slice(4) : p;
+}
+
 /** Entre contatos achados pelas variantes, prefere o número exato. */
 export function pickExactFirst<T extends { phone: string }>(rows: T[] | null | undefined, phone: string): T | null {
   if (!rows?.length) return null;

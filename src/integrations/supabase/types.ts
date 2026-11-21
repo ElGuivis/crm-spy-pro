@@ -2799,27 +2799,46 @@ export type Database = {
       }
       contact_blocks: {
         Row: {
+          contact_name: string | null
+          conversation_id: string | null
           created_at: string
           id: string
+          message_text: string | null
           phone_e164: string
           reason: string | null
+          source: string
           tenant_id: string
         }
         Insert: {
+          contact_name?: string | null
+          conversation_id?: string | null
           created_at?: string
           id?: string
+          message_text?: string | null
           phone_e164: string
           reason?: string | null
+          source?: string
           tenant_id: string
         }
         Update: {
+          contact_name?: string | null
+          conversation_id?: string | null
           created_at?: string
           id?: string
+          message_text?: string | null
           phone_e164?: string
           reason?: string | null
+          source?: string
           tenant_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "contact_blocks_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "contact_blocks_tenant_id_fkey"
             columns: ["tenant_id"]
@@ -13803,6 +13822,7 @@ export type Database = {
         Returns: boolean
       }
       archive_orphan_flow_campaigns: { Args: never; Returns: number }
+      br_phone_key: { Args: { p: string }; Returns: string }
       bump_flow_campaign: {
         Args: { p_campaign_id: string; p_ok: boolean }
         Returns: undefined
