@@ -31,7 +31,7 @@ function Success({ groupUrl }: { groupUrl: string | null }) {
   return (
     <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="py-4 text-center" role="status">
       <h3 className={`${DISPLAY} text-4xl text-[#f2f2f2] tracking-wide mb-3`}>TÁ DENTRO!</h3>
-      <p className="text-[#f2f2f2]/80 mb-6">Cadastro feito. Agora entra no grupo VIP: é lá que a pré-venda abre primeiro.</p>
+      <p className="text-[#f2f2f2]/80 mb-6">Cadastro feito. Agora entra no grupo, que é lá que o link da pré-venda cai primeiro.</p>
       {groupUrl ? (
         <a href={groupUrl} className={`block w-full bg-[#dc2828] text-white ${DISPLAY} text-xl tracking-[0.14em] py-4 rounded-[2px] hover:bg-[#f2f2f2] hover:text-[#080808] transition-colors`}>
           ENTRAR NO GRUPO VIP
@@ -49,7 +49,7 @@ export default function PreVenda() {
 
   useEffect(() => {
     const prev = document.title;
-    document.title = "OUT/BACK! — Grupo VIP da pré-venda";
+    document.title = "OUT/BACK! · Pré-venda no grupo VIP";
     return () => { document.title = prev; };
   }, []);
 
@@ -65,13 +65,13 @@ export default function PreVenda() {
         <div className="max-w-2xl w-full mx-auto text-center">
           <motion.img initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.5 }}
             src={logo} alt="OUT/BACK! Multimarcas" className="h-20 sm:h-28 mx-auto brightness-0 invert mb-3" />
-          <p className="text-[10px] sm:text-sm uppercase tracking-[0.3em] text-white/50 mb-8 sm:mb-12">Pré-venda · Grupo VIP</p>
+          <p className="text-[10px] sm:text-sm uppercase tracking-[0.3em] text-white/50 mb-8 sm:mb-12">Pré-venda · Acesso antecipado</p>
 
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.15 }} className="space-y-4 mb-8 sm:mb-12">
             <h1 className={`${DISPLAY} text-[2.6rem] sm:text-6xl md:text-7xl leading-[1.05] tracking-tight`}>
-              O PRÓXIMO CAPÍTULO
+              QUEM É DA CASA
               <br />
-              <span className="text-transparent [-webkit-text-stroke:1px_#f2f2f2] sm:[-webkit-text-stroke:2px_#f2f2f2]">COMEÇA NO GRUPO VIP.</span>
+              <span className="text-transparent [-webkit-text-stroke:1px_#f2f2f2] sm:[-webkit-text-stroke:2px_#f2f2f2]">CHEGA PRIMEIRO.</span>
             </h1>
             <div className="flex items-center gap-4 justify-center" aria-hidden="true">
               <div className="h-px w-10 bg-[#dc2828]" />
@@ -79,8 +79,8 @@ export default function PreVenda() {
               <div className="h-px w-10 bg-[#dc2828]" />
             </div>
             <p className="text-base sm:text-lg text-[#f2f2f2]/85 leading-[1.7] max-w-lg mx-auto">
-              Faz teu cadastro e entra no grupo do WhatsApp. Quem está no grupo fica sabendo primeiro
-              de tudo da pré-venda, antes de abrir para todo mundo.
+              A pré-venda da nova fase abre primeiro no nosso grupo do WhatsApp.
+              Bota teu nome aqui embaixo, entra no grupo e o link chega pra ti antes de abrir pra geral.
             </p>
           </motion.div>
 
@@ -88,8 +88,8 @@ export default function PreVenda() {
             className="bg-[#141414]/90 backdrop-blur-sm border border-[#2e2e2e] p-5 sm:p-8 max-w-md mx-auto" aria-labelledby="presale-title">
             {groupUrl === undefined ? (
               <>
-                <h2 id="presale-title" className={`${DISPLAY} text-3xl sm:text-4xl tracking-wide mb-2`}>GARANTA TEU LUGAR</h2>
-                <p className="text-sm sm:text-base text-white/70 mb-6">Teu cadastro já fica pronto na loja: na hora da pré-venda é só comprar.</p>
+                <h2 id="presale-title" className={`${DISPLAY} text-3xl sm:text-4xl tracking-wide mb-2`}>BOTA TEU NOME NA LISTA</h2>
+                <p className="text-sm sm:text-base text-white/70 mb-6">Teu cadastro no site já fica feito. No dia, é só escolher a peça e fechar.</p>
                 <PresaleForm slug={slug} onDone={setGroupUrl} />
               </>
             ) : (

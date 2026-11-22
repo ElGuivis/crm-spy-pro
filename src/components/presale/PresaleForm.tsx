@@ -63,7 +63,7 @@ export function PresaleForm({ slug, onDone }: Props) {
     const r = await lookupCep(cep);
     setCepLoading(false);
     if (!r) {
-      setErrors((prev) => ({ ...prev, cep: "CEP não encontrado. Preenche o endereço à mão." }));
+      setErrors((prev) => ({ ...prev, cep: "Não achamos esse CEP. Preenche o endereço aí na mão." }));
       return;
     }
     setForm((prev) => ({
@@ -110,7 +110,7 @@ export function PresaleForm({ slug, onDone }: Props) {
       if (body?.field && body.field !== "form") setErrors({ [body.field]: body.message } as FieldErrors);
       else setServerError(body?.message ?? "Deu ruim. Tenta de novo aí.");
     } catch {
-      setServerError("Sem conexão. Confere a internet e tenta de novo.");
+      setServerError("Caiu a conexão. Confere a internet e tenta de novo.");
     } finally {
       setSending(false);
     }
@@ -120,13 +120,16 @@ export function PresaleForm({ slug, onDone }: Props) {
 
   return (
     <form onSubmit={handleSubmit} noValidate className="space-y-4 text-left">
-      <Field {...f("name")} label="Nome completo" autoComplete="name" placeholder="Seu nome e sobrenome" />
-      <Field {...f("email")} label="E-mail" type="email" inputMode="email" autoComplete="email" placeholder="seu@email.com" />
+      <Field {...f("name")} label="Nome completo" autoComplete="name" placeholder="Nome e sobrenome" />
+      <Field {...f("email")} label="E-mail" type="email" inputMode="email" autoComplete="email" placeholder="teu@email.com" />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Field {...f("phone")} label="WhatsApp" type="tel" inputMode="tel" autoComplete="tel-national" placeholder="(00) 00000-0000" />
         <Field {...f("birthDate")} label="Nascimento" inputMode="numeric" autoComplete="bday" placeholder="dd/mm/aaaa" />
       </div>
-      <Field {...f("cpf")} label="CPF" inputMode="numeric" placeholder="000.000.000-00" />
+      <div>
+        <Field {...f("cpf")} label="CPF" inputMode="numeric" placeholder="000.000.000-00" />
+        {errors.cpf ? null : <p className="text-[11px] text-white/40 mt-1">O site da loja pede o CPF pra fechar teu cadastro.</p>}
+      </div>
 
       <div className="pt-2 border-t border-[#2e2e2e]" />
       <div className="grid grid-cols-[1fr_auto] gap-4 items-end">
@@ -151,16 +154,16 @@ export function PresaleForm({ slug, onDone }: Props) {
       <label className="flex items-start gap-3 text-sm text-white/70 cursor-pointer pt-1">
         <input type="checkbox" checked={form.acceptsNewsletter} onChange={(e) => setForm((p) => ({ ...p, acceptsNewsletter: e.target.checked }))}
           className="mt-0.5 h-4 w-4 accent-[#dc2828]" />
-        Quero receber novidades e ofertas da OUT/BACK! por e-mail.
+        Pode mandar novidade por e-mail também.
       </label>
 
       <button type="submit" disabled={sending}
         className="w-full bg-[#f2f2f2] text-[#080808] font-['Bebas_Neue'] text-xl tracking-[0.14em] py-3.5 sm:py-4 rounded-[2px] hover:bg-[#dc2828] hover:text-white active:scale-[0.98] transition-all disabled:opacity-50">
-        {sending ? "ENVIANDO…" : "QUERO ENTRAR NO GRUPO VIP"}
+        {sending ? "SEGURA AÍ…" : "QUERO CHEGAR PRIMEIRO"}
       </button>
       {serverError ? <p role="alert" className="text-[#ef4444] text-sm text-center">{serverError}</p> : null}
       <p className="text-[11px] text-white/40 text-center leading-relaxed">
-        Seus dados criam seu cadastro na loja OUT/BACK! para agilizar a compra na pré-venda.
+        Com esses dados a gente já deixa teu cadastro pronto no site da OUT/BACK!
       </p>
     </form>
   );

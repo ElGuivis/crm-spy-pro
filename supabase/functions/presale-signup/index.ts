@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
     const ip = clientIp(req);
     // 8 cadastros por IP a cada 10 min (família na mesma rede passa; robô não)
     if (!(await withinRateLimit(supabase, `presale:${ip}`, 8, 600))) {
-      return json({ error: "rate_limited", message: "Muitas tentativas. Espera uns minutos e tenta de novo." }, 429);
+      return json({ error: "rate_limited", message: "Muita tentativa seguida. Espera uns minutos e tenta de novo." }, 429);
     }
 
     const body = await req.json().catch(() => null) as Record<string, unknown> | null;
@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
 
     const page = await loadPage(input.slug);
     if (!page) return json({ error: "not_found", message: "Página não encontrada" }, 404);
-    if (!page.is_active) return json({ error: "closed", message: "Os cadastros desta pré-venda foram encerrados." }, 410);
+    if (!page.is_active) return json({ error: "closed", message: "A lista dessa pré-venda já fechou." }, 410);
 
     const row = {
       page_id: page.id,
@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
       const { data: ins, error } = await supabase.from("presale_signups").insert(row).select("id").single();
       if (error || !ins) {
         console.error("[presale-signup] insert", error?.message);
-        return json({ error: "server", message: "Não deu pra salvar agora. Tenta de novo." }, 500);
+        return json({ error: "server", message: "Não rolou salvar agora. Tenta de novo." }, 500);
       }
       signupId = ins.id;
     }
