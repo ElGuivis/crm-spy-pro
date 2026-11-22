@@ -24,6 +24,7 @@ import AcceptInvite from "./pages/AcceptInvite";
 
 // Lazy-loaded pages
 const Index = lazy(() => import("./pages/Index"));
+const PreVenda = lazy(() => import("./pages/PreVenda"));
 const Atendimentos = lazy(() => import("./pages/Atendimentos"));
 const Sales = lazy(() => import("./pages/Sales"));
 const Integrations = lazy(() => import("./pages/Integrations"));
@@ -83,6 +84,7 @@ const App = () => (
                 <Route path="/auth" element={<Auth />} />
                 <Route path="/auth/bling/callback" element={<BlingCallback />} />
                 <Route path="/invite" element={<AcceptInvite />} />
+                <Route path="/vip/:slug" element={<Suspense fallback={<div className="min-h-screen bg-[#080808]" />}><PreVenda /></Suspense>} />
                 <Route
                   path="/*"
                   element={

@@ -484,6 +484,10 @@ verify_jwt = false
 # Usuário admin autenticado (requireUserAuth + is_tenant_admin); manda 1 mensagem de teste
 verify_jwt = false
 
+[functions.presale-signup]
+# PÚBLICO (página de pré-venda /vip/<slug>): validação + limite por IP + campo isca; só grava em presale_signups
+verify_jwt = false
+
 [functions.r]
 # PÚBLICO (links curtos): só redireciona para o que está em short_links; limite de taxa por IP
 verify_jwt = false

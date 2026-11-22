@@ -1,7 +1,7 @@
-import type { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { firstIp } from "./email-bot-filter.ts";
 
-type Supabase = ReturnType<typeof createClient>;
+/** Só o que este módulo usa do cliente (evita conflito de genéricos entre versões do supabase-js). */
+type Supabase = { rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: unknown }> };
 
 /** IP de quem chamou (primeiro do x-forwarded-for / cf-connecting-ip); "unknown" se não houver. */
 export function clientIp(req: Request): string {
