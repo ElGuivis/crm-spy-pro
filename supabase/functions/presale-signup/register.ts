@@ -1,31 +1,30 @@
-// Modo "register" (cadastro completo: CPF, nascimento, endereço) -> cria/acha o cliente na Loja Integrada.
-// Hoje nenhuma página usa este modo; fica para a página de cadastro enviada no atendimento.
+// Modo "register" (/cadastro/<slug>): cadastro completo (CPF, nascimento, endereço) -> contato no Bling.
+// Link mandado no atendimento do WhatsApp para a loja lançar a venda no nome da pessoa.
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { validatePresale } from "./validate.ts";
-import { upsertLiCustomer } from "./li-customer.ts";
+import { upsertBlingContact } from "./bling-contact.ts";
 import type { Reply } from "./group.ts";
 
-type Supabase = SupabaseClient;
-export interface RegisterPage { id: string; tenant_id: string; integration_id: string | null; whatsapp_group_url: string; li_group_id: number | null }
+export interface RegisterPage { id: string; tenant_id: string }
 
-export async function handleRegister(sb: Supabase, page: RegisterPage, body: unknown): Promise<Reply> {
+export async function handleRegister(sb: SupabaseClient, page: RegisterPage, body: unknown): Promise<Reply> {
   const v = validatePresale(body);
   if (!v.ok) return { status: 400, body: { error: "invalid", field: v.field, message: v.message } };
   const input = v.data;
 
   const row = {
     page_id: page.id, tenant_id: page.tenant_id, name: input.name, email: input.email, cpf: input.cpf,
-    phone: input.phone, birth_date: input.birthDate, address: input.address, accepts_newsletter: input.acceptsNewsletter,
+    phone: input.phone, birth_date: input.birthDate, address: input.address, li_status: "skipped",
   };
-  const done: Reply = { status: 200, body: { ok: true, groupUrl: page.whatsapp_group_url } };
+  const done: Reply = { status: 200, body: { ok: true } };
   const { data: prev } = await sb.from("presale_signups")
-    .select("id, li_status, attempts").eq("page_id", page.id).eq("email", input.email).maybeSingle();
+    .select("id, bling_status, attempts").eq("page_id", page.id).eq("email", input.email).maybeSingle();
 
   let signupId: string;
   if (prev) {
     signupId = prev.id;
     await sb.from("presale_signups").update({ ...row, attempts: prev.attempts + 1, updated_at: new Date().toISOString() }).eq("id", prev.id);
-    if (prev.li_status === "created" || prev.li_status === "existing") return done; // já está na loja
+    if (prev.bling_status === "created" || prev.bling_status === "existing") return done; // já está no Bling
   } else {
     const { data: ins, error } = await sb.from("presale_signups").insert(row).select("id").single();
     if (error || !ins) {
@@ -35,19 +34,14 @@ export async function handleRegister(sb: Supabase, page: RegisterPage, body: unk
     signupId = ins.id;
   }
 
-  const { data: integ } = page.integration_id
-    ? await sb.from("integrations").select("api_key").eq("id", page.integration_id).eq("status", "connected").maybeSingle()
-    : { data: null };
-  const li = integ?.api_key
-    ? await upsertLiCustomer(integ.api_key, input, page.li_group_id)
-    : { status: "failed" as const, error: "integração da loja desconectada" };
-
+  const bling = await upsertBlingContact(sb, page.tenant_id, input);
   await sb.from("presale_signups").update({
-    li_status: li.status,
-    li_customer_id: li.status === "failed" ? null : li.customerId,
-    li_error: li.status === "failed" ? li.error : null,
+    bling_status: bling.status,
+    bling_contact_id: bling.status === "failed" ? null : bling.contactId,
+    bling_error: bling.status === "failed" ? bling.error : null,
     updated_at: new Date().toISOString(),
   }).eq("id", signupId);
-  if (li.status === "failed") console.error("[presale-signup] loja", page.id, li.error);
+  // se o Bling falhar, o cadastro fica salvo aqui (a loja vê o erro e lança à mão); a pessoa não precisa refazer
+  if (bling.status === "failed") console.error("[presale-signup] bling", page.id, bling.error);
   return done;
 }

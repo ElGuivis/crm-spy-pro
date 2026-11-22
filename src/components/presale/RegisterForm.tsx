@@ -41,10 +41,11 @@ function Field({ name, label, value, error, onValue, className = "", ...rest }: 
 
 interface Props {
   slug: string;
-  onDone: (groupUrl: string | null) => void;
+  onDone: () => void;
 }
 
-export function PresaleForm({ slug, onDone }: Props) {
+// Formulário completo da página de cadastro (/cadastro/:slug): vira contato no Bling da loja.
+export function RegisterForm({ slug, onDone }: Props) {
   const [form, setForm] = useState<PresaleFormData>(EMPTY_PRESALE_FORM);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [sending, setSending] = useState(false);
@@ -92,9 +93,9 @@ export function PresaleForm({ slug, onDone }: Props) {
         method: "POST",
         headers: { "Content-Type": "application/json", apikey: ANON_KEY },
         body: JSON.stringify({
-          slug,
+          slug, kind: "register",
           name: form.name, email: form.email, cpf: form.cpf, phone: form.phone,
-          birthDate: toIsoDate(form.birthDate), acceptsNewsletter: form.acceptsNewsletter, website: form.website,
+          birthDate: toIsoDate(form.birthDate), website: form.website,
           address: {
             cep: form.cep, street: form.street, number: form.number, complement: form.complement,
             neighborhood: form.neighborhood, city: form.city, state: form.state,
@@ -104,7 +105,7 @@ export function PresaleForm({ slug, onDone }: Props) {
       type Reply = { ok?: boolean; groupUrl?: string | null; field?: string; message?: string };
       const body: Reply | null = await res.json().then((j: Reply) => j, (): null => null);
       if (res.ok && body?.ok) {
-        onDone(body.groupUrl ?? null);
+        onDone();
         return;
       }
       if (body?.field && body.field !== "form") setErrors({ [body.field]: body.message } as FieldErrors);
@@ -128,7 +129,7 @@ export function PresaleForm({ slug, onDone }: Props) {
       </div>
       <div>
         <Field {...f("cpf")} label="CPF" inputMode="numeric" placeholder="000.000.000-00" />
-        {errors.cpf ? null : <p className="text-[11px] text-white/40 mt-1">O site da loja pede o CPF pra fechar teu cadastro.</p>}
+        {errors.cpf ? null : <p className="text-[11px] text-white/40 mt-1">Vai na nota fiscal do teu pedido.</p>}
       </div>
 
       <div className="pt-2 border-t border-[#2e2e2e]" />
@@ -151,19 +152,13 @@ export function PresaleForm({ slug, onDone }: Props) {
       <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" value={form.website}
         onChange={(e) => setForm((p) => ({ ...p, website: e.target.value }))} className="absolute -left-[9999px] h-0 w-0 opacity-0" />
 
-      <label className="flex items-start gap-3 text-sm text-white/70 cursor-pointer pt-1">
-        <input type="checkbox" checked={form.acceptsNewsletter} onChange={(e) => setForm((p) => ({ ...p, acceptsNewsletter: e.target.checked }))}
-          className="mt-0.5 h-4 w-4 accent-[#dc2828]" />
-        Pode mandar novidade por e-mail também.
-      </label>
-
       <button type="submit" disabled={sending}
         className="w-full bg-[#f2f2f2] text-[#080808] font-['Bebas_Neue'] text-xl tracking-[0.14em] py-3.5 sm:py-4 rounded-[2px] hover:bg-[#dc2828] hover:text-white active:scale-[0.98] transition-all disabled:opacity-50">
-        {sending ? "SEGURA AÍ…" : "QUERO CHEGAR PRIMEIRO"}
+        {sending ? "SEGURA AÍ…" : "FINALIZAR CADASTRO"}
       </button>
       {serverError ? <p role="alert" className="text-[#ef4444] text-sm text-center">{serverError}</p> : null}
       <p className="text-[11px] text-white/40 text-center leading-relaxed">
-        Com esses dados a gente já deixa teu cadastro pronto no site da OUT/BACK!
+        Teus dados servem pra lançar e entregar teu pedido.
       </p>
     </form>
   );

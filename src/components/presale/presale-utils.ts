@@ -14,13 +14,12 @@ export interface PresaleFormData {
   neighborhood: string;
   city: string;
   state: string;
-  acceptsNewsletter: boolean;
   website: string; // campo isca (robôs)
 }
 
 export const EMPTY_PRESALE_FORM: PresaleFormData = {
   name: "", email: "", cpf: "", phone: "", birthDate: "", cep: "", street: "", number: "",
-  complement: "", neighborhood: "", city: "", state: "", acceptsNewsletter: true, website: "",
+  complement: "", neighborhood: "", city: "", state: "", website: "",
 };
 
 const digits = (v: string) => v.replace(/\D/g, "");

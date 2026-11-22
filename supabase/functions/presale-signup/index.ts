@@ -5,18 +5,18 @@ import { handleGroupLead, handleGroupSizes } from "./group.ts";
 import { handleRegister } from "./register.ts";
 
 // Página de pré-venda (/vip/<slug>), endpoint PÚBLICO de propósito.
-//   GET  ?slug=outback -> { title, active, mode } (o link do grupo só sai depois do cadastro)
-//   POST { slug, action?, ..., website }
+//   GET  ?slug=outback&kind=group|register -> { title, active, mode } (o link do grupo só sai depois do cadastro)
+//   POST { slug, kind?, action?, ..., website }   (kind padrão "group": /vip/<slug>; "register": /cadastro/<slug>)
 //     modo "group":    action "lead" (nome/WhatsApp/e-mail -> planilha) e "sizes" (tamanhos opcionais)
-//     modo "register": cadastro completo -> cliente na Loja Integrada
+//     modo "register": cadastro completo -> contato no Bling
 // O campo `website` é isca para robôs (pessoas não veem).
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...publicCorsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" } });
 
 interface PageRow {
-  id: string; tenant_id: string; integration_id: string | null; title: string; whatsapp_group_url: string;
-  li_group_id: number | null; is_active: boolean; mode: "group" | "register"; sheet_url: string | null;
+  id: string; tenant_id: string; title: string; whatsapp_group_url: string | null;
+  is_active: boolean; mode: "group" | "register"; sheet_url: string | null;
 }
 const SLUG = /^[a-z0-9-]{3,40}$/;
 
@@ -24,17 +24,19 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: publicCorsHeaders });
 
   const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const loadPage = async (slug: string) => {
+  const kindOf = (v: unknown) => (v === "register" ? "register" : "group");
+  const loadPage = async (slug: string, mode: "group" | "register") => {
     if (!SLUG.test(slug)) return null;
     const { data } = await supabase.from("presale_pages")
-      .select("id, tenant_id, integration_id, title, whatsapp_group_url, li_group_id, is_active, mode, sheet_url")
-      .eq("slug", slug).maybeSingle();
+      .select("id, tenant_id, title, whatsapp_group_url, is_active, mode, sheet_url")
+      .eq("slug", slug).eq("mode", mode).maybeSingle();
     return data as PageRow | null;
   };
 
   try {
     if (req.method === "GET") {
-      const page = await loadPage((new URL(req.url).searchParams.get("slug") ?? "").toLowerCase());
+      const q = new URL(req.url).searchParams;
+      const page = await loadPage((q.get("slug") ?? "").toLowerCase(), kindOf(q.get("kind")));
       if (!page) return json({ error: "not_found" }, 404);
       return json({ title: page.title, active: page.is_active, mode: page.mode });
     }
@@ -49,13 +51,17 @@ Deno.serve(async (req) => {
     }
     if (typeof body.website === "string" && body.website.trim()) return json({ ok: true, groupUrl: null });
 
-    const page = await loadPage(typeof body.slug === "string" ? body.slug.toLowerCase() : "");
+    const page = await loadPage(typeof body.slug === "string" ? body.slug.toLowerCase() : "", kindOf(body.kind));
     if (!page) return json({ error: "not_found", message: "Página não encontrada" }, 404);
-    if (!page.is_active) return json({ error: "closed", message: "A lista dessa pré-venda já fechou." }, 410);
+    if (!page.is_active) return json({ error: "closed", message: page.mode === "register" ? "Esse link de cadastro não está mais ativo." : "A lista dessa pré-venda já fechou." }, 410);
 
-    const r = page.mode === "register"
-      ? await handleRegister(supabase, page, body)
-      : action === "sizes" ? await handleGroupSizes(supabase, page, body) : await handleGroupLead(supabase, page, body);
+    let r;
+    if (page.mode === "register") r = await handleRegister(supabase, page, body);
+    else if (!page.whatsapp_group_url) return json({ error: "server", message: "Página sem grupo configurado." }, 500);
+    else {
+      const groupPage = { ...page, whatsapp_group_url: page.whatsapp_group_url };
+      r = action === "sizes" ? await handleGroupSizes(supabase, groupPage, body) : await handleGroupLead(supabase, groupPage, body);
+    }
     return json(r.body, r.status);
   } catch (err) {
     if (err instanceof Response) return err;
