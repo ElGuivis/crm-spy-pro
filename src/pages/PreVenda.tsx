@@ -3,6 +3,10 @@ import { useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { GroupForm } from "@/components/presale/GroupForm";
 import { CardTitle, DISPLAY, OutbackShell } from "@/components/presale/OutbackShell";
+import { loadMetaPixel, trackMetaEvent } from "@/components/presale/metaPixel";
+
+const ENDPOINT = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/presale-signup`;
+const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
 
 // Página pública do grupo VIP da pré-venda (/vip/:slug): formulário curto -> planilha -> grupo do WhatsApp.
 
@@ -32,6 +36,22 @@ export default function PreVenda() {
   const [groupUrl, setGroupUrl] = useState<string | null | undefined>(undefined);
   const [askingSizes, setAskingSizes] = useState(false);
 
+  // pixel da Meta configurado na página (presale_pages.meta_pixel_id)
+  useEffect(() => {
+    if (!slug) return;
+    const ctrl = new AbortController();
+    fetch(`${ENDPOINT}?slug=${encodeURIComponent(slug)}&kind=group`, { headers: { apikey: ANON_KEY }, signal: ctrl.signal })
+      .then((r): Promise<unknown> | null => (r.ok ? r.json() : null))
+      .then((cfg) => { const id = (cfg as { metaPixelId?: string | null } | null)?.metaPixelId; if (id) loadMetaPixel(id); })
+      .catch((): void => undefined);
+    return () => ctrl.abort();
+  }, [slug]);
+
+  const onLead = (): void => {
+    trackMetaEvent("Lead");
+    setAskingSizes(true);
+  };
+
   return (
     <OutbackShell
       pageTitle="OUT/BACK! · Pré-venda no grupo VIP"
@@ -44,7 +64,7 @@ export default function PreVenda() {
       {groupUrl === undefined ? (
         <>
           {askingSizes ? null : <CardTitle title="BOTA TEU NOME NA LISTA" subtitle="Leva menos de um minuto. Depois é só entrar no grupo." />}
-          <GroupForm slug={slug} onDone={setGroupUrl} onSizesStep={() => setAskingSizes(true)} />
+          <GroupForm slug={slug} onDone={setGroupUrl} onSizesStep={onLead} />
         </>
       ) : (
         <Success groupUrl={groupUrl} />

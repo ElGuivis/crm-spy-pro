@@ -16,7 +16,7 @@ const json = (body: unknown, status = 200) =>
 
 interface PageRow {
   id: string; tenant_id: string; title: string; whatsapp_group_url: string | null;
-  is_active: boolean; mode: "group" | "register"; sheet_url: string | null;
+  is_active: boolean; mode: "group" | "register"; sheet_url: string | null; meta_pixel_id: string | null;
 }
 const SLUG = /^[a-z0-9-]{3,40}$/;
 
@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
   const loadPage = async (slug: string, mode: "group" | "register") => {
     if (!SLUG.test(slug)) return null;
     const { data } = await supabase.from("presale_pages")
-      .select("id, tenant_id, title, whatsapp_group_url, is_active, mode, sheet_url")
+      .select("id, tenant_id, title, whatsapp_group_url, is_active, mode, sheet_url, meta_pixel_id")
       .eq("slug", slug).eq("mode", mode).maybeSingle();
     return data as PageRow | null;
   };
@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
       const q = new URL(req.url).searchParams;
       const page = await loadPage((q.get("slug") ?? "").toLowerCase(), kindOf(q.get("kind")));
       if (!page) return json({ error: "not_found" }, 404);
-      return json({ title: page.title, active: page.is_active, mode: page.mode });
+      return json({ title: page.title, active: page.is_active, mode: page.mode, metaPixelId: page.meta_pixel_id });
     }
     if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
