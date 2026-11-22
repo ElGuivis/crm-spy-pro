@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import heroBg from "@/assets/outback/hero-bg.jpg";
 import logo from "@/assets/outback/logo.png";
-import { PresaleForm } from "@/components/presale/PresaleForm";
+import { GroupForm } from "@/components/presale/GroupForm";
 
 // Página pública de pré-venda (/vip/:slug). Visual da OUT/BACK! (mesmo do formulário "fimdaout"):
 // fundo quase preto, Bebas Neue nos títulos, Space Grotesk no texto, acento vermelho.
@@ -31,7 +31,7 @@ function Success({ groupUrl }: { groupUrl: string | null }) {
   return (
     <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="py-4 text-center" role="status">
       <h3 className={`${DISPLAY} text-4xl text-[#f2f2f2] tracking-wide mb-3`}>TÁ DENTRO!</h3>
-      <p className="text-[#f2f2f2]/80 mb-6">Cadastro feito. Agora entra no grupo, que é lá que o link da pré-venda cai primeiro.</p>
+      <p className="text-[#f2f2f2]/80 mb-6">Teu nome tá na lista. Agora entra no grupo, que é lá que o link da pré-venda cai primeiro.</p>
       {groupUrl ? (
         <a href={groupUrl} className={`block w-full bg-[#dc2828] text-white ${DISPLAY} text-xl tracking-[0.14em] py-4 rounded-[2px] hover:bg-[#f2f2f2] hover:text-[#080808] transition-colors`}>
           ENTRAR NO GRUPO VIP
@@ -89,8 +89,8 @@ export default function PreVenda() {
             {groupUrl === undefined ? (
               <>
                 <h2 id="presale-title" className={`${DISPLAY} text-3xl sm:text-4xl tracking-wide mb-2`}>BOTA TEU NOME NA LISTA</h2>
-                <p className="text-sm sm:text-base text-white/70 mb-6">Teu cadastro no site já fica feito. No dia, é só escolher a peça e fechar.</p>
-                <PresaleForm slug={slug} onDone={setGroupUrl} />
+                <p className="text-sm sm:text-base text-white/70 mb-6">Leva menos de um minuto. Depois é só entrar no grupo.</p>
+                <GroupForm slug={slug} onDone={setGroupUrl} />
               </>
             ) : (
               <Success groupUrl={groupUrl} />
