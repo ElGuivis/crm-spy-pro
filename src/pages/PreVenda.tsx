@@ -45,6 +45,7 @@ function Success({ groupUrl }: { groupUrl: string | null }) {
 export default function PreVenda() {
   const { slug = "" } = useParams();
   const [groupUrl, setGroupUrl] = useState<string | null | undefined>(undefined);
+  const [askingSizes, setAskingSizes] = useState(false);
   useOutbackFonts();
 
   useEffect(() => {
@@ -88,9 +89,13 @@ export default function PreVenda() {
             className="bg-[#141414]/90 backdrop-blur-sm border border-[#2e2e2e] p-5 sm:p-8 max-w-md mx-auto" aria-labelledby="presale-title">
             {groupUrl === undefined ? (
               <>
-                <h2 id="presale-title" className={`${DISPLAY} text-3xl sm:text-4xl tracking-wide mb-2`}>BOTA TEU NOME NA LISTA</h2>
-                <p className="text-sm sm:text-base text-white/70 mb-6">Leva menos de um minuto. Depois é só entrar no grupo.</p>
-                <GroupForm slug={slug} onDone={setGroupUrl} />
+                {askingSizes ? null : (
+                  <>
+                    <h2 id="presale-title" className={`${DISPLAY} text-3xl sm:text-4xl tracking-wide mb-2`}>BOTA TEU NOME NA LISTA</h2>
+                    <p className="text-sm sm:text-base text-white/70 mb-6">Leva menos de um minuto. Depois é só entrar no grupo.</p>
+                  </>
+                )}
+                <GroupForm slug={slug} onDone={setGroupUrl} onSizesStep={() => setAskingSizes(true)} />
               </>
             ) : (
               <Success groupUrl={groupUrl} />

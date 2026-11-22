@@ -25,9 +25,9 @@ async function post(payload: Record<string, unknown>): Promise<{ ok: boolean; bo
   return { ok: res.ok && !!body?.ok, body };
 }
 
-interface Props { slug: string; onDone: (groupUrl: string | null) => void }
+interface Props { slug: string; onDone: (groupUrl: string | null) => void; onSizesStep?: () => void }
 
-export function GroupForm({ slug, onDone }: Props) {
+export function GroupForm({ slug, onDone, onSizesStep }: Props) {
   const [step, setStep] = useState<"lead" | "sizes">("lead");
   const [lead, setLead] = useState<Lead>({ name: "", phone: "", email: "", website: "" });
   const [sizes, setSizes] = useState<Record<SizeKey, string>>({ shirtSize: "", pantsSize: "", shoeSize: "" });
@@ -60,6 +60,7 @@ export function GroupForm({ slug, onDone }: Props) {
       if (ok && body?.id) {
         setSignup({ id: body.id, groupUrl: body.groupUrl ?? null });
         setStep("sizes");
+        onSizesStep?.();
       } else if (ok) onDone(body?.groupUrl ?? null);
       else if (body?.field && body.field !== "form") setErrors({ [body.field]: body.message });
       else setServerError(body?.message ?? "Deu ruim. Tenta de novo aí.");
