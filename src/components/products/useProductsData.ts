@@ -3,7 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useSyncStatus } from "@/hooks/useSyncStatus";
-import { Product, SortOption } from "./products-helpers";
+import { Product } from "./products-helpers";
+import { useLiProductFilters } from "./useLiProductFilters";
 import { useProductsQueries } from "./useProductsQueries";
 import {
   splitParentsAndVariations,
@@ -11,9 +12,6 @@ import {
   variationCountOf,
   buildImageMap,
   productImageOf,
-  collectProductTypes,
-  computeMaxima,
-  filterAndSortProducts,
   buildPageNumbers,
   getMostRecentSync,
   formatLastSync,
@@ -23,18 +21,10 @@ export function useProductsData(integrationId: string) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { syncStatus, startSync, cancelSync } = useSyncStatus(integrationId, 'products');
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showOnlyInStock, setShowOnlyInStock] = useState(false);
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [checkingNew, setCheckingNew] = useState(false);
   const [updatingStock, setUpdatingStock] = useState(false);
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 10000]);
-  const [marginRange, setMarginRange] = useState<[number, number]>([0, 100]);
-  const [isPriceFilterActive, setIsPriceFilterActive] = useState(false);
-  const [isMarginFilterActive, setIsMarginFilterActive] = useState(false);
-  const [sortBy, setSortBy] = useState<SortOption>('name_asc');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(24);
 
@@ -51,18 +41,8 @@ export function useProductsData(integrationId: string) {
 
   const imageMap = useMemo(() => buildImageMap(parentProducts), [parentProducts]);
   const getProductImage = (product: Product) => productImageOf(product, imageMap);
-  const productTypes = useMemo(() => collectProductTypes(parentProducts), [parentProducts]);
-  const { maxPrice, maxMargin } = useMemo(() => computeMaxima(parentProducts), [parentProducts]);
-
-  const filteredProducts = useMemo(
-    () => filterAndSortProducts(
-      parentProducts,
-      { searchQuery, showOnlyInStock, selectedTypes, isPriceFilterActive, priceRange, isMarginFilterActive, marginRange, sortBy },
-      getTotalStock,
-    ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- getTotalStock depende só de variationDataMap
-    [parentProducts, searchQuery, showOnlyInStock, selectedTypes, isPriceFilterActive, priceRange, isMarginFilterActive, marginRange, sortBy, variationDataMap],
-  );
+  const { filters, setFilter, resetFilters, filterOptions, filteredProducts, anyFilter } =
+    useLiProductFilters(integrationId, parentProducts, getTotalStock);
 
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
   const paginatedProducts = useMemo(() => {
@@ -70,7 +50,7 @@ export function useProductsData(integrationId: string) {
     return filteredProducts.slice(startIndex, startIndex + itemsPerPage);
   }, [filteredProducts, currentPage, itemsPerPage]);
 
-  useEffect(() => { setCurrentPage(1); }, [searchQuery, showOnlyInStock, selectedTypes, isPriceFilterActive, priceRange, isMarginFilterActive, marginRange, sortBy, variationDataMap]);
+  useEffect(() => { setCurrentPage(1); }, [filters]);
 
   const invalidateProductQueries = () => {
     queryClient.invalidateQueries({ queryKey: ['li-products-all', integrationId] });
@@ -120,21 +100,6 @@ export function useProductsData(integrationId: string) {
     }
   };
 
-  const toggleType = (type: string) => {
-    setSelectedTypes(prev => prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]);
-  };
-
-  const clearFilters = () => {
-    setShowOnlyInStock(false);
-    setSelectedTypes([]);
-    setIsPriceFilterActive(false);
-    setIsMarginFilterActive(false);
-    setPriceRange([0, maxPrice]);
-    setMarginRange([0, maxMargin]);
-  };
-
-  const activeFiltersCount = (showOnlyInStock ? 1 : 0) + selectedTypes.length + (isPriceFilterActive ? 1 : 0) + (isMarginFilterActive ? 1 : 0);
-
   const goToPage = (page: number) => setCurrentPage(Math.max(1, Math.min(page, totalPages)));
   const getPageNumbers = () => buildPageNumbers(currentPage, totalPages);
 
@@ -164,19 +129,7 @@ export function useProductsData(integrationId: string) {
     checkingNew,
     updatingStock,
     // Filters
-    searchQuery, setSearchQuery,
-    showOnlyInStock, setShowOnlyInStock,
-    selectedTypes,
-    productTypes,
-    toggleType,
-    clearFilters,
-    activeFiltersCount,
-    isPriceFilterActive, setIsPriceFilterActive,
-    priceRange, setPriceRange,
-    isMarginFilterActive, setIsMarginFilterActive,
-    marginRange, setMarginRange,
-    maxPrice, maxMargin,
-    sortBy, setSortBy,
+    filters, setFilter, resetFilters, filterOptions, anyFilter,
     // Pagination
     currentPage, totalPages, itemsPerPage, setItemsPerPage,
     goToPage, getPageNumbers,

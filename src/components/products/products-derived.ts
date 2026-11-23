@@ -3,7 +3,6 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   Product,
-  SortOption,
   getRaw,
   getProductStock,
   normalizeLiId,
@@ -14,17 +13,6 @@ import {
 } from "./products-helpers";
 
 export type VariationData = { count: number; stock: number };
-
-export interface ProductFilters {
-  searchQuery: string;
-  showOnlyInStock: boolean;
-  selectedTypes: string[];
-  isPriceFilterActive: boolean;
-  priceRange: [number, number];
-  isMarginFilterActive: boolean;
-  marginRange: [number, number];
-  sortBy: SortOption;
-}
 
 /** Separa produtos "pai" das variações (tipo `atributo_opcao`) e agrega contagem/estoque por pai. */
 export function splitParentsAndVariations(allProducts: Product[] | undefined) {
@@ -91,65 +79,6 @@ export function productImageOf(product: Product, imageMap: Map<string, string>):
   }
   const baseName = getBaseName(product.name);
   return imageMap.get(baseName) || null;
-}
-
-export function collectProductTypes(parentProducts: Product[] | undefined): string[] {
-  if (!parentProducts) return [];
-  const types = new Set<string>();
-  parentProducts.forEach((product) => {
-    const type = normalizeType(product.name);
-    if (type) types.add(type);
-  });
-  return Array.from(types).sort();
-}
-
-export function computeMaxima(parentProducts: Product[] | undefined): { maxPrice: number; maxMargin: number } {
-  if (!parentProducts) return { maxPrice: 10000, maxMargin: 100 };
-  let maxP = 0;
-  let maxM = 0;
-  parentProducts.forEach((product) => {
-    const price = product.promotional_price || product.price || 0;
-    if (price > maxP) maxP = price;
-    const margin = calculateMargin(product);
-    if (margin !== null && margin > maxM) maxM = margin;
-  });
-  return { maxPrice: Math.ceil(maxP / 100) * 100, maxMargin: Math.min(Math.ceil(maxM / 10) * 10, 500) };
-}
-
-export function filterAndSortProducts(
-  parentProducts: Product[] | undefined,
-  f: ProductFilters,
-  getTotalStock: (product: Product) => number,
-): Product[] {
-  if (!parentProducts) return [];
-  const filtered = parentProducts.filter((product) => {
-    const matchesSearch = f.searchQuery === "" ||
-      product.name.toLowerCase().includes(f.searchQuery.toLowerCase()) ||
-      (product.sku && product.sku.toLowerCase().includes(f.searchQuery.toLowerCase()));
-    const totalStock = getTotalStock(product);
-    const matchesStock = !f.showOnlyInStock || totalStock > 0;
-    const productType = normalizeType(product.name);
-    const matchesType = f.selectedTypes.length === 0 || f.selectedTypes.includes(productType);
-    const productPrice = product.promotional_price || product.price || 0;
-    const matchesPrice = !f.isPriceFilterActive || (productPrice >= f.priceRange[0] && productPrice <= f.priceRange[1]);
-    const margin = calculateMargin(product);
-    const matchesMargin = !f.isMarginFilterActive || (margin !== null && margin >= f.marginRange[0] && margin <= f.marginRange[1]);
-    return matchesSearch && matchesStock && matchesType && matchesPrice && matchesMargin;
-  });
-
-  return filtered.sort((a, b) => {
-    switch (f.sortBy) {
-      case 'name_asc': return a.name.localeCompare(b.name, 'pt-BR');
-      case 'name_desc': return b.name.localeCompare(a.name, 'pt-BR');
-      case 'price_asc': return (a.promotional_price || a.price || 0) - (b.promotional_price || b.price || 0);
-      case 'price_desc': return (b.promotional_price || b.price || 0) - (a.promotional_price || a.price || 0);
-      case 'stock_asc': return getTotalStock(a) - getTotalStock(b);
-      case 'stock_desc': return getTotalStock(b) - getTotalStock(a);
-      case 'margin_asc': return (calculateMargin(a) ?? -Infinity) - (calculateMargin(b) ?? -Infinity);
-      case 'margin_desc': return (calculateMargin(b) ?? -Infinity) - (calculateMargin(a) ?? -Infinity);
-      default: return 0;
-    }
-  });
 }
 
 export function buildPageNumbers(currentPage: number, totalPages: number): (number | string)[] {

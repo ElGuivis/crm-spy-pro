@@ -1,17 +1,15 @@
-import { useState } from "react";
-import { Package, Search, Filter, Eye, Tag, Box, X, AlertTriangle, ChevronLeft, ChevronRight, ArrowUpDown, ArrowLeft, RefreshCw, Zap, Clock, CheckCircle, XCircle, Layers, Star, Ban, Download } from "lucide-react";
+import { Package, Box, X, AlertTriangle, ChevronLeft, ChevronRight, ArrowLeft, RefreshCw, Zap, Clock, CheckCircle, XCircle, Layers, Star, Ban, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { DeleteIntegrationDataButton } from "@/components/common/DeleteIntegrationDataButton";
 import { SyncStatusBadge } from "@/components/common/SyncStatusBadge";
 import { SyncProgressBanner } from "@/components/common/SyncProgressBanner";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CatalogFilterRow } from "@/components/catalogo/CatalogFilterRow";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import ProductDetailsDialog from "@/components/products/ProductDetailsDialog";
@@ -20,7 +18,7 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useProductsData } from "./useProductsData";
-import { Product, SORT_OPTIONS, ITEMS_PER_PAGE_OPTIONS, calculateMargin, getRaw, formatCurrency, getProductStock } from "./products-helpers";
+import { ITEMS_PER_PAGE_OPTIONS, calculateMargin, getRaw, formatCurrency, getProductStock } from "./products-helpers";
 
 interface ProductsContentProps {
   integrationId: string;
@@ -146,90 +144,36 @@ export function ProductsContent({ integrationId }: ProductsContentProps) {
         <Card><CardContent className="pt-6"><div className="flex items-center justify-between"><div><p className="text-sm text-muted-foreground">Última Sincronização</p><p className="text-sm font-medium">{data.formatLastSync(data.getMostRecentSync(data.integration) ?? null)}</p></div><Clock className="h-8 w-8 text-muted-foreground opacity-50" /></div></CardContent></Card>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-64">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Buscar por nome ou SKU..."
-            value={data.searchQuery}
-            onChange={(e) => data.setSearchQuery(e.target.value)}
-            className="h-10 w-full rounded-lg border border-input bg-background pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary"
-          />
-        </div>
-
-        {data.inactiveCount > 0 && (
-          <Button variant={data.showInactive ? "secondary" : "outline"} onClick={() => data.setShowInactive(!data.showInactive)}>
-            {data.showInactive ? "Ocultar inativos" : `Mostrar inativos (${data.inactiveCount})`}
-          </Button>
-        )}
-
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="gap-2">
-              <Filter className="h-4 w-4" />Filtros
-              {data.activeFiltersCount > 0 && <Badge variant="secondary" className="ml-1 h-5 w-5 rounded-full p-0 text-xs">{data.activeFiltersCount}</Badge>}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-96 bg-popover border border-border" align="end">
-            <div className="space-y-5">
-              <div className="flex items-center justify-between">
-                <h4 className="font-medium text-foreground">Filtros Avançados</h4>
-                {data.activeFiltersCount > 0 && <Button variant="ghost" size="sm" onClick={data.clearFilters} className="h-auto p-1 text-xs text-muted-foreground"><X className="h-3 w-3 mr-1" />Limpar</Button>}
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Estoque</Label>
-                <div className="flex items-center space-x-2">
-                  <Checkbox id="in-stock" checked={data.showOnlyInStock} onCheckedChange={(checked) => data.setShowOnlyInStock(checked === true)} />
-                  <label htmlFor="in-stock" className="text-sm text-muted-foreground cursor-pointer">Apenas com estoque</label>
-                </div>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">Faixa de Preço</Label>
-                  <Checkbox id="price-filter-active" checked={data.isPriceFilterActive} onCheckedChange={(checked) => data.setIsPriceFilterActive(checked === true)} />
-                </div>
-                <div className={data.isPriceFilterActive ? "" : "opacity-50 pointer-events-none"}>
-                  <Slider value={data.priceRange} onValueChange={(value) => data.setPriceRange(value as [number, number])} max={data.maxPrice} min={0} step={10} className="w-full" />
-                  <div className="flex justify-between text-xs text-muted-foreground mt-1"><span>{formatCurrency(data.priceRange[0])}</span><span>{formatCurrency(data.priceRange[1])}</span></div>
-                </div>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium">Margem de Lucro (%)</Label>
-                  <Checkbox id="margin-filter-active" checked={data.isMarginFilterActive} onCheckedChange={(checked) => data.setIsMarginFilterActive(checked === true)} />
-                </div>
-                <div className={data.isMarginFilterActive ? "" : "opacity-50 pointer-events-none"}>
-                  <Slider value={data.marginRange} onValueChange={(value) => data.setMarginRange(value as [number, number])} max={data.maxMargin} min={0} step={5} className="w-full" />
-                  <div className="flex justify-between text-xs text-muted-foreground mt-1"><span>{data.marginRange[0]}%</span><span>{data.marginRange[1]}%</span></div>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Tipos de Produto</Label>
-                <div className="max-h-32 overflow-y-auto space-y-2 pr-2">
-                  {data.productTypes.map(type => (
-                    <div key={type} className="flex items-center space-x-2">
-                      <Checkbox id={`type-${type}`} checked={data.selectedTypes.includes(type)} onCheckedChange={() => data.toggleType(type)} />
-                      <label htmlFor={`type-${type}`} className="text-sm text-muted-foreground cursor-pointer">{type}</label>
-                    </div>
-                  ))}
-                </div>
-              </div>
+      {/* Filtros: os mesmos do Catálogo WhatsApp */}
+      <Card>
+        <CardContent className="p-4 space-y-2">
+          <CatalogFilterRow filters={data.filters} setFilter={data.setFilter} options={data.filterOptions} />
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="flex items-center gap-1.5">
+              <Switch id="li-stock" checked={data.filters.onlyInStock} onCheckedChange={(v) => data.setFilter("onlyInStock", v)} />
+              <Label htmlFor="li-stock" className="text-sm">Só com estoque</Label>
             </div>
-          </PopoverContent>
-        </Popover>
-
-        <Select value={data.sortBy} onValueChange={(value) => data.setSortBy(value as typeof data.sortBy)}>
-          <SelectTrigger className="w-40"><ArrowUpDown className="h-4 w-4 mr-2" /><SelectValue /></SelectTrigger>
-          <SelectContent>{SORT_OPTIONS.map((option) => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}</SelectContent>
-        </Select>
-
-        <Select value={data.itemsPerPage.toString()} onValueChange={(value) => data.setItemsPerPage(Number(value))}>
-          <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-          <SelectContent>{ITEMS_PER_PAGE_OPTIONS.map(n => <SelectItem key={n} value={n.toString()}>{n} por pág</SelectItem>)}</SelectContent>
-        </Select>
-      </div>
+            {data.inactiveCount > 0 && (
+              <div className="flex items-center gap-1.5">
+                <Switch id="li-inactive" checked={data.showInactive} onCheckedChange={data.setShowInactive} />
+                <Label htmlFor="li-inactive" className="text-sm">Mostrar inativos ({data.inactiveCount})</Label>
+              </div>
+            )}
+            <div className="ml-auto flex items-center gap-2">
+              {data.anyFilter && (
+                <Button variant="ghost" size="sm" onClick={data.resetFilters} className="h-7 text-xs px-2">
+                  <X className="h-3 w-3 mr-1" />Limpar filtros
+                </Button>
+              )}
+              <Select value={data.itemsPerPage.toString()} onValueChange={(value) => data.setItemsPerPage(Number(value))}>
+                <SelectTrigger className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>{ITEMS_PER_PAGE_OPTIONS.map(n => <SelectItem key={n} value={n.toString()}>{n} por pág</SelectItem>)}</SelectContent>
+              </Select>
+              <Badge variant="secondary" className="text-xs">{data.filteredProducts.length} produto{data.filteredProducts.length === 1 ? "" : "s"}</Badge>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Products Grid */}
       {data.isLoading ? (

@@ -5,19 +5,6 @@ export type Product = Tables<'li_products'>;
 
 export const ITEMS_PER_PAGE_OPTIONS = [12, 24, 48, 96];
 
-export type SortOption = 'name_asc' | 'name_desc' | 'price_asc' | 'price_desc' | 'stock_asc' | 'stock_desc' | 'margin_asc' | 'margin_desc';
-
-export const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: 'name_asc', label: 'Nome (A-Z)' },
-  { value: 'name_desc', label: 'Nome (Z-A)' },
-  { value: 'price_asc', label: 'Preço (menor)' },
-  { value: 'price_desc', label: 'Preço (maior)' },
-  { value: 'stock_asc', label: 'Estoque (menor)' },
-  { value: 'stock_desc', label: 'Estoque (maior)' },
-  { value: 'margin_asc', label: 'Margem (menor)' },
-  { value: 'margin_desc', label: 'Margem (maior)' },
-];
-
 /** Extract data from raw_json */
 export const getRaw = (product: Product, key: string): unknown => {
   const raw = jsonAs<Record<string, unknown>>(product.raw_json);
