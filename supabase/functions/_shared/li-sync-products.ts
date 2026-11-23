@@ -11,6 +11,9 @@ type ServiceClient = ReturnType<typeof createClient>;
 
 const LI_API_BASE = "https://api.awsli.com.br/v1";
 
+/** estoque_quantidade do JSON do produto ("2.000" ou 2) → número ≥ 0 */
+const jsonStock = (v: unknown): number => Math.max(Number(v) || 0, 0);
+
 export async function updateProductInfo(
   supabase: ServiceClient,
   authHeader: string,
@@ -87,10 +90,10 @@ export async function updateProductInfo(
 
         const apiProduct = await response.json();
 
-        // FIXED: Fetch stock from the correct endpoint /produto_estoque/{id}
-        // The /produto/{id} endpoint does NOT return stock data
-        let estoqueQuantidade = 0;
-        let estoqueGerenciado = false;
+        // Estoque: /produto_estoque/{id} (quantidade_disponivel). Se a chamada falhar (429 da loja), vale o
+        // estoque_quantidade que o próprio produto traz; antes ficava 0 e a IA achava o produto esgotado (23/11/2026)
+        let estoqueQuantidade = jsonStock(apiProduct.estoque_quantidade);
+        let estoqueGerenciado = apiProduct.estoque_gerenciado === true;
         try {
           const stockResponse = await fetch(`${LI_API_BASE}/produto_estoque/${product.loja_integrada_product_id}`, {
             headers: { 'Authorization': authHeader }
@@ -271,10 +274,9 @@ export async function syncNewProducts(
           }
         }
 
-        // FIXED: Fetch stock from correct endpoint /produto_estoque/{id}
-        // The /produto/{id} endpoint does NOT return stock data
-        let estoqueQuantidade = 0;
-        let estoqueGerenciado = false;
+        // Estoque: /produto_estoque/{id}; se falhar, o estoque_quantidade do próprio produto (antes ficava 0)
+        let estoqueQuantidade = jsonStock(product.estoque_quantidade);
+        let estoqueGerenciado = product.estoque_gerenciado === true;
         try {
           const stockResponse = await fetch(`${LI_API_BASE}/produto_estoque/${product.id}`, {
             headers: { 'Authorization': authHeader }

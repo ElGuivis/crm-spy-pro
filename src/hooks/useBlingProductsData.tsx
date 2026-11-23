@@ -10,6 +10,8 @@ import { Tables } from "@/integrations/supabase/types";
 import { BLING_PRODUCT_SELECT } from "@/components/products/product-select-columns";
 import { brtDate } from "@/lib/brt";
 import { type BlingProductRow, normalizeBlingProducts } from "@/components/catalogo/catalogoHelpers";
+import { childrenStock, linkBlingVariations } from "@/components/catalogo/blingVariations";
+import { fetchBlingStockRows } from "@/components/catalogo/blingStockRows";
 import {
   type CatalogFilterState, DEFAULT_CATALOG_FILTERS, applyCatalogFilters, buildCatalogFilterOptions,
 } from "@/components/catalogo/catalogFilters";
@@ -79,31 +81,28 @@ export function useBlingProductsData(integrationId: string) {
     },
   });
 
-  const { data: variationData } = useQuery({
+  // linhas das variações (em páginas: antes parava em 1.000 das ~3 mil); são elas que o Bling atualiza a cada venda
+  const { data: stockRows } = useQuery({
     queryKey: ["bling-variation-data", integrationId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("bling_products")
-        .select("produto_pai_id, estoque_atual")
-        .eq("integration_id", integrationId)
-        .not("produto_pai_id", "is", null);
-      if (error) throw error;
-      const dataMap = new Map<number, { count: number; stock: number }>();
-      data?.forEach(p => {
-        if (p.produto_pai_id) {
-          const cur = dataMap.get(p.produto_pai_id) || { count: 0, stock: 0 };
-          dataMap.set(p.produto_pai_id, { count: cur.count + 1, stock: cur.stock + (p.estoque_atual || 0) });
-        }
-      });
-      return dataMap;
-    },
+    queryFn: () => fetchBlingStockRows(integrationId),
     enabled: !!integrationId,
   });
+  const kids = useMemo(
+    () => (stockRows && products ? linkBlingVariations(products, stockRows).kids : undefined),
+    [stockRows, products],
+  );
 
-  const getTotalStock = useCallback((product: BlingProduct): number =>
-    (product.estoque_atual || 0) +
-    (variationData?.get(product.bling_id)?.stock || 0) +
-    getInlineVariationStock(product), [variationData]);
+  const variationData = useMemo(() => {
+    const m = new Map<number, { count: number; stock: number }>();
+    kids?.forEach((rows, pid) => m.set(pid, { count: rows.length, stock: childrenStock(rows) }));
+    return m;
+  }, [kids]);
+
+  // variações em linhas valem sozinhas; o JSON do pai só conta quando não há linhas (antes somava os dois = estoque em dobro)
+  const getTotalStock = useCallback((product: BlingProduct): number => {
+    const rows = kids?.get(product.bling_id);
+    return Math.max(product.estoque_atual || 0, 0) + (rows?.length ? childrenStock(rows) : getInlineVariationStock(product));
+  }, [kids]);
 
   const getProductImage = (product: BlingProduct): string | null => {
     const imagens = product.imagens as Array<{ link: string }> | null;
@@ -137,14 +136,14 @@ export function useBlingProductsData(integrationId: string) {
   const { filteredProducts, filterOptions } = useMemo(() => {
     const rows = products ?? [];
     const byId = new Map(rows.map(p => [p.id, p]));
-    const all = normalizeBlingProducts(rows as unknown as BlingProductRow[])
+    const all = normalizeBlingProducts(rows as unknown as BlingProductRow[], kids)
       .map((c, i) => ({ ...c, stock: getTotalStock(rows[i]) }));
     const base = filters.onlyInStock ? all.filter(c => c.stock > 0) : all;
     return {
       filterOptions: buildCatalogFilterOptions(base),
       filteredProducts: applyCatalogFilters(base, filters).map(c => byId.get(c.id)!).filter(Boolean),
     };
-  }, [products, filters, getTotalStock]);
+  }, [products, kids, filters, getTotalStock]);
 
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
   const paginatedProducts = useMemo(() => {

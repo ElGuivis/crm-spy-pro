@@ -1,3 +1,5 @@
+import type { BlingChildRow } from "./blingVariations";
+
 /** Campos do `raw_json` da Loja Integrada lidos fora do catálogo (ex.: NotificationDropdown). */
 export interface LiProductRaw {
   tipo?: string;
@@ -23,6 +25,7 @@ export interface LiCatalogRow {
 /** Linha de `bling_products` como o catálogo a consulta. */
 export interface BlingProductRow {
   id: string;
+  bling_id?: number | null;
   nome: string;
   preco: number | null;
   estoque_atual: number | null;
@@ -66,10 +69,10 @@ export interface CatalogProduct {
 export function parseVariationString(v: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const part of v.split(";")) {
-    const i = part.indexOf(":");
-    if (i <= 0) continue;
-    const key = part.slice(0, i).trim().split(/\s+/).pop() ?? "";
-    const val = part.slice(i + 1).trim();
+    // último "chave:valor" da parte: o nome do produto vem antes e pode ter ":" ("Colab: Dexter Tamanho:M")
+    const m = part.match(/([^\s:]+):([^:]*)$/);
+    if (!m) continue;
+    const key = m[1].trim(), val = m[2].trim();
     if (key && val) out[key] = val;
   }
   return out;
@@ -122,10 +125,17 @@ export function normalizeLiCatalogRows(rows: LiCatalogRow[]): CatalogProduct[] {
   });
 }
 
-export function normalizeBlingProducts(blingProducts: BlingProductRow[]): CatalogProduct[] {
+/**
+ * `kids` = linhas das variações por bling_id do pai (`fetchBlingChildren`). Quando o pai tem linhas, estoque,
+ * tamanho e cor vêm delas (são as que o Bling atualiza a cada venda); o JSON `variacoes` do pai só vale sem elas.
+ */
+export function normalizeBlingProducts(blingProducts: BlingProductRow[], kids?: Map<number, BlingChildRow[]>): CatalogProduct[] {
   return blingProducts.map(p => {
     const imagens = p.imagens as Array<{ link: string }> | null;
-    const variacoes = p.variacoes as Array<{ nome?: string; estoque?: { saldoVirtualTotal?: number } }> | null;
+    const rows = p.bling_id != null ? kids?.get(Number(p.bling_id)) : undefined;
+    const variacoes = rows?.length
+      ? rows.map(k => ({ nome: k.nome ?? "", estoque: { saldoVirtualTotal: Number(k.estoque_atual) || 0 } }))
+      : p.variacoes as Array<{ nome?: string; estoque?: { saldoVirtualTotal?: number } }> | null;
     const variants: CatalogVariant[] = (variacoes ?? [])
       .map(v => ({ attrs: parseVariationString(v.nome || ""), stock: Math.max(v.estoque?.saldoVirtualTotal || 0, 0) }))
       .filter(v => v.stock > 0 && Object.keys(v.attrs).length > 0);

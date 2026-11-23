@@ -7,6 +7,8 @@ import {
 import {
   type CatalogFilterState, DEFAULT_CATALOG_FILTERS, applyCatalogFilters, baseCatalog, buildCatalogFilterOptions,
 } from "@/components/catalogo/catalogFilters";
+import { linkBlingVariations } from "@/components/catalogo/blingVariations";
+import { fetchBlingStockRows } from "@/components/catalogo/blingStockRows";
 
 const BLING_PAGE = 1000; // limite de linhas por resposta do PostgREST
 
@@ -14,7 +16,7 @@ async function fetchAllBling(integrationId: string): Promise<BlingProductRow[]> 
   const all: BlingProductRow[] = [];
   for (let from = 0; ; from += BLING_PAGE) {
     const { data, error } = await supabase.from("bling_products")
-      .select("id, nome, preco, estoque_atual, imagem_url, imagens, codigo, variacoes, created_at")
+      .select("id, bling_id, nome, preco, estoque_atual, imagem_url, imagens, codigo, variacoes, created_at")
       .eq("integration_id", integrationId).is("produto_pai_id", null)
       .order("id").range(from, from + BLING_PAGE - 1);
     if (error) throw error;
@@ -60,7 +62,12 @@ export function useCatalogoProducts(integrationId: string, enabled = true) {
 
   const { data: blingProducts, isLoading: blingLoading, error: blingError } = useQuery({
     queryKey: ["catalogo-bling-products", integrationId],
-    queryFn: async () => normalizeBlingProducts(await fetchAllBling(integrationId)),
+    queryFn: async () => {
+      const [parents, rows] = await Promise.all([fetchAllBling(integrationId), fetchBlingStockRows(integrationId)]);
+      const { kids, variantIds } = linkBlingVariations(parents, rows);
+      // variação ainda sem produto_pai_id não vira produto próprio (sairia duplicado, com "Tamanho:P" no nome)
+      return normalizeBlingProducts(parents.filter(p => p.bling_id == null || !variantIds.has(Number(p.bling_id))), kids);
+    },
     enabled: enabled && !!integration && isBling,
     staleTime: 60_000,
   });

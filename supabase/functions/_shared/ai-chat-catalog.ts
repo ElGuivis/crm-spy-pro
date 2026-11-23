@@ -74,7 +74,7 @@ export async function buildAvailableProductsInfo(
     // LI: funcao SQL que compara sem acento ("bone" acha "Boné"); ilike nao casa acento.
     if (isLI) return await supabase.rpc('search_available_products', { p_tenant: tenantId, p_terms: terms, p_mode: mode, p_limit: terms.length ? 20 : 10 });
     let query = supabase.from(table).select(columns).eq('tenant_id', tenantId);
-    query = isLI ? query.eq('active', true).gt('stock', 0) : query.eq('situacao', 'Ativo').gt('estoque_atual', 0);
+    query = isLI ? query.eq('active', true).gt('stock', 0) : query.in('situacao', ['A', 'Ativo']).gt('estoque_atual', 0); // o sync grava 'A' (com 'Ativo' a IA não achava nada do Bling)
     if (terms.length && mode === 'all') for (const t of terms) query = query.ilike(nameCol, `%${t}%`);
     if (terms.length && mode === 'any') query = query.or(terms.map((t) => `${nameCol}.ilike.%${t}%`).join(','));
     return await query.order(isLI ? 'stock' : 'estoque_atual', { ascending: false }).limit(terms.length ? 20 : 10);
