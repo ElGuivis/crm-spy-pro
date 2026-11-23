@@ -82,10 +82,17 @@ export const formatCatalogCurrency = (value: number | null) => {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 };
 
-/** Miniatura da CDN da loja (380x380) para a grade de escolha; outras origens ficam como estão. */
-export function thumbUrl(url: string): string {
-  const m = url.match(/^(https?:\/\/cdn\.awsli\.com\.br)\/(?!\d+x\d+\/)(.+)$/i);
-  return m ? `${m[1]}/380x380/${m[2]}` : url;
+/**
+ * Miniatura para grades: CDN da Loja Integrada (380x380) ou nosso Storage (foto do Bling copiada,
+ * reduzida na hora pelo imgproxy do servidor). Outras origens ficam como estão.
+ */
+export function thumbUrl(url: string, size = 500): string {
+  const li = url.match(/^(https?:\/\/cdn\.awsli\.com\.br)\/(?!\d+x\d+\/)(.+)$/i);
+  if (li) return `${li[1]}/380x380/${li[2]}`;
+  if (url.includes("/storage/v1/object/public/") && !url.includes("?")) {
+    return `${url.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/")}?width=${size}&height=${size}&resize=contain&quality=80`;
+  }
+  return url;
 }
 
 export function normalizeLiCatalogRows(rows: LiCatalogRow[]): CatalogProduct[] {

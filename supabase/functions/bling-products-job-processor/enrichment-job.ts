@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 type ServiceClient = ReturnType<typeof createClient>;
+import { mirrorBlingImages } from '../_shared/bling-images.ts';
 import { BLING_API_BASE, ENRICHMENT_BATCH_SIZE, ENRICHMENT_DELAY, type BlingConnection, type Log, delay, ensureValidToken, updateJobProgress, getJobStatus } from './job-helpers.ts';
 
 async function fetchProductDetails(accessToken: string, productId: number, log: Log): Promise<Record<string, unknown> | null> {
@@ -13,31 +14,6 @@ async function fetchProductDetails(accessToken: string, productId: number, log: 
   }
   const result = await response.json();
   return result.data || null;
-}
-
-function extractImages(productDetail: Record<string, unknown>): Array<{ link: string; linkMiniatura?: string; ordem?: number }> {
-  const images: Array<{ link: string; linkMiniatura?: string; ordem?: number }> = [];
-  const midia = productDetail?.midia as Record<string, unknown>;
-  const imgObj = midia?.imagens as Record<string, unknown>;
-
-  const internas = imgObj?.internas;
-  if (Array.isArray(internas)) {
-    (internas as Record<string, unknown>[]).forEach((img, index) => {
-      if (img.link) images.push({ link: img.link as string, linkMiniatura: img.linkMiniatura as string | undefined, ordem: (img.ordem ?? index) as number });
-    });
-  }
-
-  const externas = imgObj?.externas;
-  if (Array.isArray(externas)) {
-    (externas as Record<string, unknown>[]).forEach((img, index) => {
-      if (img.link) images.push({ link: img.link as string, ordem: ((Array.isArray(internas) ? internas.length : 0) + index) });
-    });
-  }
-
-  if (images.length === 0 && productDetail?.imagemURL) {
-    images.push({ link: productDetail.imagemURL as string, ordem: 0 });
-  }
-  return images;
 }
 
 function extractVariations(productDetail: Record<string, unknown>): Record<string, unknown>[] {
@@ -64,7 +40,12 @@ export async function processEnrichmentJob(
   const jobId = job.id;
   const integrationId = job.integration_id;
   let enriched = 0;
-  const offset = (job.resume_page as number) || 0;
+  // Sempre do começo: quem já foi enriquecido sai do filtro `imagens IS NULL` (o offset antigo pulava
+  // produtos). Produto sem foto ou que falhou de vez fica com imagens = [] para não voltar.
+  const offset = 0;
+  const startedAt = Date.now();
+  const BUDGET_MS = 100_000; // a cópia das fotos leva tempo; o resto fica para a próxima chamada
+  const known = new Map<string, string>(); // fotos já copiadas nesta chamada (pai e variações repetem)
 
   try {
     const accessToken = await ensureValidToken(supabase, connection);
@@ -91,17 +72,23 @@ export async function processEnrichmentJob(
     log.info(`[ENRICHMENT] Processing ${products.length} products from offset ${offset}`);
 
     for (const product of products as Record<string, unknown>[]) {
+      if (Date.now() - startedAt > BUDGET_MS) { log.info('[ENRICHMENT] Time budget reached, continuing next run'); break; }
       const { cancelled } = await getJobStatus(supabase, jobId as string);
       if (cancelled) { log.info(`[ENRICHMENT] Job ${jobId} cancelled`); return { success: true, synced: enriched, completed: false, error: 'CANCELLED' }; }
 
       try {
         const details = await fetchProductDetails(accessToken, product.bling_id as number, log);
+        if (!details) {
+          await supabase.from('bling_products').update({ imagens: [], updated_at: new Date().toISOString() }).eq('id', product.id);
+        }
         if (details) {
-          const images = extractImages(details);
+          // fotos originais copiadas para o nosso Storage (o link do Bling vence em 7 dias)
+          const { images, failed } = await mirrorBlingImages(supabase, job.tenant_id as string, details, known);
+          if (failed) log.info(`[ENRICHMENT] ${failed} foto(s) do produto ${product.bling_id} não copiadas`);
           const variations = extractVariations(details);
           const parentId = getParentProductId(details);
           const updateData: Record<string, unknown> = {
-            imagens: images.length > 0 ? images : null, variacoes: variations.length > 0 ? variations : null, produto_pai_id: parentId,
+            imagens: images, ...(images[0] ? { imagem_url: images[0].link } : {}), variacoes: variations.length > 0 ? variations : null, produto_pai_id: parentId,
             descricao_completa: details.descricao || null, descricao_curta: details.descricaoCurta || null, observacoes: details.observacoes || null,
             ncm: (details.tributacao as Record<string, unknown>)?.ncm || null, cest: (details.tributacao as Record<string, unknown>)?.cest || null,
             origem: (details.tributacao as Record<string, unknown>)?.origem ?? null, tributacao: details.tributacao || null,
@@ -137,7 +124,7 @@ export async function processEnrichmentJob(
       }
     }
 
-    const newOffset = offset + products.length;
+    const newOffset = offset;
     await supabase.from('bling_sync_jobs').update({
       status: 'pending', resume_page: newOffset,
       processed_count: ((job.processed_count as number) || 0) + enriched,

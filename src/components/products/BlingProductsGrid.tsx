@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/select";
 import { Tables } from "@/integrations/supabase/types";
 import { ReactNode } from "react";
+import { thumbUrl } from "@/components/catalogo/catalogoHelpers";
 
 type BlingProduct = Tables<"bling_products">;
 
@@ -89,7 +90,7 @@ export function BlingProductsGrid({
             >
               <div className="aspect-square bg-muted flex items-center justify-center relative">
                 {imageUrl ? (
-                  <img src={imageUrl} alt={product.nome} className="w-full h-full object-cover"
+                  <img src={thumbUrl(imageUrl)} alt={product.nome} loading="lazy" className="w-full h-full object-cover"
                     onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
                 ) : (
                   <div className="flex flex-col items-center gap-1">

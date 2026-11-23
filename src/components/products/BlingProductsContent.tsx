@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
-import { Search, ArrowLeft, RefreshCw, ArrowUpDown, Download, XCircle, PackageSearch, RotateCw, ImageIcon } from "lucide-react";
+import { ArrowLeft, RefreshCw, Download, XCircle, PackageSearch, RotateCw, ImageIcon, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { CatalogFilterRow } from "@/components/catalogo/CatalogFilterRow";
 import { Label } from "@/components/ui/label";
 import { SyncStatusBadge } from "@/components/common/SyncStatusBadge";
 import { DeleteIntegrationDataButton } from "@/components/common/DeleteIntegrationDataButton";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useNavigate } from "react-router-dom";
 import { useBlingSync } from "@/hooks/useBlingSync";
 import { BlingProductDetailsDialog } from "./BlingProductDetailsDialog";
@@ -19,14 +20,6 @@ import { Tables } from "@/integrations/supabase/types";
 
 type BlingProduct = Tables<"bling_products">;
 
-const SORT_OPTIONS = [
-  { value: "name_asc", label: "Nome (A-Z)" },
-  { value: "name_desc", label: "Nome (Z-A)" },
-  { value: "price_asc", label: "Preço (menor)" },
-  { value: "price_desc", label: "Preço (maior)" },
-  { value: "stock_asc", label: "Estoque (menor)" },
-  { value: "stock_desc", label: "Estoque (maior)" },
-] as const;
 
 interface BlingProductsContentProps {
   integrationId: string;
@@ -43,8 +36,7 @@ export function BlingProductsContent({ integrationId }: BlingProductsContentProp
 
   const {
     integration, products, variationData, isLoading, refetchProducts,
-    searchQuery, setSearchQuery, showOnlyInStock, setShowOnlyInStock,
-    sortBy, setSortBy, currentPage, setCurrentPage, itemsPerPage, setItemsPerPage,
+    filters, setFilter, resetFilters, filterOptions, currentPage, setCurrentPage, itemsPerPage, setItemsPerPage,
     isExporting, handleExportCSV, filteredProducts, paginatedProducts, totalPages,
     getTotalStock, getProductImage, getImageCount, formatLastSync, formatCurrency, getStockBadge,
   } = useBlingProductsData(integrationId);
@@ -58,7 +50,8 @@ export function BlingProductsContent({ integrationId }: BlingProductsContentProp
     return () => { supabase.removeChannel(channel); };
   }, [integrationId, refetchProducts]);
 
-  useEffect(() => { setCurrentPage(1); }, [searchQuery, showOnlyInStock, sortBy, setCurrentPage]);
+  useEffect(() => { setCurrentPage(1); }, [filters, setCurrentPage]);
+  const anyFilter = !!(filters.search || filters.type || filters.color || filters.size || filters.onlyInStock);
 
   const isSyncing = syncStatus === "syncing" || syncStatus === "pending";
 
@@ -148,41 +141,30 @@ export function BlingProductsContent({ integrationId }: BlingProductsContentProp
         ))}
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-4 items-center">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <input type="text" placeholder="Buscar por nome ou código..."
-            value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border rounded-md bg-background" />
-        </div>
-        <div className="flex items-center gap-2">
-          <Checkbox id="inStock" checked={showOnlyInStock}
-            onCheckedChange={v => setShowOnlyInStock(v as boolean)} />
-          <Label htmlFor="inStock" className="text-sm cursor-pointer">Apenas em estoque</Label>
-        </div>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm">
-              <ArrowUpDown className="h-4 w-4 mr-2" />Ordenar
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-48">
-            <div className="space-y-2">
-              {SORT_OPTIONS.map(o => (
-                <Button key={o.value} variant={sortBy === o.value ? "secondary" : "ghost"}
-                  size="sm" className="w-full justify-start" onClick={() => setSortBy(o.value as typeof sortBy)}>
-                  {o.label}
-                </Button>
-              ))}
+      {/* Filtros: os mesmos do Catálogo WhatsApp */}
+      <Card>
+        <CardContent className="p-4 space-y-2">
+          <CatalogFilterRow filters={filters} setFilter={setFilter} options={filterOptions} />
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <div className="flex items-center gap-1.5">
+              <Switch id="bling-stock" checked={filters.onlyInStock} onCheckedChange={(v) => setFilter("onlyInStock", v)} />
+              <Label htmlFor="bling-stock" className="text-sm">Só com estoque</Label>
             </div>
-          </PopoverContent>
-        </Popover>
-      </div>
+            <div className="ml-auto flex items-center gap-2">
+              {anyFilter && (
+                <Button variant="ghost" size="sm" onClick={resetFilters} className="h-7 text-xs px-2">
+                  <X className="h-3 w-3 mr-1" />Limpar filtros
+                </Button>
+              )}
+              <Badge variant="secondary" className="text-xs">{filteredProducts.length} produto{filteredProducts.length === 1 ? "" : "s"}</Badge>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <BlingProductsGrid
         isLoading={isLoading} products={paginatedProducts} variationData={variationData}
-        searchQuery={searchQuery} totalPages={totalPages} currentPage={currentPage}
+        searchQuery={filters.search} totalPages={totalPages} currentPage={currentPage}
         itemsPerPage={itemsPerPage} filteredTotal={filteredProducts.length}
         setCurrentPage={setCurrentPage} setItemsPerPage={setItemsPerPage}
         getTotalStock={getTotalStock} getProductImage={getProductImage}

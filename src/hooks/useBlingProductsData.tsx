@@ -9,9 +9,14 @@ import { ptBR } from "date-fns/locale";
 import { Tables } from "@/integrations/supabase/types";
 import { BLING_PRODUCT_SELECT } from "@/components/products/product-select-columns";
 import { brtDate } from "@/lib/brt";
+import { type BlingProductRow, normalizeBlingProducts } from "@/components/catalogo/catalogoHelpers";
+import {
+  type CatalogFilterState, DEFAULT_CATALOG_FILTERS, applyCatalogFilters, buildCatalogFilterOptions,
+} from "@/components/catalogo/catalogFilters";
+
+const PAGE = 1000; // limite de linhas por resposta do PostgREST
 
 type BlingProduct = Tables<"bling_products">;
-type SortOption = "name_asc" | "name_desc" | "price_asc" | "price_desc" | "stock_asc" | "stock_desc";
 
 /** Estoque somado das variações que já vêm dentro do próprio produto. */
 const getInlineVariationStock = (product: BlingProduct): number => {
@@ -24,9 +29,12 @@ export function useBlingProductsData(integrationId: string) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showOnlyInStock, setShowOnlyInStock] = useState(false);
-  const [sortBy, setSortBy] = useState<SortOption>("name_asc");
+  // mesmos filtros do Catálogo WhatsApp (busca, tipo, cor, tamanho, ordem, só com estoque)
+  const [filters, setFilters] = useState<CatalogFilterState>({ ...DEFAULT_CATALOG_FILTERS, onlyInStock: false });
+  const setFilter = useCallback(<K extends keyof CatalogFilterState>(key: K, value: CatalogFilterState[K]) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+  }, []);
+  const resetFilters = useCallback(() => setFilters(prev => ({ ...DEFAULT_CATALOG_FILTERS, onlyInStock: false, sort: prev.sort })), []);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(24);
   const [isExporting, setIsExporting] = useState(false);
@@ -51,16 +59,23 @@ export function useBlingProductsData(integrationId: string) {
   const { data: products, isLoading, refetch: refetchProducts } = useQuery({
     queryKey: ["bling-products", integrationId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("bling_products")
-        .select(BLING_PRODUCT_SELECT)
-        .eq("integration_id", integrationId)
-        .is("produto_pai_id", null)
-        .or("formato.eq.V,and(formato.eq.S,nome.not.ilike.%Tamanho:%,nome.not.ilike.%;%)")
-        .order("nome", { ascending: true })
-        .returns<BlingProduct[]>();
-      if (error) throw error;
-      return data;
+      // em páginas: uma consulta só parava em 1.000 produtos
+      const all: BlingProduct[] = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+          .from("bling_products")
+          .select(BLING_PRODUCT_SELECT)
+          .eq("integration_id", integrationId)
+          .is("produto_pai_id", null)
+          .or("formato.eq.V,and(formato.eq.S,nome.not.ilike.%Tamanho:%,nome.not.ilike.%;%)")
+          .order("nome", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, from + PAGE - 1)
+          .returns<BlingProduct[]>();
+        if (error) throw error;
+        all.push(...(data ?? []));
+        if (!data || data.length < PAGE) return all;
+      }
     },
   });
 
@@ -119,28 +134,17 @@ export function useBlingProductsData(integrationId: string) {
     return <Badge className="bg-green-500 text-white">{qty} un</Badge>;
   };
 
-  const filteredProducts = useMemo(() => {
-    if (!products) return [];
-    return products
-      .filter(p => {
-        const matchesSearch = !searchQuery ||
-          p.nome.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (p.codigo && p.codigo.toLowerCase().includes(searchQuery.toLowerCase()));
-        const total = (p.estoque_atual || 0) + (variationData?.get(p.bling_id)?.stock || 0) + getInlineVariationStock(p);
-        return matchesSearch && (!showOnlyInStock || total > 0);
-      })
-      .sort((a, b) => {
-        switch (sortBy) {
-          case "name_asc": return a.nome.localeCompare(b.nome, "pt-BR");
-          case "name_desc": return b.nome.localeCompare(a.nome, "pt-BR");
-          case "price_asc": return (a.preco || 0) - (b.preco || 0);
-          case "price_desc": return (b.preco || 0) - (a.preco || 0);
-          case "stock_asc": return getTotalStock(a) - getTotalStock(b);
-          case "stock_desc": return getTotalStock(b) - getTotalStock(a);
-          default: return 0;
-        }
-      });
-  }, [products, searchQuery, showOnlyInStock, sortBy, variationData, getTotalStock]);
+  const { filteredProducts, filterOptions } = useMemo(() => {
+    const rows = products ?? [];
+    const byId = new Map(rows.map(p => [p.id, p]));
+    const all = normalizeBlingProducts(rows as unknown as BlingProductRow[])
+      .map((c, i) => ({ ...c, stock: getTotalStock(rows[i]) }));
+    const base = filters.onlyInStock ? all.filter(c => c.stock > 0) : all;
+    return {
+      filterOptions: buildCatalogFilterOptions(base),
+      filteredProducts: applyCatalogFilters(base, filters).map(c => byId.get(c.id)!).filter(Boolean),
+    };
+  }, [products, filters, getTotalStock]);
 
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
   const paginatedProducts = useMemo(() => {
@@ -201,9 +205,7 @@ export function useBlingProductsData(integrationId: string) {
 
   return {
     integration, products, variationData, isLoading, refetchProducts,
-    searchQuery, setSearchQuery,
-    showOnlyInStock, setShowOnlyInStock,
-    sortBy, setSortBy,
+    filters, setFilter, resetFilters, filterOptions,
     currentPage, setCurrentPage,
     itemsPerPage, setItemsPerPage,
     isExporting, handleExportCSV,

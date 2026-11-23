@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Package, ImageOff, Images } from "lucide-react";
-import { type CatalogProduct, formatCatalogCurrency, MAX_CATALOG_PHOTOS } from "./catalogoHelpers";
+import { type CatalogProduct, formatCatalogCurrency, MAX_CATALOG_PHOTOS, thumbUrl } from "./catalogoHelpers";
 import { CatalogCardBits } from "./CatalogCardBits";
 
 interface Props {
@@ -48,7 +48,7 @@ export function CatalogoProductGrid({ isLoading, products, selectedIds, onToggle
             <CardContent className="p-0">
               <div className="relative aspect-square bg-muted rounded-t-lg overflow-hidden">
                 {product.imageUrl ? (
-                  <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" loading="lazy" />
+                  <img src={thumbUrl(product.imageUrl)} alt={product.name} className="w-full h-full object-cover" loading="lazy" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <ImageOff className="h-8 w-8 text-muted-foreground" />

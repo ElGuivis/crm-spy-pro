@@ -3,6 +3,7 @@ type ServiceClient = ReturnType<typeof createClient>;
 import type { Logger } from "../_shared/correlation.ts";
 import { getValidAccessToken } from './webhook-helpers.ts';
 import { loadChannelScope } from '../_shared/bling-channels.ts';
+import { mirrorBlingImages } from '../_shared/bling-images.ts';
 
 const BLING_API_BASE = 'https://api.bling.com.br/Api/v3';
 
@@ -43,14 +44,8 @@ export async function processProductEvent(
   const product = await fetchProductDetails(accessToken, productId, log);
   if (!product) return { success: false, message: 'Não foi possível buscar detalhes do produto' };
 
-  let imagens: Array<{ link: string }> = [];
-  const midia = product.midia as Record<string, unknown>;
-  if (midia?.imagens) {
-    const imgObj = midia.imagens as Record<string, unknown>;
-    const internas = (imgObj.internas || []) as Record<string, unknown>[];
-    const externas = (imgObj.externas || []) as Record<string, unknown>[];
-    imagens = [...internas, ...externas].filter(img => img.link).map(img => ({ link: img.link as string }));
-  }
+  // fotos copiadas para o nosso Storage (o link do Bling vence em 7 dias)
+  const { images: imagens } = await mirrorBlingImages(supabase, tenantId, product);
 
   const productData = {
     bling_id: product.id, integration_id: integrationId, tenant_id: tenantId,
