@@ -7,8 +7,9 @@ import { CardTitle, DISPLAY, OutbackShell } from "@/components/presale/OutbackSh
 // Página pública de cadastro (/cadastro/:slug): link mandado no atendimento do WhatsApp.
 // O cadastro vira contato no Bling da loja, para lançar a venda no nome da pessoa.
 
-export default function Cadastro() {
-  const { slug = "" } = useParams();
+export default function Cadastro({ slug: fixedSlug }: { slug?: string } = {}) {
+  const params = useParams();
+  const slug = fixedSlug ?? params.slug ?? "";
   const [done, setDone] = useState(false);
 
   return (

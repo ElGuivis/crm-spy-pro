@@ -11,6 +11,7 @@ import { NewOrdersProvider } from "@/contexts/NewOrdersContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 import { Suspense, lazy } from "react";
+import BrandApp, { brandSlug } from "@/components/presale/BrandApp";
 import { SkeletonStats } from "@/components/common/SkeletonLoaders";
 
 // Eager-loaded (critical path)
@@ -68,7 +69,7 @@ const queryClient = new QueryClient({
   },
 });
 
-const App = () => (
+const CrmApp = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <TokenProvider>
@@ -139,5 +140,8 @@ const App = () => (
     </AuthProvider>
   </QueryClientProvider>
 );
+
+// No domínio de uma loja (ex.: lojaoutback.com.br) só sobem as páginas públicas dela.
+const App = () => (brandSlug ? <BrandApp slug={brandSlug} /> : <CrmApp />);
 
 export default App;

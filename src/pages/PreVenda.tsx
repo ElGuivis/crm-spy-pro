@@ -31,8 +31,9 @@ function Success({ groupUrl }: { groupUrl: string | null }) {
   );
 }
 
-export default function PreVenda() {
-  const { slug = "" } = useParams();
+export default function PreVenda({ slug: fixedSlug }: { slug?: string } = {}) {
+  const params = useParams();
+  const slug = fixedSlug ?? params.slug ?? "";
   const [groupUrl, setGroupUrl] = useState<string | null | undefined>(undefined);
   const [askingSizes, setAskingSizes] = useState(false);
 

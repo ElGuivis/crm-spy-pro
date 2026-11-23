@@ -27,7 +27,7 @@ export function sendLeadToMeta(sb: SupabaseClient, page: MetaPage, lead: Lead, r
       ? await sendMetaEvent({
           pixelId: page.meta_pixel_id!, token, testEventCode: page.meta_test_event_code,
           eventName: "Lead", eventId,
-          eventSourceUrl: url.startsWith("https://spypro.com.br/") ? url : null,
+          eventSourceUrl: url.startsWith("https://") ? url : null,
           user: {
             email: lead.email, phone: lead.phone, firstName, lastName: rest.join(" "), externalId: lead.signupId,
             ip: req.ip, userAgent: req.userAgent?.slice(0, 400) ?? null,
@@ -57,7 +57,7 @@ export function sendViewToMeta(sb: SupabaseClient, page: MetaPage, rawMeta: unkn
     const r = await sendMetaEvent({
       pixelId: page.meta_pixel_id!, token, testEventCode: page.meta_test_event_code,
       eventName: "ViewContent", eventId,
-      eventSourceUrl: url.startsWith("https://spypro.com.br/") ? url : null,
+      eventSourceUrl: url.startsWith("https://") ? url : null,
       user: { ip: req.ip, userAgent: req.userAgent?.slice(0, 400) ?? null, fbp: str(meta.fbp, 120) || null, fbc: str(meta.fbc, 300) || null },
     });
     if (!r.ok) console.error("[presale-signup] meta capi view", r.error);
