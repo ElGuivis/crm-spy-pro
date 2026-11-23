@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 type ServiceClient = ReturnType<typeof createClient>;
 import type { Logger } from "../_shared/correlation.ts";
 import { getValidAccessToken } from './webhook-helpers.ts';
+import { loadChannelScope } from '../_shared/bling-channels.ts';
 
 const BLING_API_BASE = 'https://api.bling.com.br/Api/v3';
 
@@ -26,6 +27,14 @@ export async function processProductEvent(
     if (error) { log.error('[Bling Webhook] Erro ao deletar produto:', error); return { success: false, message: error.message }; }
     log.info('[Bling Webhook] Produto deletado com sucesso:', productId);
     return { success: true, message: 'Produto deletado' };
+  }
+
+  // Produtos de um canal só: o aviso não diz o canal do produto, então aqui só se atualiza produto
+  // que já está na base; produto novo vinculado ao canal entra pela sincronização periódica (idLoja).
+  const scope = await loadChannelScope(supabase, integrationId);
+  if (scope.productStoreId) {
+    const { data: known } = await supabase.from('bling_products').select('id').eq('bling_id', productId).eq('integration_id', integrationId).maybeSingle();
+    if (!known) return { success: true, message: 'Produto fora do canal escolhido (ignorado)' };
   }
 
   const accessToken = await getValidAccessToken(supabase, tenantId, log);

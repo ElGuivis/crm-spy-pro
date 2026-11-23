@@ -6,7 +6,6 @@ import {
   type BlingSyncStatus,
   type BlingSyncJob,
 } from "./useBlingSyncRealtime";
-import { jsonAs } from "@/lib/json-access";
 
 const log = createLogger("useBlingSync");
 
@@ -15,7 +14,7 @@ export type { BlingSyncStatus };
 interface UseBlingSync {
   syncStatus: BlingSyncStatus;
   currentJob: BlingSyncJob | null;
-  startSync: (storeIds?: number[]) => Promise<void>;
+  startSync: () => Promise<void>;
   checkForNew: () => Promise<void>;
   updateStock: () => Promise<void>;
   cancelSync: () => Promise<void>;
@@ -40,12 +39,12 @@ export function useBlingSync(integrationId: string, syncType: string = "all"): U
     setSyncStatus("syncing"); setCurrentJob(null); setSyncLogId(null); setIsStuck(false);
   };
 
-  const startSync = useCallback(async (storeIds?: number[]) => {
+  const startSync = useCallback(async () => {
     if (!integrationId) { log.error("[useBlingSync] No integrationId provided"); return; }
     resetBeforeStart();
     try {
       const { data, error } = await supabase.functions.invoke("bling-sync", {
-        body: { integrationId, syncType, storeIds, incremental: false },
+        body: { integrationId, syncType, incremental: false },
       });
       if (error) { log.error("[useBlingSync] Error starting sync:", error); setSyncStatus("failed"); return; }
       if (data?.syncLogId) setSyncLogId(data.syncLogId);
@@ -70,11 +69,9 @@ export function useBlingSync(integrationId: string, syncType: string = "all"): U
         return;
       }
 
-      const { data: integration } = await supabase.from("integrations").select("id, metadata").eq("id", integrationId).single();
-      const savedStoreIds = jsonAs<{ bling_store_ids?: number[] }>(integration?.metadata)?.bling_store_ids ?? null;
-
+      // os canais escolhidos são lidos pelo servidor (integrations.bling_store_ids)
       const { data, error } = await supabase.functions.invoke("bling-sync", {
-        body: { integrationId, syncType, storeIds: savedStoreIds, incremental: true },
+        body: { integrationId, syncType, incremental: true },
       });
       if (error) { log.error("[useBlingSync] Error checking for new:", error); setSyncStatus("failed"); return; }
       if (data?.syncLogId) setSyncLogId(data.syncLogId);

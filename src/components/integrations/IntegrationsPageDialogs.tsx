@@ -9,6 +9,9 @@ import { AIProviderIntegrationDialog } from "./AIProviderIntegrationDialog";
 import { MelhorEnvioDialog } from "./MelhorEnvioDialog";
 import { BlingConnectionDialog } from "./BlingConnectionDialog";
 import { BlingConfigDialog } from "./BlingConfigDialog";
+import { BlingStoreSelectorDialog } from "./BlingStoreSelectorDialog";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import { NuvemshopConnectionDialog } from "./NuvemshopConnectionDialog";
 import type { useIntegrationsPage } from "@/hooks/useIntegrationsPage";
 
@@ -67,6 +70,23 @@ export function IntegrationsPageDialogs({ page, onScrollToInstagram }: Props) {
         onOpenChange={(open) => { page.setNuvemshopDialogOpen(open); if (!open) page.fetchIntegrations(); }}
         mode={page.nuvemshopDialogMode}
       />
+
+      {page.blingChannels && (
+        <BlingStoreSelectorDialog
+          open={!!page.blingChannels}
+          onOpenChange={(open) => { if (!open) page.setBlingChannels(null); }}
+          integrationId={page.blingChannels.id}
+          confirmLabel={page.blingChannels.sync ? "Salvar e sincronizar" : "Salvar"}
+          onConfirm={async () => {
+            const current = page.blingChannels;
+            if (!current?.sync) return;
+            const { error } = await supabase.functions.invoke("bling-sync", { body: { integrationId: current.id, syncType: "all" } });
+            if (error) toast.error("Não foi possível iniciar a sincronização");
+            else toast.success("Sincronização iniciada", { description: "Pedidos, clientes e produtos dos canais escolhidos. Acompanhe em Vendas." });
+            page.fetchIntegrations();
+          }}
+        />
+      )}
 
       {page.selectedBlingIntegration && (
         <BlingConfigDialog

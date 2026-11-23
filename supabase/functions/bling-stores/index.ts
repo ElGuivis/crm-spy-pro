@@ -97,6 +97,7 @@ Deno.serve(async (req) => {
       id: canal.id,
       name: canal.descricao || `Canal ${canal.id}`,
       type: canal.tipo || 'canal_venda',
+      active: canal.situacao === 1, // 1 = ativo, 2 = inativo
     }));
 
     log.info(`[bling-stores] Found ${canais.length} canais de venda`);

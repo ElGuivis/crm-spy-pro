@@ -16,6 +16,7 @@ import { syncOrders } from "../_shared/bling-sync-orders.ts";
 import { syncCustomersFromOrders } from "../_shared/bling-sync-customers.ts";
 import { syncProducts } from "../_shared/bling-sync-products.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
+import { parseChannelScope } from "../_shared/bling-channels.ts";
 
 declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
 
@@ -40,7 +41,8 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
-    const { integrationId, syncType = 'all', storeIds, incremental = false } = body;
+    // os canais vêm SEMPRE da integração salva (o corpo não manda mais neles)
+    const { integrationId, syncType = 'all', incremental = false } = body;
 
     log.info(`[bling-sync] Starting sync: integration=${integrationId}, type=${syncType}, incremental=${incremental}`);
 
@@ -95,7 +97,7 @@ Deno.serve(async (req) => {
     // Get integration details
     const { data: integration, error: intError } = await supabase
       .from('integrations')
-      .select('tenant_id, type')
+      .select('tenant_id, type, bling_store_ids, bling_product_store_id')
       .eq('id', integrationId)
       .single();
 
@@ -126,6 +128,7 @@ Deno.serve(async (req) => {
     }
 
     const accessToken = await ensureValidToken(supabase, connection);
+    const scope = parseChannelScope(integration);
 
     // Create sync log
     const { data: syncLog, error: logError } = await supabase
@@ -191,7 +194,7 @@ Deno.serve(async (req) => {
 
           switch (type) {
             case 'orders':
-              synced = await syncOrders(supabase, accessToken, integrationId, integration.tenant_id, job.id, storeIds, incremental);
+              synced = await syncOrders(supabase, accessToken, integrationId, integration.tenant_id, job.id, scope.orderStoreIds, incremental);
               await supabase.from('integrations').update({
                 last_orders_sync_at: new Date().toISOString(),
                 last_sync_at: new Date().toISOString(),
@@ -209,7 +212,7 @@ Deno.serve(async (req) => {
               break;
 
             case 'products':
-              synced = await syncProducts(supabase, accessToken, integrationId, integration.tenant_id, job.id);
+              synced = await syncProducts(supabase, accessToken, integrationId, integration.tenant_id, job.id, scope.productStoreId);
               break;
           }
 

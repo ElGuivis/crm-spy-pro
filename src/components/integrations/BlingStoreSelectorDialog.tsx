@@ -1,224 +1,167 @@
 import { useState, useEffect, useCallback } from "react";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Store, RefreshCw, CheckCircle2 } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Store, RefreshCw, Hand } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { createLogger } from "@/lib/logger";
 
-import { createLogger } from '@/lib/logger';
-const log = createLogger('BlingStoreSelectorDialog');
+const log = createLogger("BlingStoreSelectorDialog");
 
-interface BlingStore {
-  id: number;
-  name: string;
-  type: string;
-  default?: boolean;
-}
+/** Canais de venda do Bling (PDV, e-commerce, marketplace). O id 0 = pedidos sem canal. */
+const NO_CHANNEL = 0;
 
-interface BlingStoreSelectorDialogProps {
+interface BlingStore { id: number; name: string; type: string; active?: boolean }
+
+interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   integrationId: string;
-  onConfirm: (storeIds: number[] | null) => void;
+  /** Chamado depois de salvar. `storeIds` null = todos os canais. */
+  onConfirm?: (storeIds: number[] | null) => void;
+  confirmLabel?: string;
   title?: string;
   description?: string;
 }
 
-export function BlingStoreSelectorDialog({
-  open,
-  onOpenChange,
-  integrationId,
-  onConfirm,
-  title = "Selecionar Lojas para Sincronizar",
-  description = "Escolha quais lojas/depósitos do Bling você deseja sincronizar. Deixe vazio para sincronizar todas.",
-}: BlingStoreSelectorDialogProps) {
-  const [stores, setStores] = useState<BlingStore[]>([]);
-  const [selectedStoreIds, setSelectedStoreIds] = useState<number[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [syncAll, setSyncAll] = useState(false);
+const TYPE_LABEL: Record<string, string> = {
+  LojaFisica: "Loja física (PDV)", LojaIntegrada: "Loja Integrada", Nuvemshop: "Nuvemshop",
+  TikTok: "TikTok Shop", MercadoLivre: "Mercado Livre", Shopee: "Shopee", Amazon: "Amazon",
+};
 
-  const fetchStores = useCallback(async () => {
+export function BlingStoreSelectorDialog({
+  open, onOpenChange, integrationId, onConfirm,
+  confirmLabel = "Salvar e sincronizar",
+  title = "De onde puxar do Bling",
+  description = "Escolha os canais de venda do Bling que são desta loja. Pedidos de outros canais ficam de fora.",
+}: Props) {
+  const [stores, setStores] = useState<BlingStore[]>([]);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [productStore, setProductStore] = useState<string>("all");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('bling-stores', {
-        body: { integrationId },
-      });
-
-      if (error) {
-        log.error('Error fetching Bling stores:', error);
-        setStores([]);
-      } else {
-        setStores(data?.stores || []);
-      }
+      const [storesRes, intRes] = await Promise.all([
+        supabase.functions.invoke("bling-stores", { body: { integrationId } }),
+        supabase.from("integrations").select("bling_store_ids, bling_product_store_id").eq("id", integrationId).maybeSingle(),
+      ]);
+      if (storesRes.error) log.error("Error fetching Bling stores:", storesRes.error);
+      const list = ((storesRes.data?.stores ?? []) as BlingStore[])
+        .slice().sort((a, b) => Number(b.active !== false) - Number(a.active !== false) || a.name.localeCompare(b.name));
+      setStores(list);
+      setSelected(intRes.data?.bling_store_ids ?? []);
+      setProductStore(intRes.data?.bling_product_store_id ? String(intRes.data.bling_product_store_id) : "all");
     } catch (err) {
-      log.error('Error:', err);
+      log.error("Error loading channels:", err);
       setStores([]);
     } finally {
       setLoading(false);
     }
   }, [integrationId]);
 
-  useEffect(() => {
-    if (open) {
-      fetchStores();
-      // Reset state when opening
-      setSyncAll(false);
-      setSelectedStoreIds([]);
-    }
-  }, [open, integrationId, fetchStores]);
+  useEffect(() => { if (open) load(); }, [open, load]);
 
-  const toggleStore = (storeId: number) => {
-    setSelectedStoreIds((prev) =>
-      prev.includes(storeId)
-        ? prev.filter((id) => id !== storeId)
-        : [...prev, storeId]
-    );
-    // If manually selecting stores, disable "sync all"
-    setSyncAll(false);
-  };
-
-  const handleSyncAllChange = (checked: boolean) => {
-    setSyncAll(checked);
-    if (checked) {
-      setSelectedStoreIds([]);
-    }
-  };
+  const toggle = (id: number) =>
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   const handleConfirm = async () => {
-    // If syncAll is true or no stores selected, pass null to sync all
-    const storeIds = syncAll || selectedStoreIds.length === 0 ? null : selectedStoreIds;
-    
-    // Save selected store IDs to integration for future "check for new" syncs
-    try {
-      await supabase
-        .from('integrations')
-        .update({ bling_store_ids: storeIds })
-        .eq('id', integrationId);
-    } catch (err) {
-      log.error('Error saving bling_store_ids:', err);
+    const storeIds = selected.length ? selected : null;
+    const productStoreId = productStore === "all" ? null : Number(productStore);
+    setSaving(true);
+    const { error } = await supabase.from("integrations")
+      .update({ bling_store_ids: storeIds, bling_product_store_id: productStoreId })
+      .eq("id", integrationId);
+    setSaving(false);
+    if (error) {
+      log.error("Error saving channels:", error);
+      toast.error("Não foi possível salvar os canais");
+      return;
     }
-    
-    onConfirm(storeIds);
+    toast.success(storeIds ? `${storeIds.length} canal(is) escolhido(s)` : "Todos os canais do Bling");
+    onConfirm?.(storeIds);
     onOpenChange(false);
   };
 
-  const getStoreIcon = (type: string) => {
-    return <Store className="h-4 w-4" />;
-  };
+  const row = (id: number, name: string, hint: string, icon: JSX.Element, muted = false) => (
+    <label
+      key={id}
+      htmlFor={`ch-${id}`}
+      className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+        selected.includes(id) ? "bg-primary/5 border-primary" : "hover:bg-muted/50"
+      } ${muted ? "opacity-60" : ""}`}
+    >
+      <Checkbox id={`ch-${id}`} checked={selected.includes(id)} onCheckedChange={() => toggle(id)} />
+      {icon}
+      <span className="flex-1 text-sm">{name}</span>
+      <span className="text-xs text-muted-foreground">{hint}</span>
+    </label>
+  );
 
-  const getStoreTypeBadge = (type: string) => {
-    return <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">{type}</span>;
-  };
+  const productChannels = stores.filter((s) => s.type !== "LojaFisica");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Store className="h-5 w-5" />
-            {title}
-          </DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><Store className="h-5 w-5" />{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          {/* Store List - Show first */}
-          <p className="text-sm text-muted-foreground">
-            Selecione as lojas que deseja sincronizar:
-          </p>
-          <div className="space-y-2 max-h-60 overflow-y-auto">
-            {loading ? (
-              <>
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-              </>
-            ) : stores.length === 0 ? (
-              <div className="text-center py-4 text-muted-foreground">
-                <p>Nenhuma loja encontrada no Bling.</p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={fetchStores}
-                  className="mt-2"
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Tentar novamente
-                </Button>
-              </div>
-            ) : (
-              stores.map((store) => (
-                <div
-                  key={`${store.type}-${store.id}`}
-                  className={`flex items-center space-x-3 p-3 rounded-lg border transition-colors cursor-pointer ${
-                    selectedStoreIds.includes(store.id)
-                      ? 'bg-primary/5 border-primary'
-                      : 'hover:bg-muted/50'
-                  }`}
-                  onClick={() => toggleStore(store.id)}
-                >
-                  <Checkbox
-                    id={`store-${store.id}`}
-                    checked={selectedStoreIds.includes(store.id)}
-                    onCheckedChange={() => toggleStore(store.id)}
-                  />
-                  <Label
-                    htmlFor={`store-${store.id}`}
-                    className="flex-1 cursor-pointer flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-2">
-                      {getStoreIcon(store.type)}
-                      <span>{store.name}</span>
-                      {store.default && (
-                        <span className="text-xs text-green-600">(Padrão)</span>
-                      )}
-                    </div>
-                    {getStoreTypeBadge(store.type)}
-                  </Label>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Sync All Option - At bottom */}
-          <div className="flex items-center space-x-3 p-3 bg-muted/50 rounded-lg border">
-            <Checkbox
-              id="sync-all"
-              checked={syncAll}
-              onCheckedChange={handleSyncAllChange}
-            />
-            <Label
-              htmlFor="sync-all"
-              className="flex-1 cursor-pointer flex items-center gap-2"
-            >
-              <CheckCircle2 className="h-4 w-4 text-primary" />
-              <span className="font-medium">Sincronizar todas as lojas</span>
-            </Label>
-          </div>
-
-          {selectedStoreIds.length > 0 && !syncAll && (
-            <p className="text-sm text-muted-foreground">
-              {selectedStoreIds.length} loja(s) selecionada(s)
-            </p>
+        <section className="space-y-2">
+          <h3 className="text-sm font-medium">Pedidos</h3>
+          {loading ? (
+            <><Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-full" /><Skeleton className="h-11 w-full" /></>
+          ) : stores.length === 0 ? (
+            <div className="text-center py-3 text-sm text-muted-foreground">
+              Não consegui ler os canais do Bling.
+              <Button variant="ghost" size="sm" onClick={load} className="ml-2"><RefreshCw className="h-4 w-4 mr-1" />Tentar de novo</Button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {stores.map((s) =>
+                row(s.id, s.name, `${TYPE_LABEL[s.type] ?? s.type}${s.active === false ? " · inativo" : ""}`,
+                  <Store className="h-4 w-4 text-muted-foreground" />, s.active === false))}
+              {row(NO_CHANNEL, "Pedidos sem canal", "lançados à mão no Bling", <Hand className="h-4 w-4 text-muted-foreground" />)}
+            </div>
           )}
-        </div>
+          <p className="text-xs text-muted-foreground">
+            {selected.length === 0
+              ? "Nada marcado = puxa os pedidos de TODOS os canais (inclusive de outras marcas que usam este Bling)."
+              : `${selected.length} marcado(s). Só os pedidos desses canais entram, inclusive os avisos automáticos do Bling.`}
+          </p>
+        </section>
+
+        <section className="space-y-2 pt-2">
+          <h3 className="text-sm font-medium">Produtos</h3>
+          <RadioGroup value={productStore} onValueChange={setProductStore} className="space-y-1">
+            <label className="flex items-center gap-3 text-sm cursor-pointer">
+              <RadioGroupItem value="all" id="prod-all" />Todos os produtos do Bling
+            </label>
+            {productChannels.map((s) => (
+              <label key={s.id} className="flex items-center gap-3 text-sm cursor-pointer">
+                <RadioGroupItem value={String(s.id)} id={`prod-${s.id}`} />
+                Só os vinculados a {s.name}
+              </label>
+            ))}
+          </RadioGroup>
+          <p className="text-xs text-muted-foreground">
+            A loja física (PDV) não tem produtos vinculados no Bling; para ela, use os de um canal de e-commerce ou todos.
+          </p>
+        </section>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
-          <Button onClick={handleConfirm}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Iniciar Sincronização
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+          <Button onClick={handleConfirm} disabled={loading || saving}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${saving ? "animate-spin" : ""}`} />{confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

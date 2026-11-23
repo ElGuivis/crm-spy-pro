@@ -35,6 +35,9 @@ export function useIntegrationsPage() {
   const [blingDialogMode, setBlingDialogMode] = useState<DialogMode>("manage");
   const [blingConfigDialogOpen, setBlingConfigDialogOpen] = useState(false);
   const [selectedBlingIntegration, setSelectedBlingIntegration] = useState<Integration | null>(null);
+  // janela "De onde puxar do Bling" (canais); `sync` = sincronizar tudo ao salvar (logo após conectar)
+  const [blingChannels, setBlingChannels] = useState<{ id: string; sync: boolean } | null>(null);
+  const [blingJustConnected, setBlingJustConnected] = useState(false);
   const [nuvemshopDialogOpen, setNuvemshopDialogOpen] = useState(false);
   const [nuvemshopDialogMode, setNuvemshopDialogMode] = useState<DialogMode>("manage");
   const [evolutionReconnectIntegration, setEvolutionReconnectIntegration] = useState<Integration | null>(null);
@@ -83,11 +86,18 @@ export function useIntegrationsPage() {
     }
   };
 
+  // logo após conectar o Bling: abre a escolha de canais antes da 1ª sincronização
+  useEffect(() => {
+    if (!blingJustConnected) return;
+    const bling = integrations.find((i) => i.type === "bling");
+    if (bling) { setBlingChannels({ id: bling.id, sync: true }); setBlingJustConnected(false); }
+  }, [blingJustConnected, integrations]);
+
   // OAuth callback handler
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const handlers = [
-      { key: "bling_success", msg: () => toast.success("Bling conectado com sucesso!") },
+      { key: "bling_success", msg: () => { toast.success("Bling conectado! Agora escolha de onde puxar."); setBlingJustConnected(true); fetchIntegrations(); } },
       { key: "ns_success", msg: () => { toast.success("Nuvemshop conectada com sucesso!"); fetchIntegrations(); } },
       { key: "ig_success", msg: () => toast.success("Instagram conectado com sucesso!") },
     ];
@@ -243,6 +253,7 @@ export function useIntegrationsPage() {
     blingDialogMode, setBlingDialogMode,
     blingConfigDialogOpen, setBlingConfigDialogOpen,
     selectedBlingIntegration, setSelectedBlingIntegration,
+    blingChannels, setBlingChannels,
     nuvemshopDialogOpen, setNuvemshopDialogOpen,
     nuvemshopDialogMode, setNuvemshopDialogMode,
     evolutionReconnectIntegration, setEvolutionReconnectIntegration,

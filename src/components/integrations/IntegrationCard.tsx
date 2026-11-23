@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreVertical, Trash2, Star, Palette, Settings, RefreshCw, Download } from "lucide-react";
+import { MoreVertical, Trash2, Star, Palette, Settings, RefreshCw, Download, Store } from "lucide-react";
 import {
   type Integration, getIntegrationLogo, getIntegrationIcon,
   getIntegrationDescription, getStatusBadge,
@@ -21,6 +21,7 @@ interface Actions {
   onDelete: (id: string) => void;
   onBlingConfig: (i: Integration) => void;
   onBlingManage: () => void;
+  onBlingChannels: (i: Integration) => void;
   onBlingReconnect: () => void;
   onEvolutionReconnect: (i: Integration) => void;
   onLojaIntegradaReconnect: () => void;
@@ -72,6 +73,10 @@ export function IntegrationCard({ integration, defaultAIProvider, statusInfo, ac
             <DropdownMenuContent align="end">
               {integration.type === "bling" && (
                 <>
+                  <DropdownMenuItem onClick={() => actions.onBlingChannels(integration)}>
+                    <Store className="h-4 w-4 mr-2" />
+                    Canais de venda (de onde puxar)
+                  </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => actions.onBlingConfig(integration)}>
                     <Palette className="h-4 w-4 mr-2" />
                     Configurações de exibição

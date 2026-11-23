@@ -183,8 +183,8 @@ export function useBlingSalesData(integrationId: string) {
 
   const handleSyncWithStores = async (storeIds: number[] | null) => {
     try {
-      toast({ title: "Sincronização iniciada", description: storeIds ? `Sincronizando pedidos de ${storeIds.length} loja(s)...` : "Sincronizando pedidos de todas as lojas..." });
-      await startSync(storeIds || undefined);
+      toast({ title: "Sincronização iniciada", description: storeIds ? `Sincronizando pedidos de ${storeIds.length} canal(is)...` : "Sincronizando pedidos de todos os canais..." });
+      await startSync();
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : "Não foi possível iniciar a sincronização.";
       toast({ title: "Erro na sincronização", description: msg, variant: "destructive" });

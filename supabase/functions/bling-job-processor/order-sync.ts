@@ -1,6 +1,7 @@
 import { createLogger } from "../_shared/correlation.ts";
 import type { ServiceClient } from "../_shared/supabase-types.ts";
 import { BLING_API_BASE, RATE_LIMIT_DELAY, delay, safeParseDate, fetchOrderDetails } from "./job-helpers.ts";
+import { orderInChannels, orderListQueries } from "../_shared/bling-channels.ts";
 
 type Log = ReturnType<typeof createLogger>;
 
@@ -14,24 +15,25 @@ export async function syncNewOrders(
 
   try {
     const allOrders: Record<string, unknown>[] = [];
-    for (let page = 1; page <= 2; page++) {
-      const response = await fetch(`${BLING_API_BASE}/pedidos/vendas?pagina=${page}&limite=100`, {
-        headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json' }
-      });
-      if (!response.ok) { if (response.status === 429) throw new Error('RATE_LIMITED'); throw new Error(`API error: ${response.status}`); }
-      const result = await response.json();
-      const orders = result.data || [];
-      allOrders.push(...orders);
-      if (orders.length < 100) break;
-      await delay(RATE_LIMIT_DELAY);
+    // uma listagem por canal escolhido (o Bling filtra por idLoja) ou uma só, filtrada aqui
+    for (const query of orderListQueries(storeIds)) {
+      for (let page = 1; page <= 2; page++) {
+        const qs = new URLSearchParams({ pagina: String(page), limite: '100', ...query });
+        const response = await fetch(`${BLING_API_BASE}/pedidos/vendas?${qs}`, {
+          headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json' }
+        });
+        if (!response.ok) { if (response.status === 429) throw new Error('RATE_LIMITED'); throw new Error(`API error: ${response.status}`); }
+        const result = await response.json();
+        const orders = result.data || [];
+        allOrders.push(...orders);
+        await delay(RATE_LIMIT_DELAY);
+        if (orders.length < 100) break;
+      }
     }
 
     log.info(`[BLING-JOB] Fetched ${allOrders.length} orders from API`);
-    let filteredOrders = allOrders;
-    if (storeIds && storeIds.length > 0) {
-      filteredOrders = allOrders.filter((o: Record<string, unknown>) => (o.loja as Record<string, unknown>)?.id && storeIds.includes((o.loja as Record<string, unknown>).id as number));
-      log.info(`[BLING-JOB] Filtered to ${filteredOrders.length} orders for stores: ${storeIds.join(', ')}`);
-    }
+    const filteredOrders = allOrders.filter((o: Record<string, unknown>) => orderInChannels(o, storeIds));
+    if (storeIds) log.info(`[BLING-JOB] Filtered to ${filteredOrders.length} orders for canais: ${storeIds.join(', ')}`);
 
     const newOrders = filteredOrders.filter((o: Record<string, unknown>) => (o.id as number) > lastBlingId);
     debug.newOrdersCount = newOrders.length;

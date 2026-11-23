@@ -169,6 +169,19 @@ export async function exchangeCode(supabase: ServiceClient, body: { code: string
     // Get scopes from response (if available)
     const scopes = tokenData.scope ? tokenData.scope.split(' ') : [];
 
+    // Código da empresa no Bling: é o `companyId` dos avisos (webhooks). Sem ele os avisos não
+    // acham a loja e ficam 'ignored' (foi o que aconteceu de 16 a 22/11/2026).
+    let companyId: string | null = null;
+    try {
+      const r = await fetch('https://api.bling.com.br/Api/v3/empresas/me/dados-basicos', {
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json' },
+      });
+      if (r.ok) companyId = String(((await r.json()) as { data?: { id?: unknown } }).data?.id ?? '') || null;
+      else log.error('Bling dados-basicos falhou:', r.status);
+    } catch (e) {
+      log.error('Bling dados-basicos erro:', e);
+    }
+
     // Encrypt tokens before storage
     const encAccessToken = await encryptSecret(supabase, accessToken);
     const encRefreshToken = await encryptSecret(supabase, refreshToken);
@@ -187,6 +200,7 @@ export async function exchangeCode(supabase: ServiceClient, body: { code: string
         refresh_expires_at: refreshExpiresAt,
         scopes: scopes,
         status: 'connected',
+        ...(companyId ? { bling_company_id: companyId } : {}),
       }, {
         onConflict: 'tenant_id'
       })

@@ -1,11 +1,13 @@
 import { createLogger } from "../_shared/correlation.ts";
 import type { ServiceClient } from "../_shared/supabase-types.ts";
 import { BLING_API_BASE, RATE_LIMIT_DELAY, delay } from "./job-helpers.ts";
+import { productListParams } from "../_shared/bling-channels.ts";
 
 type Log = ReturnType<typeof createLogger>;
 
 export async function syncNewProducts(
-  supabase: ServiceClient, accessToken: string, integrationId: string, tenantId: string, lastBlingId: number, log: Log
+  supabase: ServiceClient, accessToken: string, integrationId: string, tenantId: string, lastBlingId: number, log: Log,
+  productStoreId: number | null = null,
 ): Promise<{ success: boolean; synced: number; errors: string[] }> {
   const errors: string[] = [];
   let synced = 0;
@@ -13,7 +15,7 @@ export async function syncNewProducts(
   try {
     const allProducts: Record<string, unknown>[] = [];
     for (let page = 1; page <= 2; page++) {
-      const response = await fetch(`${BLING_API_BASE}/produtos?pagina=${page}&limite=100`, {
+      const response = await fetch(`${BLING_API_BASE}/produtos?${new URLSearchParams({ pagina: String(page), limite: '100', ...productListParams(productStoreId) })}`, {
         headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json' }
       });
       if (!response.ok) { if (response.status === 429) throw new Error('RATE_LIMITED'); throw new Error(`API error: ${response.status}`); }

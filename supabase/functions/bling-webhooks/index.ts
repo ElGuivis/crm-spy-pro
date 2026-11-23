@@ -83,11 +83,13 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ ok: true, message: 'Event already processed' }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    let tenantId: string | null = null;
+    // O mesmo Bling pode estar ligado a mais de uma loja (cada uma filtra os seus canais)
+    let tenantIds: string[] = [];
     if (companyId) {
-      const { data: connection } = await supabase.from('bling_connections').select('tenant_id').eq('bling_company_id', companyId).eq('status', 'connected').maybeSingle();
-      tenantId = connection?.tenant_id || null;
+      const { data: conns } = await supabase.from('bling_connections').select('tenant_id').eq('bling_company_id', companyId).eq('status', 'connected');
+      tenantIds = [...new Set((conns || []).map((c) => c.tenant_id as string))];
     }
+    const tenantId: string | null = tenantIds[0] ?? null;
 
     let status = 'received';
     let processResult: { success: boolean; message: string } | null = null;
@@ -107,39 +109,30 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Failed to save event' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    log.info('[Bling Webhook] Evento salvo com sucesso:', { id: insertedEvent.id, status, tenantId: tenantId || 'N/A' });
+    log.info('[Bling Webhook] Evento salvo com sucesso:', { id: insertedEvent.id, status, tenants: tenantIds.length });
 
-    if (tenantId) {
-      const integrationId = await findIntegrationId(supabase, tenantId);
-
-      if (integrationId) {
-        if (resource === 'produtos' && dataId) {
-          log.info('[Bling Webhook] Processando evento de produto...');
-          processResult = await processProductEvent(supabase, tenantId, integrationId, action as string, dataId as number, insertedEvent.id, log);
-        }
-
-        if ((resource === 'estoques' || resource === 'stock' || resource === 'estoques_virtuais' || resource === 'virtual_stock') && payload.data) {
-          log.info('[Bling Webhook] Processando evento de estoque...');
-          processResult = await processStockEvent(supabase, tenantId, integrationId, action as string, payload.data as Record<string, unknown>, insertedEvent.id, log);
-        }
-
-        if ((resource === 'pedidos' || resource === 'pedidos.vendas') && dataId) {
-          log.info('[Bling Webhook] Processando evento de pedido...');
-          processResult = await processOrderEvent(supabase, tenantId, integrationId, action as string, dataId as number, insertedEvent.id, log);
-        }
-
-        if (resource === 'contatos' && dataId) {
-          log.info('[Bling Webhook] Processando evento de contato...');
-          processResult = await processCustomerEvent(supabase, tenantId, integrationId, action as string, dataId as number, insertedEvent.id, log);
-        }
-
-        if (processResult) {
-          await supabase.from('bling_webhook_events').update({ status: processResult.success ? 'processed' : 'failed', error: processResult.success ? null : processResult.message, processed_at: new Date().toISOString() }).eq('id', insertedEvent.id);
-          log.info('[Bling Webhook] Processamento concluído:', processResult);
-        }
-      } else {
-        log.info('[Bling Webhook] Integration_id não encontrado para tenant:', tenantId);
+    const results: Array<{ success: boolean; message: string }> = [];
+    for (const tid of tenantIds) {
+      const integrationId = await findIntegrationId(supabase, tid);
+      if (!integrationId) { log.info('[Bling Webhook] Integration_id não encontrado para tenant:', tid); continue; }
+      let r: { success: boolean; message: string } | null = null;
+      if (resource === 'produtos' && dataId) {
+        r = await processProductEvent(supabase, tid, integrationId, action as string, dataId as number, insertedEvent.id, log);
+      } else if ((resource === 'estoques' || resource === 'stock' || resource === 'estoques_virtuais' || resource === 'virtual_stock') && payload.data) {
+        r = await processStockEvent(supabase, tid, integrationId, action as string, payload.data as Record<string, unknown>, insertedEvent.id, log);
+      } else if ((resource === 'pedidos' || resource === 'pedidos.vendas') && dataId) {
+        r = await processOrderEvent(supabase, tid, integrationId, action as string, dataId as number, insertedEvent.id, log);
+      } else if (resource === 'contatos' && dataId) {
+        r = await processCustomerEvent(supabase, tid, integrationId, action as string, dataId as number, insertedEvent.id, log);
       }
+      if (r) results.push(r);
+    }
+
+    if (results.length) {
+      const failed = results.filter((r) => !r.success);
+      processResult = { success: failed.length === 0, message: (failed.length ? failed : results).map((r) => r.message).join(' | ') };
+      await supabase.from('bling_webhook_events').update({ status: processResult.success ? 'processed' : 'failed', error: processResult.success ? null : processResult.message, processed_at: new Date().toISOString() }).eq('id', insertedEvent.id);
+      log.info('[Bling Webhook] Processamento concluído:', processResult);
     }
 
     return new Response(JSON.stringify({ ok: true, processed: processResult?.success ?? false, message: processResult?.message }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });

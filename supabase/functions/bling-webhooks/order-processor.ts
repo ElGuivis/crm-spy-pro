@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 type ServiceClient = ReturnType<typeof createClient>;
 import type { Logger } from "../_shared/correlation.ts";
 import { getValidAccessToken } from './webhook-helpers.ts';
+import { loadChannelScope, orderInChannels, orderChannelId } from '../_shared/bling-channels.ts';
 
 const BLING_API_BASE = 'https://api.bling.com.br/Api/v3';
 
@@ -43,6 +44,13 @@ export async function processOrderEvent(
 
   const order = await fetchOrderDetails(accessToken, orderId, log);
   if (!order) return { success: false, message: 'Não foi possível buscar detalhes do pedido' };
+
+  // só os canais escolhidos na integração (o mesmo Bling pode atender várias lojas)
+  const scope = await loadChannelScope(supabase, integrationId);
+  if (!orderInChannels(order, scope.orderStoreIds)) {
+    log.info(`[Bling Webhook] Pedido ${orderId} do canal ${orderChannelId(order)} fora dos canais escolhidos; ignorado`);
+    return { success: true, message: 'Pedido de canal não escolhido (ignorado)' };
+  }
 
   let formaPagamento = (order.formaPagamento as Record<string, unknown>)?.descricao || null;
   if (!formaPagamento && order.parcelas && Array.isArray(order.parcelas) && (order.parcelas as unknown[]).length > 0) {
@@ -124,6 +132,14 @@ export async function processCustomerEvent(
     const { error } = await supabase.from('bling_customers').delete().eq('bling_id', contactId).eq('integration_id', integrationId);
     if (error) { log.error('[Bling Webhook] Erro ao deletar contato:', error); return { success: false, message: error.message }; }
     return { success: true, message: 'Contato deletado' };
+  }
+
+  // Com canais escolhidos, contato novo só entra junto com um pedido desses canais
+  // (o mesmo Bling guarda clientes de outras lojas); o aviso só atualiza quem já está na base.
+  const scope = await loadChannelScope(supabase, integrationId);
+  if (scope.orderStoreIds) {
+    const { data: known } = await supabase.from('bling_customers').select('id').eq('bling_id', contactId).eq('integration_id', integrationId).maybeSingle();
+    if (!known) return { success: true, message: 'Contato fora dos canais escolhidos (ignorado)' };
   }
 
   const accessToken = await getValidAccessToken(supabase, tenantId, log);

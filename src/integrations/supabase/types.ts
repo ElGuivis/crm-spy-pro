@@ -9503,6 +9503,7 @@ export type Database = {
           auto_sync_products_interval: number | null
           auto_sync_shipments: boolean | null
           auto_sync_shipments_interval: number | null
+          bling_product_store_id: number | null
           bling_store_ids: number[] | null
           created_at: string
           error_message: string | null
@@ -9540,6 +9541,7 @@ export type Database = {
           auto_sync_products_interval?: number | null
           auto_sync_shipments?: boolean | null
           auto_sync_shipments_interval?: number | null
+          bling_product_store_id?: number | null
           bling_store_ids?: number[] | null
           created_at?: string
           error_message?: string | null
@@ -9577,6 +9579,7 @@ export type Database = {
           auto_sync_products_interval?: number | null
           auto_sync_shipments?: boolean | null
           auto_sync_shipments_interval?: number | null
+          bling_product_store_id?: number | null
           bling_store_ids?: number[] | null
           created_at?: string
           error_message?: string | null
@@ -12238,6 +12241,165 @@ export type Database = {
           },
           {
             foreignKeyName: "outbound_queue_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      presale_pages: {
+        Row: {
+          created_at: string
+          id: string
+          integration_id: string | null
+          is_active: boolean
+          li_group_id: number | null
+          meta_pixel_id: string | null
+          mode: string
+          sheet_url: string | null
+          slug: string
+          tenant_id: string
+          title: string
+          updated_at: string
+          whatsapp_group_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          integration_id?: string | null
+          is_active?: boolean
+          li_group_id?: number | null
+          meta_pixel_id?: string | null
+          mode?: string
+          sheet_url?: string | null
+          slug: string
+          tenant_id: string
+          title: string
+          updated_at?: string
+          whatsapp_group_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          integration_id?: string | null
+          is_active?: boolean
+          li_group_id?: number | null
+          meta_pixel_id?: string | null
+          mode?: string
+          sheet_url?: string | null
+          slug?: string
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+          whatsapp_group_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "presale_pages_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "presale_pages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      presale_signups: {
+        Row: {
+          accepts_newsletter: boolean
+          address: Json
+          attempts: number
+          birth_date: string | null
+          bling_contact_id: number | null
+          bling_error: string | null
+          bling_status: string | null
+          cpf: string | null
+          created_at: string
+          email: string
+          id: string
+          li_customer_id: number | null
+          li_error: string | null
+          li_status: string
+          name: string
+          page_id: string
+          pants_size: string | null
+          phone: string
+          sheet_error: string | null
+          sheet_status: string | null
+          shirt_size: string | null
+          shoe_size: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          accepts_newsletter?: boolean
+          address?: Json
+          attempts?: number
+          birth_date?: string | null
+          bling_contact_id?: number | null
+          bling_error?: string | null
+          bling_status?: string | null
+          cpf?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          li_customer_id?: number | null
+          li_error?: string | null
+          li_status?: string
+          name: string
+          page_id: string
+          pants_size?: string | null
+          phone: string
+          sheet_error?: string | null
+          sheet_status?: string | null
+          shirt_size?: string | null
+          shoe_size?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          accepts_newsletter?: boolean
+          address?: Json
+          attempts?: number
+          birth_date?: string | null
+          bling_contact_id?: number | null
+          bling_error?: string | null
+          bling_status?: string | null
+          cpf?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          li_customer_id?: number | null
+          li_error?: string | null
+          li_status?: string
+          name?: string
+          page_id?: string
+          pants_size?: string | null
+          phone?: string
+          sheet_error?: string | null
+          sheet_status?: string | null
+          shirt_size?: string | null
+          shoe_size?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "presale_signups_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "presale_pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "presale_signups_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"

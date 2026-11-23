@@ -55,6 +55,7 @@ export async function getValidAccessToken(supabase: ServiceClient, tenantId: str
 
 export async function findIntegrationId(supabase: ServiceClient, tenantId: string): Promise<string | null> {
   const { data: integration } = await supabase
-    .from('integrations').select('id').eq('tenant_id', tenantId).eq('type', 'bling').eq('is_active', true).maybeSingle();
+    // (a coluna is_active não existe em integrations: o filtro antigo fazia a consulta falhar sempre)
+    .from('integrations').select('id').eq('tenant_id', tenantId).eq('type', 'bling').order('created_at', { ascending: false }).limit(1).maybeSingle();
   return integration?.id || null;
 }

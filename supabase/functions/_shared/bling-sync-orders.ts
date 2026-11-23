@@ -10,6 +10,7 @@ import {
   delay, fetchBlingData, fetchBlingDetail,
   safeParseDate, isJobCancelled, updateJobProgress,
 } from "./bling-sync-helpers.ts";
+import { orderInChannels, orderListQueries } from "./bling-channels.ts";
 
 const log = createLogger("bling-sync-orders", "shared");
 
@@ -20,14 +21,16 @@ export async function syncOrders(
   integrationId: string,
   tenantId: string,
   jobId: string,
-  storeIds?: number[],
+  storeIds: number[] | null = null,
   incremental: boolean = false
 ): Promise<number> {
-  let page = 1;
   let totalSynced = 0;
-  let hasMore = true;
   const maxPages = incremental ? 3 : 100;
 
+  // uma listagem por canal escolhido (o Bling filtra por idLoja) ou uma só, filtrada aqui
+  for (const query of orderListQueries(storeIds)) {
+  let page = 1;
+  let hasMore = true;
   while (hasMore && page <= maxPages) {
     if (await isJobCancelled(supabase, jobId)) {
       log.info('[bling-sync] Job cancelled, stopping orders sync');
@@ -37,16 +40,13 @@ export async function syncOrders(
     try {
       await updateJobProgress(supabase, jobId, { current_page: page });
 
-      const { data: orders, hasMore: more } = await fetchBlingData(accessToken, '/pedidos/vendas', page);
+      const { data: orders, hasMore: more } = await fetchBlingData(accessToken, '/pedidos/vendas', page, query);
       hasMore = more;
       if (orders.length === 0) break;
 
-      let filteredOrders = orders;
-      if (storeIds && storeIds.length > 0) {
-        filteredOrders = orders.filter((o: Record<string, unknown>) =>
-          (o.loja as Record<string, unknown>)?.id && storeIds.includes((o.loja as Record<string, unknown>).id as number)
-        );
-        log.info(`[bling-sync] Filtered ${orders.length} orders to ${filteredOrders.length} (stores: ${storeIds.join(', ')})`);
+      const filteredOrders = orders.filter((o: Record<string, unknown>) => orderInChannels(o, storeIds));
+      if (filteredOrders.length !== orders.length) {
+        log.info(`[bling-sync] Filtered ${orders.length} orders to ${filteredOrders.length} (canais: ${storeIds?.join(', ')})`);
       }
 
       for (const orderSummary of filteredOrders) {
@@ -206,6 +206,7 @@ export async function syncOrders(
       }
       throw err;
     }
+  }
   }
 
   return totalSynced;

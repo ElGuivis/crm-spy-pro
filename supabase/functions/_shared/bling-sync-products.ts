@@ -6,6 +6,7 @@
 import type { ServiceClient } from "./supabase-types.ts";
 import { fetchBlingData } from "./bling-sync-helpers.ts";
 import { createLogger } from "./correlation.ts";
+import { productListParams } from "./bling-channels.ts";
 const log = createLogger("bling-sync-products", "shared");
 
 const UPSERT_CHUNK_SIZE = 25; // stay well under PostgREST 8s statement_timeout at scale
@@ -23,12 +24,13 @@ export async function syncProducts(
   accessToken: string,
   integrationId: string,
   tenantId: string,
-  jobId: string
+  jobId: string,
+  productStoreId: number | null = null,
 ): Promise<number> {
   log.info('[bling-sync] Setting up resumable product sync...');
 
   const { data: firstPageProducts, hasMore: hasMorePages } = await fetchBlingData(
-    accessToken, '/produtos', 1
+    accessToken, '/produtos', 1, productListParams(productStoreId)
   );
 
   if (firstPageProducts.length === 0) {

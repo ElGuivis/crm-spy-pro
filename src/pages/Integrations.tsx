@@ -87,6 +87,7 @@ const IntegrationsPage = () => {
                 onDelete: (id) => { page.setIntegrationToDelete(id); page.setDeleteDialogOpen(true); },
                 onBlingConfig: (i) => { page.setSelectedBlingIntegration(i); page.setBlingConfigDialogOpen(true); },
                 onBlingManage: () => { page.setBlingDialogMode("manage"); page.setBlingDialogOpen(true); },
+                onBlingChannels: (i) => page.setBlingChannels({ id: i.id, sync: false }),
                 onBlingReconnect: () => { page.setBlingDialogMode("connect"); page.setBlingDialogOpen(true); },
                 onEvolutionReconnect: (i) => { page.setEvolutionReconnectIntegration(i); page.setEvolutionDialogOpen(true); },
                 onLojaIntegradaReconnect: () => page.setDialogOpen(true),

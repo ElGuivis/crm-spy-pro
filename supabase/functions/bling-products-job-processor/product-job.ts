@@ -1,13 +1,15 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 type ServiceClient = ReturnType<typeof createClient>;
+import { loadChannelScope, productListParams } from '../_shared/bling-channels.ts';
 import { BLING_API_BASE, PAGE_SIZE, UPSERT_CHUNK_SIZE, RATE_LIMIT_DELAY, MAX_PAGES_PER_RUN, type BlingConnection, type Log, chunkArray, delay, ensureValidToken, updateJobProgress, getJobStatus } from './job-helpers.ts';
 
 async function fetchBlingProducts(
   accessToken: string,
   page: number,
   log: Log,
+  productStoreId: number | null = null,
 ): Promise<{ data: Record<string, unknown>[]; hasMore: boolean }> {
-  const params = new URLSearchParams({ pagina: String(page), limite: String(PAGE_SIZE) });
+  const params = new URLSearchParams({ pagina: String(page), limite: String(PAGE_SIZE), ...productListParams(productStoreId) });
   const url = `${BLING_API_BASE}/produtos?${params}`;
   log.info(`[PRODUCTS-JOB] Fetching page ${page}`);
 
@@ -64,6 +66,7 @@ export async function processProductJob(
 
   try {
     const accessToken = await ensureValidToken(supabase, connection);
+    const scope = await loadChannelScope(supabase, integrationId as string);
 
     await supabase.from('bling_sync_jobs').update({
       status: 'running',
@@ -80,7 +83,7 @@ export async function processProductJob(
       }
 
       try {
-        const { data: products, hasMore: morePages } = await fetchBlingProducts(accessToken, currentPage, log);
+        const { data: products, hasMore: morePages } = await fetchBlingProducts(accessToken, currentPage, log, scope.productStoreId);
         hasMore = morePages;
 
         log.info(`[PRODUCTS-JOB] Page ${currentPage}: ${products.length} products, hasMore=${hasMore}`);

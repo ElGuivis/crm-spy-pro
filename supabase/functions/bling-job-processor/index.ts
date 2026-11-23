@@ -8,6 +8,7 @@ import { syncNewProducts } from "./product-sync.ts";
 import { updateProductStock } from "./stock-sync.ts";
 import { syncCustomersFromOrders } from "./customer-sync.ts";
 import { syncNewOrders } from "./order-sync.ts";
+import { parseChannelScope } from "../_shared/bling-channels.ts";
 
 Deno.serve(async (req) => {
   const cid = getCorrelationId(req);
@@ -42,7 +43,7 @@ Deno.serve(async (req) => {
     const { data: connectedConnections } = await supabase.from('bling_connections').select('tenant_id').eq('status', 'connected');
     const connectedTenantIds = (connectedConnections || []).map(c => c.tenant_id);
 
-    let integrationQuery = supabase.from('integrations').select(`id, tenant_id, bling_store_ids, auto_sync_orders, auto_sync_orders_interval, last_sync_orders_at, auto_sync_products, auto_sync_products_interval, last_sync_products_at, auto_sync_customers, auto_sync_customers_interval, last_sync_customers_at, initial_sync_completed`).eq('type', 'bling');
+    let integrationQuery = supabase.from('integrations').select(`id, tenant_id, bling_store_ids, bling_product_store_id, auto_sync_orders, auto_sync_orders_interval, last_sync_orders_at, auto_sync_products, auto_sync_products_interval, last_sync_products_at, auto_sync_customers, auto_sync_customers_interval, last_sync_customers_at, initial_sync_completed`).eq('type', 'bling');
     if (specifiedIntegrationId) {
       integrationQuery = integrationQuery.eq('id', specifiedIntegrationId);
       if (!auth.isInternal) integrationQuery = integrationQuery.eq('tenant_id', auth.tenantId!);
@@ -75,7 +76,7 @@ Deno.serve(async (req) => {
             const { data: lastOrder } = await supabase.from('bling_orders').select('bling_id').eq('integration_id', intId).order('bling_id', { ascending: false }).limit(1).maybeSingle();
             const lastOrderBlingId = lastOrder?.bling_id || 0;
             log.info(`[BLING-JOB] Processing orders for ${intId}, last bling_id: ${lastOrderBlingId}`);
-            const ordersResult = await syncNewOrders(supabase, accessToken, intId, tenantId, integration.bling_store_ids || null, lastOrderBlingId, log);
+            const ordersResult = await syncNewOrders(supabase, accessToken, intId, tenantId, parseChannelScope(integration).orderStoreIds, lastOrderBlingId, log);
             results.push({ type: 'incremental_orders', integrationId: intId, ...ordersResult });
             await supabase.from('integrations').update({ last_sync_orders_at: new Date().toISOString(), last_sync_at: new Date().toISOString() }).eq('id', intId);
           }
@@ -89,7 +90,7 @@ Deno.serve(async (req) => {
           const { data: lastProduct } = await supabase.from('bling_products').select('bling_id').eq('integration_id', intId).order('bling_id', { ascending: false }).limit(1).maybeSingle();
           const lastProductBlingId = lastProduct?.bling_id || 0;
           log.info(`[BLING-JOB] Processing new products for ${intId}, last bling_id: ${lastProductBlingId}`);
-          const productsResult = await syncNewProducts(supabase, accessToken, intId, tenantId, lastProductBlingId, log);
+          const productsResult = await syncNewProducts(supabase, accessToken, intId, tenantId, lastProductBlingId, log, parseChannelScope(integration).productStoreId);
           results.push({ type: 'incremental_products', integrationId: intId, ...productsResult });
           await supabase.from('integrations').update({ last_sync_products_at: new Date().toISOString(), last_sync_at: new Date().toISOString() }).eq('id', intId);
         }
