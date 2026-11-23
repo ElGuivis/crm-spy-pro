@@ -1,4 +1,4 @@
-// Pós-build: HTML de entrada próprio para o domínio de uma loja (ex.: lojaoutback.com.br).
+// Pós-build: HTML de entrada próprio para os subdomínios de uma loja (ex.: grupovip.lojaoutback.com.br).
 // Mesmo app (mesmos scripts), mas título, ícone e prévia de link (og/twitter) da loja; o nginx
 // entrega este arquivo quando o Host é o da loja (nginx.conf, `map $host $spa_index`).
 // Roda ANTES do prerender (que reescreve dist/index.html com a landing do SpyPro).
@@ -13,14 +13,24 @@ const template = readFileSync(path.join(dist, "index.html"), "utf8");
 
 const brands = [
   {
-    file: "outback.html",
-    url: "https://lojaoutback.com.br/",
+    file: "outback-vip.html",
+    url: "https://grupovip.lojaoutback.com.br/",
     title: "OUT/BACK! Multimarcas · Pré-venda no grupo VIP",
     description: "Quem é da casa chega primeiro. Bota teu nome na lista e entra no grupo VIP do WhatsApp: o link da pré-venda cai lá antes de abrir pra geral.",
     author: "OUT/BACK! Multimarcas",
     icon: "/outback/favicon.ico",
     appleIcon: "/outback/apple-touch-icon.png",
-    image: "https://lojaoutback.com.br/outback/og.jpg",
+    image: "https://grupovip.lojaoutback.com.br/outback/og.jpg",
+  },
+  {
+    file: "outback-cadastro.html",
+    url: "https://cadastro.lojaoutback.com.br/",
+    title: "OUT/BACK! Multimarcas · Cadastro do teu pedido",
+    description: "Preenche teus dados que a gente lança o pedido no teu nome e manda tudo certinho pro teu endereço.",
+    author: "OUT/BACK! Multimarcas",
+    icon: "/outback/favicon.ico",
+    appleIcon: "/outback/apple-touch-icon.png",
+    image: "https://cadastro.lojaoutback.com.br/outback/og-cadastro.jpg",
   },
 ];
 

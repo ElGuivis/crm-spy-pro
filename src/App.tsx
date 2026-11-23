@@ -11,7 +11,8 @@ import { NewOrdersProvider } from "@/contexts/NewOrdersContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 import { Suspense, lazy } from "react";
-import BrandApp, { brandSlug } from "@/components/presale/BrandApp";
+import BrandApp from "@/components/presale/BrandApp";
+import { brandHost } from "@/components/presale/brandHosts";
 import { SkeletonStats } from "@/components/common/SkeletonLoaders";
 
 // Eager-loaded (critical path)
@@ -141,7 +142,7 @@ const CrmApp = () => (
   </QueryClientProvider>
 );
 
-// No domínio de uma loja (ex.: lojaoutback.com.br) só sobem as páginas públicas dela.
-const App = () => (brandSlug ? <BrandApp slug={brandSlug} /> : <CrmApp />);
+// Nos subdomínios de uma loja (ex.: grupovip.lojaoutback.com.br) só sobe a página pública dela.
+const App = () => (brandHost ? <BrandApp site={brandHost} /> : <CrmApp />);
 
 export default App;
