@@ -43,3 +43,24 @@ export function sendLeadToMeta(sb: SupabaseClient, page: MetaPage, lead: Lead, r
 
   if (typeof EdgeRuntime !== "undefined" && EdgeRuntime) EdgeRuntime.waitUntil(task);
 }
+
+/** "Ver conteúdo" ao abrir a página: só dados do navegador (IP, navegador, cookies do pixel). */
+export function sendViewToMeta(sb: SupabaseClient, page: MetaPage, rawMeta: unknown, req: RequestInfo): void {
+  if (!page.meta_pixel_id || !page.meta_capi_token_encrypted) return;
+  const meta = (rawMeta && typeof rawMeta === "object" ? rawMeta : {}) as Record<string, unknown>;
+  const eventId = str(meta.eventId, 64);
+  if (!EVENT_ID.test(eventId)) return;
+  const url = str(meta.url, 500);
+  const task = (async () => {
+    const token = await decryptSecret(sb as never, page.meta_capi_token_encrypted);
+    if (!token) return;
+    const r = await sendMetaEvent({
+      pixelId: page.meta_pixel_id!, token, testEventCode: page.meta_test_event_code,
+      eventName: "ViewContent", eventId,
+      eventSourceUrl: url.startsWith("https://spypro.com.br/") ? url : null,
+      user: { ip: req.ip, userAgent: req.userAgent?.slice(0, 400) ?? null, fbp: str(meta.fbp, 120) || null, fbc: str(meta.fbc, 300) || null },
+    });
+    if (!r.ok) console.error("[presale-signup] meta capi view", r.error);
+  })().catch((e) => console.error("[presale-signup] meta capi view", e instanceof Error ? e.message : e));
+  if (typeof EdgeRuntime !== "undefined" && EdgeRuntime) EdgeRuntime.waitUntil(task);
+}

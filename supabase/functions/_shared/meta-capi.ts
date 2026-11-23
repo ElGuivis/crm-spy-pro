@@ -25,7 +25,7 @@ export interface MetaEvent {
   pixelId: string;
   token: string;
   testEventCode?: string | null;
-  eventName: "Lead" | "CompleteRegistration" | "PageView";
+  eventName: "Lead" | "CompleteRegistration" | "PageView" | "ViewContent";
   eventId: string;
   eventSourceUrl?: string | null;
   user: MetaUser;

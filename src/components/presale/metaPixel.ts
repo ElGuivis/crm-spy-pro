@@ -33,7 +33,7 @@ export function loadMetaPixel(pixelId: string): void {
 }
 
 /** `eventId` = o mesmo mandado ao servidor (API de Conversões), para a Meta não contar duas vezes. */
-export function trackMetaEvent(event: "Lead" | "CompleteRegistration", eventId?: string): void {
+export function trackMetaEvent(event: "Lead" | "CompleteRegistration" | "ViewContent", eventId?: string): void {
   if (!initialized.size || !window.fbq) return;
   if (eventId) window.fbq("track", event, {}, { eventID: eventId });
   else window.fbq("track", event);

@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { GroupForm } from "@/components/presale/GroupForm";
 import { CardTitle, DISPLAY, OutbackShell } from "@/components/presale/OutbackShell";
-import { loadMetaPixel, trackMetaEvent } from "@/components/presale/metaPixel";
+import { loadMetaPixel, metaBrowserData, trackMetaEvent } from "@/components/presale/metaPixel";
 
 const ENDPOINT = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/presale-signup`;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
@@ -40,11 +40,26 @@ export default function PreVenda() {
   useEffect(() => {
     if (!slug) return;
     const ctrl = new AbortController();
+    let viewTimer = 0;
     fetch(`${ENDPOINT}?slug=${encodeURIComponent(slug)}&kind=group`, { headers: { apikey: ANON_KEY }, signal: ctrl.signal })
       .then((r): Promise<unknown> | null => (r.ok ? r.json() : null))
-      .then((cfg) => { const id = (cfg as { metaPixelId?: string | null } | null)?.metaPixelId; if (id) loadMetaPixel(id); })
+      .then((cfg) => {
+        const id = (cfg as { metaPixelId?: string | null } | null)?.metaPixelId;
+        if (!id) return;
+        loadMetaPixel(id);
+        // "Ver conteúdo": pixel + servidor com o mesmo event_id. Espera o pixel criar o cookie _fbp.
+        const eventId = crypto.randomUUID();
+        trackMetaEvent("ViewContent", eventId);
+        viewTimer = window.setTimeout(() => {
+          fetch(ENDPOINT, {
+            method: "POST", keepalive: true,
+            headers: { "Content-Type": "application/json", apikey: ANON_KEY },
+            body: JSON.stringify({ slug, action: "view", meta: metaBrowserData(eventId) }),
+          }).catch((): void => undefined);
+        }, 1500);
+      })
       .catch((): void => undefined);
-    return () => ctrl.abort();
+    return () => { ctrl.abort(); window.clearTimeout(viewTimer); };
   }, [slug]);
 
   const onLead = (eventId: string): void => {

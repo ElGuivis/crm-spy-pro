@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { publicCorsHeaders } from "../_shared/cors.ts";
 import { clientIp, withinRateLimit } from "../_shared/rate-limit.ts";
 import { handleGroupLead, handleGroupSizes } from "./group.ts";
+import { sendViewToMeta } from "./meta.ts";
 import { handleRegister } from "./register.ts";
 
 // Página de pré-venda (/vip/<slug>), endpoint PÚBLICO de propósito.
@@ -46,14 +47,23 @@ Deno.serve(async (req) => {
     // 8 envios por IP a cada 10 min (família na mesma rede passa; robô não). Etapa dos tamanhos conta à parte.
     const body = await req.json().catch(() => null) as Record<string, unknown> | null;
     if (!body) return json({ error: "invalid", message: "Dados inválidos" }, 400);
-    const action = body.action === "sizes" ? "sizes" : "lead";
-    if (!(await withinRateLimit(supabase, `presale:${action}:${clientIp(req)}`, action === "sizes" ? 20 : 8, 600))) {
+    const action = body.action === "sizes" ? "sizes" : body.action === "view" ? "view" : "lead";
+    const ip = clientIp(req);
+    const reqInfo = { ip: ip === "unknown" ? null : ip, userAgent: req.headers.get("user-agent") };
+    const limit = action === "view" ? 30 : action === "sizes" ? 20 : 8;
+    if (!(await withinRateLimit(supabase, `presale:${action}:${ip}`, limit, 600))) {
+      if (action === "view") return json({ ok: true }); // visita além do limite: só não manda à Meta
       return json({ error: "rate_limited", message: "Muita tentativa seguida. Espera uns minutos e tenta de novo." }, 429);
     }
     if (typeof body.website === "string" && body.website.trim()) return json({ ok: true, groupUrl: null });
 
     const page = await loadPage(typeof body.slug === "string" ? body.slug.toLowerCase() : "", kindOf(body.kind));
     if (!page) return json({ error: "not_found", message: "Página não encontrada" }, 404);
+    // "Ver conteúdo" (abriu a página) para a API de Conversões; o pixel manda o mesmo event_id
+    if (action === "view") {
+      if (page.mode === "group") sendViewToMeta(supabase, page, body.meta, reqInfo);
+      return json({ ok: true });
+    }
     if (!page.is_active) return json({ error: "closed", message: page.mode === "register" ? "Esse link de cadastro não está mais ativo." : "A lista dessa pré-venda já fechou." }, 410);
 
     let r;
@@ -61,7 +71,7 @@ Deno.serve(async (req) => {
     else if (!page.whatsapp_group_url) return json({ error: "server", message: "Página sem grupo configurado." }, 500);
     else {
       const groupPage = { ...page, whatsapp_group_url: page.whatsapp_group_url };
-      r = action === "sizes" ? await handleGroupSizes(supabase, groupPage, body) : await handleGroupLead(supabase, groupPage, body, { ip: clientIp(req) === "unknown" ? null : clientIp(req), userAgent: req.headers.get("user-agent") });
+      r = action === "sizes" ? await handleGroupSizes(supabase, groupPage, body) : await handleGroupLead(supabase, groupPage, body, reqInfo);
     }
     return json(r.body, r.status);
   } catch (err) {
