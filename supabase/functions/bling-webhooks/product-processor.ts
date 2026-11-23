@@ -3,7 +3,7 @@ type ServiceClient = ReturnType<typeof createClient>;
 import type { Logger } from "../_shared/correlation.ts";
 import { getValidAccessToken } from './webhook-helpers.ts';
 import { loadChannelScope } from '../_shared/bling-channels.ts';
-import { mirrorBlingImages } from '../_shared/bling-images.ts';
+import { blingDate, mirrorBlingImages } from '../_shared/bling-images.ts';
 
 const BLING_API_BASE = 'https://api.bling.com.br/Api/v3';
 
@@ -79,7 +79,7 @@ export async function processProductEvent(
     frete_gratis: product.freteGratis === true, sob_encomenda: product.sobEncomenda === true,
     producao_propria: product.producao === 'P', cross_docking: product.crossdocking ?? null,
     garantia: product.garantia ?? null, volumes_por_produto: product.volumesPorProduto ?? null,
-    campos_customizados: product.camposCustomizados || null, data_validade: product.dataValidade || null,
+    campos_customizados: product.camposCustomizados || null, data_validade: blingDate(product.dataValidade),
     dados_nfe: (product.spedTipoItem || product.canalVendasCodigo) ? { spedTipoItem: product.spedTipoItem || null, canalVendasCodigo: product.canalVendasCodigo || null } : null,
     raw_data: product, synced_at: new Date().toISOString(), updated_at: new Date().toISOString(),
   };

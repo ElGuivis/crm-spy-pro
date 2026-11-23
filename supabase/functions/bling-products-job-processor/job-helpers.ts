@@ -10,7 +10,7 @@ export const UPSERT_CHUNK_SIZE = 25;
 export const RATE_LIMIT_DELAY = 400;
 export const MAX_PAGES_PER_RUN = 3;
 export const LOCK_TIMEOUT_MS = 5 * 60 * 1000;
-export const ENRICHMENT_BATCH_SIZE = 20;
+export const ENRICHMENT_BATCH_SIZE = 150; // o limite real é o tempo (BUDGET_MS em enrichment-job.ts)
 export const ENRICHMENT_DELAY = 400;
 
 export interface BlingConnection {

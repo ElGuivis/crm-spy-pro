@@ -14,6 +14,13 @@
  */
 
 export const PRODUCT_IMAGES_BUCKET = "product-images";
+
+/** Data do Bling (AAAA-MM-DD) ou null: o Bling manda "0000-00-00" quando não há data, e o banco recusa. */
+export function blingDate(v: unknown): string | null {
+  if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}/.test(v)) return null;
+  const d = new Date(v.slice(0, 10) + "T00:00:00Z");
+  return isNaN(d.getTime()) || v.startsWith("0000") ? null : v.slice(0, 10);
+}
 const IMGPROXY = Deno.env.get("IMGPROXY_INTERNAL_URL") ?? "http://imgproxy:5001";
 const MAX_SIDE = 2000;
 const QUALITY = 90;

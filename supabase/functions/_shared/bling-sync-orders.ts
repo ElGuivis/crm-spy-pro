@@ -14,6 +14,9 @@ import { orderInChannels, orderListQueries } from "./bling-channels.ts";
 
 const log = createLogger("bling-sync-orders", "shared");
 
+/** De onde continuar (listagem `query`, página `page`) e até quando rodar nesta chamada. */
+export interface OrdersResume { query?: number; page?: number; deadline?: number }
+
 /** Sync orders from Bling - fetches complete details for each order */
 export async function syncOrders(
   supabase: ServiceClient,
@@ -22,16 +25,22 @@ export async function syncOrders(
   tenantId: string,
   jobId: string,
   storeIds: number[] | null = null,
-  incremental: boolean = false
-): Promise<number> {
+  incremental: boolean = false,
+  resume: OrdersResume = {},
+): Promise<{ synced: number; next: { query: number; page: number } | null }> {
   let totalSynced = 0;
-  const maxPages = incremental ? 3 : 100;
+  const maxPages = incremental ? 3 : 1000;
+  const queries = orderListQueries(storeIds);
 
   // uma listagem por canal escolhido (o Bling filtra por idLoja) ou uma só, filtrada aqui
-  for (const query of orderListQueries(storeIds)) {
-  let page = 1;
+  for (let qi = resume.query ?? 0; qi < queries.length; qi++) {
+  const query = queries[qi];
+  let page = qi === (resume.query ?? 0) ? (resume.page ?? 1) : 1;
   let hasMore = true;
   while (hasMore && page <= maxPages) {
+    // a chamada tem ~150 s de vida: para antes e continua em outra (bling-sync se chama de novo)
+    if (resume.deadline && Date.now() > resume.deadline) return { synced: totalSynced, next: { query: qi, page } };
+
     if (await isJobCancelled(supabase, jobId)) {
       log.info('[bling-sync] Job cancelled, stopping orders sync');
       throw new Error('CANCELLED');
@@ -209,5 +218,5 @@ export async function syncOrders(
   }
   }
 
-  return totalSynced;
+  return { synced: totalSynced, next: null };
 }

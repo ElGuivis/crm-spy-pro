@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 type ServiceClient = ReturnType<typeof createClient>;
-import { mirrorBlingImages } from '../_shared/bling-images.ts';
+import { blingDate, mirrorBlingImages } from '../_shared/bling-images.ts';
 import { BLING_API_BASE, ENRICHMENT_BATCH_SIZE, ENRICHMENT_DELAY, type BlingConnection, type Log, delay, ensureValidToken, updateJobProgress, getJobStatus } from './job-helpers.ts';
 
 async function fetchProductDetails(accessToken: string, productId: number, log: Log): Promise<Record<string, unknown> | null> {
@@ -108,13 +108,20 @@ export async function processEnrichmentJob(
             sob_encomenda: details.sobEncomenda === true, producao_propria: details.producao === 'P',
             cross_docking: details.crossdocking ?? null, garantia: details.garantia ?? null,
             volumes_por_produto: details.volumesPorProduto ?? null, campos_customizados: details.camposCustomizados || null,
-            data_validade: details.dataValidade || null,
+            data_validade: blingDate(details.dataValidade),
             dados_nfe: (details.spedTipoItem || details.canalVendasCodigo) ? { spedTipoItem: details.spedTipoItem || null, canalVendasCodigo: details.canalVendasCodigo || null } : null,
             updated_at: new Date().toISOString(),
           };
           const { error: updateError } = await supabase.from('bling_products').update(updateData).eq('id', product.id);
           if (!updateError) enriched++;
-          else log.error(`[ENRICHMENT] Error updating product ${product.bling_id}:`, updateError);
+          else {
+            // algum campo do detalhe recusado pelo banco: grava ao menos as fotos (senão o produto volta sempre)
+            log.error(`[ENRICHMENT] Error updating product ${product.bling_id}:`, updateError);
+            const { error: minError } = await supabase.from('bling_products').update({
+              imagens: images, ...(images[0] ? { imagem_url: images[0].link } : {}), updated_at: new Date().toISOString(),
+            }).eq('id', product.id);
+            if (!minError) enriched++;
+          }
         }
         await updateJobProgress(supabase, jobId as string, { processed_count: ((job.processed_count as number) || 0) + enriched, saved_count: ((job.saved_count as number) || 0) + enriched });
         await delay(ENRICHMENT_DELAY);

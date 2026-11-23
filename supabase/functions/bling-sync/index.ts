@@ -20,6 +20,33 @@ import { parseChannelScope } from "../_shared/bling-channels.ts";
 
 declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void };
 
+/** Tempo de pedidos por chamada (o runtime encerra a chamada perto de 150 s). */
+const ORDERS_BUDGET_MS = 100_000;
+
+async function priorSaved(supabase: ReturnType<typeof createClient>, jobId: string): Promise<number> {
+  const { data } = await supabase.from('bling_sync_jobs').select('saved_count').eq('id', jobId).maybeSingle();
+  return Number((data as { saved_count?: number } | null)?.saved_count) || 0;
+}
+
+/** Grava onde parou e chama o bling-sync de novo para continuar (carga de pedidos grande). */
+async function continueOrders(
+  supabase: ReturnType<typeof createClient>, integrationId: string, syncLogId: string, jobId: string,
+  next: { query: number; page: number }, syncedNow: number, jobIds: string[],
+): Promise<string> {
+  const saved = (await priorSaved(supabase, jobId)) + syncedNow;
+  const now = new Date().toISOString();
+  await supabase.from('bling_sync_jobs').update({ status: 'running', resume_page: next.page, saved_count: saved, updated_at: now }).eq('id', jobId);
+  // mantém vivos os outros jobs desta carga (o bling-sync marca como travado o que passa de 5 min parado)
+  await supabase.from('bling_sync_jobs').update({ updated_at: now }).in('id', jobIds).eq('status', 'pending');
+  const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/bling-sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
+    body: JSON.stringify({ integrationId, syncType: 'orders', resumeJobId: jobId, resumeLogId: syncLogId, resumeQuery: next.query, resumePage: next.page }),
+  });
+  await res.body?.cancel();
+  return `[bling-sync] orders: ${saved} salvos, continua na página ${next.page} (HTTP ${res.status})`;
+}
+
 async function ensureValidToken(supabase: ServiceClient, connection: BlingConnection): Promise<string> {
   return ensureBlingToken(supabase, connection, '[bling-sync]');
 }
@@ -43,6 +70,10 @@ Deno.serve(async (req) => {
     const body = await req.json();
     // os canais vêm SEMPRE da integração salva (o corpo não manda mais neles)
     const { integrationId, syncType = 'all', incremental = false } = body;
+    // continuação de uma carga de pedidos que passou do tempo de uma chamada (só interna)
+    const resume = auth.isInternal && typeof body.resumeJobId === 'string'
+      ? { jobId: body.resumeJobId as string, query: Number(body.resumeQuery) || 0, page: Number(body.resumePage) || 1 }
+      : null;
 
     log.info(`[bling-sync] Starting sync: integration=${integrationId}, type=${syncType}, incremental=${incremental}`);
 
@@ -61,12 +92,14 @@ Deno.serve(async (req) => {
     // Auto-recover stuck jobs (running/pending for more than 5 minutes)
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
-    const { data: stuckJobs } = await supabase
+    let stuckQuery = supabase
       .from('bling_sync_jobs')
       .select('id, sync_log_id')
       .eq('integration_id', integrationId)
       .in('status', ['running', 'pending'])
       .lt('updated_at', fiveMinutesAgo);
+    if (resume) stuckQuery = stuckQuery.neq('sync_log_id', body.resumeLogId);
+    const { data: stuckJobs } = await stuckQuery;
 
     if (stuckJobs && stuckJobs.length > 0) {
       log.info(`[bling-sync] Found ${stuckJobs.length} stuck jobs (>5min), marking as failed`);
@@ -130,53 +163,63 @@ Deno.serve(async (req) => {
     const accessToken = await ensureValidToken(supabase, connection);
     const scope = parseChannelScope(integration);
 
-    // Create sync log
-    const { data: syncLog, error: logError } = await supabase
-      .from('bling_sync_logs')
-      .insert({
-        integration_id: integrationId,
-        tenant_id: integration.tenant_id,
-        sync_type: syncType,
-        status: 'running',
-        started_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (logError) {
-      log.error('[bling-sync] Error creating sync log:', logError);
-      throw logError;
-    }
-
-    // Determine which sync types to run
-    const syncTypes: Array<'orders' | 'customers' | 'products'> = syncType === 'all'
-      ? ['orders', 'customers', 'products']
-      : [syncType];
-
-    // Create jobs
+    let syncLog: { id: string };
     const jobs: Array<{ id: string; job_type: 'orders' | 'customers' | 'products' }> = [];
-    for (const type of syncTypes) {
-      const { data: job, error: jobError } = await supabase
-        .from('bling_sync_jobs')
+    if (resume) {
+      syncLog = { id: body.resumeLogId as string };
+      const { data: rest } = await supabase.from('bling_sync_jobs').select('id, job_type')
+        .eq('sync_log_id', syncLog.id).eq('status', 'pending').eq('job_type', 'customers').order('created_at');
+      jobs.push({ id: resume.jobId, job_type: 'orders' }, ...((rest ?? []) as typeof jobs));
+    } else {
+      // Create sync log
+      const { data: createdLog, error: logError } = await supabase
+        .from('bling_sync_logs')
         .insert({
-          sync_log_id: syncLog.id,
           integration_id: integrationId,
           tenant_id: integration.tenant_id,
-          job_type: type,
-          status: 'pending',
+          sync_type: syncType,
+          status: 'running',
           started_at: new Date().toISOString(),
         })
-        .select('id, job_type')
+        .select()
         .single();
 
-      if (jobError || !job) {
-        log.error(`[bling-sync] Error creating job for ${type}:`, jobError);
-        continue;
+      if (logError) {
+        log.error('[bling-sync] Error creating sync log:', logError);
+        throw logError;
       }
-      jobs.push(job);
+      syncLog = createdLog;
+
+      // Determine which sync types to run
+      const syncTypes: Array<'orders' | 'customers' | 'products'> = syncType === 'all'
+        ? ['orders', 'customers', 'products']
+        : [syncType];
+
+      // Create jobs
+      for (const type of syncTypes) {
+        const { data: job, error: jobError } = await supabase
+          .from('bling_sync_jobs')
+          .insert({
+            sync_log_id: syncLog.id,
+            integration_id: integrationId,
+            tenant_id: integration.tenant_id,
+            job_type: type,
+            status: 'pending',
+            started_at: new Date().toISOString(),
+          })
+          .select('id, job_type')
+          .single();
+
+        if (jobError || !job) {
+          log.error(`[bling-sync] Error creating job for ${type}:`, jobError);
+          continue;
+        }
+        jobs.push(job);
+      }
     }
 
     // Run sync in background
+    const startedAt = Date.now();
     const backgroundTask = async () => {
       let totalRecords = 0;
       let hadError = false;
@@ -193,14 +236,21 @@ Deno.serve(async (req) => {
           let synced = 0;
 
           switch (type) {
-            case 'orders':
-              synced = await syncOrders(supabase, accessToken, integrationId, integration.tenant_id, job.id, scope.orderStoreIds, incremental);
+            case 'orders': {
+              const r = await syncOrders(supabase, accessToken, integrationId, integration.tenant_id, job.id, scope.orderStoreIds, incremental,
+                { query: resume?.query, page: resume?.page, deadline: startedAt + ORDERS_BUDGET_MS });
+              if (r.next) {
+                log.info(await continueOrders(supabase, integrationId, syncLog.id, job.id, r.next, r.synced, jobs.map((j) => j.id)));
+                return; // a próxima chamada termina os pedidos e faz o resto
+              }
+              synced = r.synced + (resume ? await priorSaved(supabase, job.id) : 0);
               await supabase.from('integrations').update({
                 last_orders_sync_at: new Date().toISOString(),
                 last_sync_at: new Date().toISOString(),
                 initial_sync_completed: true,
               }).eq('id', integrationId);
               break;
+            }
 
             case 'customers':
               synced = await syncCustomersFromOrders(supabase, accessToken, integrationId, integration.tenant_id, job.id);
