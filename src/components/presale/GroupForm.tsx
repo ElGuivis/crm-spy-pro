@@ -1,4 +1,5 @@
 import { FormEvent, useState } from "react";
+import { metaBrowserData } from "./metaPixel";
 import { maskPhone } from "./presale-utils";
 
 // Formulário curto do grupo VIP (mesmos campos da página antiga "fimdaout"):
@@ -25,7 +26,7 @@ async function post(payload: Record<string, unknown>): Promise<{ ok: boolean; bo
   return { ok: res.ok && !!body?.ok, body };
 }
 
-interface Props { slug: string; onDone: (groupUrl: string | null) => void; onSizesStep?: () => void }
+interface Props { slug: string; onDone: (groupUrl: string | null) => void; onSizesStep?: (eventId: string) => void }
 
 export function GroupForm({ slug, onDone, onSizesStep }: Props) {
   const [step, setStep] = useState<"lead" | "sizes">("lead");
@@ -56,11 +57,12 @@ export function GroupForm({ slug, onDone, onSizesStep }: Props) {
     }
     setSending(true);
     try {
-      const { ok, body } = await post({ slug, action: "lead", ...lead });
+      const eventId = crypto.randomUUID();
+      const { ok, body } = await post({ slug, action: "lead", ...lead, meta: metaBrowserData(eventId) });
       if (ok && body?.id) {
         setSignup({ id: body.id, groupUrl: body.groupUrl ?? null });
         setStep("sizes");
-        onSizesStep?.();
+        onSizesStep?.(eventId);
       } else if (ok) onDone(body?.groupUrl ?? null);
       else if (body?.field && body.field !== "form") setErrors({ [body.field]: body.message });
       else setServerError(body?.message ?? "Deu ruim. Tenta de novo aí.");

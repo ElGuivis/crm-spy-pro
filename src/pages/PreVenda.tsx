@@ -47,8 +47,8 @@ export default function PreVenda() {
     return () => ctrl.abort();
   }, [slug]);
 
-  const onLead = (): void => {
-    trackMetaEvent("Lead");
+  const onLead = (eventId: string): void => {
+    trackMetaEvent("Lead", eventId);
     setAskingSizes(true);
   };
 

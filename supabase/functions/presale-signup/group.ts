@@ -4,9 +4,13 @@
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { formatBrPhone, normalizeBrPhone } from "./validate.ts";
 import { sendToSheet } from "./sheet.ts";
+import { sendLeadToMeta, type RequestInfo } from "./meta.ts";
 
 type Supabase = SupabaseClient;
-export interface GroupPage { id: string; tenant_id: string; whatsapp_group_url: string; sheet_url: string | null }
+export interface GroupPage {
+  id: string; tenant_id: string; whatsapp_group_url: string; sheet_url: string | null;
+  meta_pixel_id: string | null; meta_capi_token_encrypted: string | null; meta_test_event_code: string | null;
+}
 export type Reply = { status: number; body: Record<string, unknown> };
 
 export const SHIRT_SIZES = ["PP", "P", "M", "G", "GG", "XGG"];
@@ -26,7 +30,7 @@ async function markSheet(sb: Supabase, id: string, r: { ok: boolean; error?: str
   if (!r.ok) console.error("[presale-signup] planilha", id, r.error);
 }
 
-export async function handleGroupLead(sb: Supabase, page: GroupPage, b: Record<string, unknown>): Promise<Reply> {
+export async function handleGroupLead(sb: Supabase, page: GroupPage, b: Record<string, unknown>, req: RequestInfo): Promise<Reply> {
   const name = s(b.name, 120);
   if (name.length < 2) return invalid("name", "Bota teu nome aí");
   const phone = normalizeBrPhone(s(b.phone, 30));
@@ -41,6 +45,9 @@ export async function handleGroupLead(sb: Supabase, page: GroupPage, b: Record<s
     console.error("[presale-signup] grupo insert", error?.message);
     return { status: 500, body: { error: "server", message: "Não rolou salvar agora. Tenta de novo." } };
   }
+
+  // API de Conversões: em segundo plano (não atrasa a pessoa), mesmo event_id do navegador
+  sendLeadToMeta(sb, page, { signupId: data.id, name, phone, email }, b.meta, req);
 
   if (page.sheet_url) {
     const r = await sendToSheet(page.sheet_url, { name, phone: formatBrPhone(phone), email, shirtSize: "", pantsSize: "", shoeSize: "" });

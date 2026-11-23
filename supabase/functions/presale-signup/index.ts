@@ -17,6 +17,7 @@ const json = (body: unknown, status = 200) =>
 interface PageRow {
   id: string; tenant_id: string; title: string; whatsapp_group_url: string | null;
   is_active: boolean; mode: "group" | "register"; sheet_url: string | null; meta_pixel_id: string | null;
+  meta_capi_token_encrypted: string | null; meta_test_event_code: string | null;
 }
 const SLUG = /^[a-z0-9-]{3,40}$/;
 
@@ -28,7 +29,7 @@ Deno.serve(async (req) => {
   const loadPage = async (slug: string, mode: "group" | "register") => {
     if (!SLUG.test(slug)) return null;
     const { data } = await supabase.from("presale_pages")
-      .select("id, tenant_id, title, whatsapp_group_url, is_active, mode, sheet_url, meta_pixel_id")
+      .select("id, tenant_id, title, whatsapp_group_url, is_active, mode, sheet_url, meta_pixel_id, meta_capi_token_encrypted, meta_test_event_code")
       .eq("slug", slug).eq("mode", mode).maybeSingle();
     return data as PageRow | null;
   };
@@ -60,7 +61,7 @@ Deno.serve(async (req) => {
     else if (!page.whatsapp_group_url) return json({ error: "server", message: "Página sem grupo configurado." }, 500);
     else {
       const groupPage = { ...page, whatsapp_group_url: page.whatsapp_group_url };
-      r = action === "sizes" ? await handleGroupSizes(supabase, groupPage, body) : await handleGroupLead(supabase, groupPage, body);
+      r = action === "sizes" ? await handleGroupSizes(supabase, groupPage, body) : await handleGroupLead(supabase, groupPage, body, { ip: clientIp(req) === "unknown" ? null : clientIp(req), userAgent: req.headers.get("user-agent") });
     }
     return json(r.body, r.status);
   } catch (err) {

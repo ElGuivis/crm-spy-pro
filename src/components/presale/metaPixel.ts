@@ -32,6 +32,22 @@ export function loadMetaPixel(pixelId: string): void {
   window.fbq("track", "PageView");
 }
 
-export function trackMetaEvent(event: "Lead" | "CompleteRegistration"): void {
-  if (initialized.size && window.fbq) window.fbq("track", event);
+/** `eventId` = o mesmo mandado ao servidor (API de Conversões), para a Meta não contar duas vezes. */
+export function trackMetaEvent(event: "Lead" | "CompleteRegistration", eventId?: string): void {
+  if (!initialized.size || !window.fbq) return;
+  if (eventId) window.fbq("track", event, {}, { eventID: eventId });
+  else window.fbq("track", event);
+}
+
+function cookie(name: string): string | null {
+  const m = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+/** Dados do navegador que a API de Conversões usa para casar o evento (cookies do pixel). */
+export function metaBrowserData(eventId: string): { eventId: string; fbp: string | null; fbc: string | null; url: string } {
+  let fbc = cookie("_fbc");
+  const clickId = new URLSearchParams(window.location.search).get("fbclid");
+  if (!fbc && clickId) fbc = `fb.1.${Date.now()}.${clickId}`;
+  return { eventId, fbp: cookie("_fbp"), fbc, url: window.location.href.split("#")[0] };
 }
