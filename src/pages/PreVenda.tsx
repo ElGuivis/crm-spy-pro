@@ -10,12 +10,13 @@ const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
 
 // Página pública do grupo VIP da pré-venda (/vip/:slug): formulário curto -> planilha -> grupo do WhatsApp.
 
-function Success({ groupUrl }: { groupUrl: string | null }) {
+function Success({ groupUrl, opened }: { groupUrl: string | null; opened: boolean }) {
+  // opened: o grupo já foi aberto no clique; aqui só fica o botão caso a pessoa volte
   useEffect(() => {
-    if (!groupUrl) return;
+    if (!groupUrl || opened) return;
     const t = window.setTimeout(() => window.location.assign(groupUrl), 2500);
     return () => window.clearTimeout(t);
-  }, [groupUrl]);
+  }, [groupUrl, opened]);
 
   return (
     <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="py-4 text-center" role="status">
@@ -36,6 +37,8 @@ export default function PreVenda({ slug: fixedSlug }: { slug?: string } = {}) {
   const slug = fixedSlug ?? params.slug ?? "";
   const [groupUrl, setGroupUrl] = useState<string | null | undefined>(undefined);
   const [askingSizes, setAskingSizes] = useState(false);
+  const [opened, setOpened] = useState(false);
+  const onDone = (url: string | null, wasOpened = false): void => { setOpened(wasOpened); setGroupUrl(url); };
 
   // pixel da Meta configurado na página (presale_pages.meta_pixel_id)
   useEffect(() => {
@@ -80,10 +83,10 @@ export default function PreVenda({ slug: fixedSlug }: { slug?: string } = {}) {
       {groupUrl === undefined ? (
         <>
           {askingSizes ? null : <CardTitle title="BOTA TEU NOME NA LISTA" subtitle="Leva menos de um minuto. Depois é só entrar no grupo." />}
-          <GroupForm slug={slug} onDone={setGroupUrl} onSizesStep={onLead} />
+          <GroupForm slug={slug} onDone={onDone} onSizesStep={onLead} />
         </>
       ) : (
-        <Success groupUrl={groupUrl} />
+        <Success groupUrl={groupUrl} opened={opened} />
       )}
     </OutbackShell>
   );

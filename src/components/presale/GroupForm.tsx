@@ -4,6 +4,7 @@ import { maskPhone } from "./presale-utils";
 
 // Formulário curto do grupo VIP (mesmos campos da página antiga "fimdaout"):
 // etapa 1 nome/WhatsApp/e-mail -> etapa 2 tamanhos (opcional) -> grupo.
+// No máximo 2 cliques: o botão da etapa 2 já abre o grupo (sem tela intermediária).
 const ENDPOINT = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/presale-signup`;
 const ANON_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string;
 
@@ -20,13 +21,14 @@ const INPUT = "w-full bg-[#242424] border border-[#2e2e2e] rounded-[2px] px-3 sm
 const LABEL = "block text-[10px] sm:text-xs text-white/50 mb-1 uppercase tracking-[0.2em]";
 const PRIMARY = "w-full bg-[#f2f2f2] text-[#080808] font-['Bebas_Neue'] text-xl tracking-[0.14em] py-3.5 sm:py-4 rounded-[2px] hover:bg-[#dc2828] hover:text-white active:scale-[0.98] transition-all disabled:opacity-50";
 
-async function post(payload: Record<string, unknown>): Promise<{ ok: boolean; body: Reply | null }> {
-  const res = await fetch(ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json", apikey: ANON_KEY }, body: JSON.stringify(payload) });
+async function post(payload: Record<string, unknown>, keepalive = false): Promise<{ ok: boolean; body: Reply | null }> {
+  // keepalive: a requisição termina mesmo com a página saindo para o WhatsApp
+  const res = await fetch(ENDPOINT, { method: "POST", keepalive, headers: { "Content-Type": "application/json", apikey: ANON_KEY }, body: JSON.stringify(payload) });
   const body: Reply | null = await res.json().then((j: Reply) => j, (): null => null);
   return { ok: res.ok && !!body?.ok, body };
 }
 
-interface Props { slug: string; onDone: (groupUrl: string | null) => void; onSizesStep?: (eventId: string) => void }
+interface Props { slug: string; onDone: (groupUrl: string | null, opened?: boolean) => void; onSizesStep?: (eventId: string) => void }
 
 export function GroupForm({ slug, onDone, onSizesStep }: Props) {
   const [step, setStep] = useState<"lead" | "sizes">("lead");
@@ -73,16 +75,19 @@ export function GroupForm({ slug, onDone, onSizesStep }: Props) {
     }
   };
 
-  const finish = async (withSizes: boolean) => {
+  const finish = (withSizes: boolean) => {
     if (!signup) return;
     setSending(true);
-    try {
-      // mesmo se os tamanhos falharem, o cadastro já está salvo: segue pro grupo
-      await post({ slug, action: "sizes", id: signup.id, ...(withSizes ? sizes : {}) }).catch((): null => null);
-    } finally {
+    // mesmo se os tamanhos falharem, o cadastro já está salvo: segue pro grupo
+    const saving = post({ slug, action: "sizes", id: signup.id, ...(withSizes ? sizes : {}) }, true).catch((): null => null);
+    const url = signup.groupUrl;
+    // espera salvar os tamanhos (no máximo 1,5 s) e abre o grupo direto, sem tela intermediária
+    const waitMax = new Promise<void>((r) => window.setTimeout(r, 1500));
+    void Promise.race([saving, waitMax]).then(() => {
+      if (url) window.location.assign(url);
       setSending(false);
-      onDone(signup.groupUrl);
-    }
+      onDone(url, !!url);
+    });
   };
 
   if (step === "sizes") {
@@ -102,7 +107,7 @@ export function GroupForm({ slug, onDone, onSizesStep }: Props) {
           </div>
         ))}
         <button type="button" onClick={() => finish(true)} disabled={sending} className={PRIMARY}>
-          {sending ? "SEGURA AÍ…" : "SALVAR E ENTRAR NO GRUPO"}
+          {sending ? "ABRINDO O WHATSAPP…" : "SALVAR E ENTRAR NO GRUPO"}
         </button>
         <button type="button" onClick={() => finish(false)} disabled={sending}
           className="w-full border border-[#2e2e2e] text-[#f2f2f2] py-3 rounded-[2px] hover:bg-[#242424] transition-colors disabled:opacity-50">
