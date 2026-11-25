@@ -1749,6 +1749,7 @@ export type Database = {
           message_template: string
           name: string
           next_send_at: string | null
+          pause_reason: string | null
           processing_lock_until: string | null
           read_count: number
           scheduled_at: string | null
@@ -1779,6 +1780,7 @@ export type Database = {
           message_template: string
           name: string
           next_send_at?: string | null
+          pause_reason?: string | null
           processing_lock_until?: string | null
           read_count?: number
           scheduled_at?: string | null
@@ -1809,6 +1811,7 @@ export type Database = {
           message_template?: string
           name?: string
           next_send_at?: string | null
+          pause_reason?: string | null
           processing_lock_until?: string | null
           read_count?: number
           scheduled_at?: string | null
@@ -12255,7 +12258,9 @@ export type Database = {
           integration_id: string | null
           is_active: boolean
           li_group_id: number | null
+          meta_capi_token_encrypted: string | null
           meta_pixel_id: string | null
+          meta_test_event_code: string | null
           mode: string
           sheet_url: string | null
           slug: string
@@ -12270,7 +12275,9 @@ export type Database = {
           integration_id?: string | null
           is_active?: boolean
           li_group_id?: number | null
+          meta_capi_token_encrypted?: string | null
           meta_pixel_id?: string | null
+          meta_test_event_code?: string | null
           mode?: string
           sheet_url?: string | null
           slug: string
@@ -12285,7 +12292,9 @@ export type Database = {
           integration_id?: string | null
           is_active?: boolean
           li_group_id?: number | null
+          meta_capi_token_encrypted?: string | null
           meta_pixel_id?: string | null
+          meta_test_event_code?: string | null
           mode?: string
           sheet_url?: string | null
           slug?: string
@@ -12327,6 +12336,9 @@ export type Database = {
           li_customer_id: number | null
           li_error: string | null
           li_status: string
+          meta_capi_error: string | null
+          meta_capi_status: string | null
+          meta_event_id: string | null
           name: string
           page_id: string
           pants_size: string | null
@@ -12353,6 +12365,9 @@ export type Database = {
           li_customer_id?: number | null
           li_error?: string | null
           li_status?: string
+          meta_capi_error?: string | null
+          meta_capi_status?: string | null
+          meta_event_id?: string | null
           name: string
           page_id: string
           pants_size?: string | null
@@ -12379,6 +12394,9 @@ export type Database = {
           li_customer_id?: number | null
           li_error?: string | null
           li_status?: string
+          meta_capi_error?: string | null
+          meta_capi_status?: string | null
+          meta_event_id?: string | null
           name?: string
           page_id?: string
           pants_size?: string | null

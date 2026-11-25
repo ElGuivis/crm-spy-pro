@@ -68,6 +68,9 @@ export function CampaignCard({ campaign, onStart, onPause, onView, onDelete, onE
               {formatDistanceToNow(new Date(campaign.created_at), { addSuffix: true, locale: ptBR })}
             </span>
           </div>
+          {campaign.status === "paused" && campaign.pause_reason && (
+            <p className="mt-1 text-xs text-orange-600">{campaign.pause_reason}</p>
+          )}
         </div>
 
         {(campaign.status === "processing" || campaign.status === "completed" || campaign.status === "paused") && (

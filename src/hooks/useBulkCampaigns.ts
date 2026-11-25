@@ -29,7 +29,7 @@ export function useBulkCampaigns() {
     try {
       const { data, error } = await supabase
         .from("bulk_campaigns")
-        .select("id, name, message_template, whatsapp_integration_id, delay_seconds, delay_max_seconds, status, total_contacts, sent_count, delivered_count, read_count, failed_count, tokens_per_message, total_tokens_used, scheduled_at, started_at, completed_at, created_at, media_url, media_type, timezone, ab_test_id, ab_variant")
+        .select("id, name, message_template, whatsapp_integration_id, delay_seconds, delay_max_seconds, status, total_contacts, sent_count, delivered_count, read_count, failed_count, tokens_per_message, total_tokens_used, scheduled_at, started_at, completed_at, created_at, media_url, media_type, timezone, ab_test_id, ab_variant, pause_reason")
         .order("created_at", { ascending: false });
       if (error) throw error;
       setCampaigns((data || []) as Campaign[]);
@@ -56,7 +56,7 @@ export function useBulkCampaigns() {
 
   const startCampaign = async (id: string) => {
     try {
-      const { error } = await supabase.from("bulk_campaigns").update({ status: "processing", started_at: new Date().toISOString() }).eq("id", id);
+      const { error } = await supabase.from("bulk_campaigns").update({ status: "processing", started_at: new Date().toISOString(), pause_reason: null }).eq("id", id);
       if (error) throw error;
       supabase.functions.invoke("bulk-campaign-processor", { body: { campaign_id: id } }).catch((err: unknown) => logger.error("Processor invoke failed", err));
       toast({ title: "Campanha iniciada!", description: "Os disparos começarão em instantes." });
@@ -105,6 +105,7 @@ export function useBulkCampaigns() {
         .update({
           status: "processing",
           failed_count: newFailed,
+          pause_reason: null,
           completed_at: null,
           processing_lock_until: null,
           next_send_at: null,

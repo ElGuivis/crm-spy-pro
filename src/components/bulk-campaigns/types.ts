@@ -22,6 +22,7 @@ export interface Campaign {
   delay_max_seconds: number | null;
   ab_test_id: string | null;
   ab_variant: string | null;
+  pause_reason?: string | null;
 }
 
 export interface WhatsAppIntegration {

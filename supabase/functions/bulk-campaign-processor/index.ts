@@ -5,6 +5,7 @@ import { requireResource } from "../_shared/resource-guard.ts";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { canContact, recordTouches, REASON_TEXT } from "../_shared/contact-policy.ts";
+import { getInstanceState, hasWhatsApp, isConnectionError, typingDelayMs, PAUSE_REASONS } from "./evolution-guard.ts";
 
 const TOKENS_PER_MESSAGE = 2;
 
@@ -207,6 +208,29 @@ serve(async (req) => {
     let failedCount = 0;
     let stoppedByWindow = false;
 
+    // Número caído/restrito: pausa em vez de queimar a lista com "Connection Closed".
+    const pauseForConnection = async (reason: string) => {
+      await supabase.from("bulk_campaigns").update({
+        status: "paused", pause_reason: reason, processing_lock_until: null, next_send_at: null,
+      }).eq("id", campaign_id);
+      log.warn(`⛔ Campanha pausada: ${reason}`);
+      return new Response(JSON.stringify({ success: false, paused: true, reason }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    };
+
+    const state = await getInstanceState(baseUrl, evolutionApiKey, instanceName);
+    if (state === "close" || state === "connecting") {
+      return await pauseForConnection(PAUSE_REASONS.disconnected);
+    }
+    if (state === "unknown") {
+      // Evolution fora do ar ou lenta: tenta de novo em 2 min, sem gastar contato.
+      await supabase.rpc("release_bulk_campaign_lock", { _campaign_id: campaign_id, _next_send_seconds: 120 });
+      return new Response(JSON.stringify({ success: false, skipped: "evolution_unreachable" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     for (const contact of contacts) {
       // Check if campaign was paused
       const { data: currentCampaign } = await supabase
@@ -249,6 +273,15 @@ serve(async (req) => {
         continue;
       }
 
+      // Número sem WhatsApp: não envia (envio para número inexistente pesa contra o chip).
+      const formattedPhone = formatPhoneNumber(contact.phone);
+      if (await hasWhatsApp(baseUrl, evolutionApiKey, instanceName, formattedPhone) === false) {
+        await supabase.from("campaign_contacts").update({ status: "failed", error_message: "Número sem WhatsApp (não enviado)" }).eq("id", contact.id);
+        failedCount++;
+        await supabase.from("bulk_campaigns").update({ failed_count: (campaign.failed_count || 0) + failedCount }).eq("id", campaign_id);
+        continue;
+      }
+
       // Update status to sending
       await supabase.from("campaign_contacts").update({ status: "sending" }).eq("id", contact.id);
 
@@ -263,7 +296,6 @@ serve(async (req) => {
         message = message.replace(new RegExp(`\\{${key}\\}`, "gi"), String(val));
       }
 
-      const formattedPhone = formatPhoneNumber(contact.phone);
       const hasMedia = campaign.media_url && campaign.media_type && campaign.media_type !== "text";
 
       try {
@@ -291,6 +323,7 @@ serve(async (req) => {
               media: campaign.media_url,
               caption: message || undefined,
               fileName: campaign.media_type === "document" ? "documento" : undefined,
+              delay: typingDelayMs(message || ""),
             }),
           });
         } else {
@@ -303,6 +336,7 @@ serve(async (req) => {
             body: JSON.stringify({
               number: formattedPhone,
               text: message,
+              delay: typingDelayMs(message),
             }),
           });
         }
@@ -336,6 +370,16 @@ serve(async (req) => {
             failed_count: (campaign.failed_count || 0) + failedCount,
             total_tokens_used: (campaign.total_tokens_used || 0) + sentCount * TOKENS_PER_MESSAGE,
           }).eq("id", campaign_id);
+        } else if (isConnectionError(result)) {
+          // culpa da conexão, não do contato: volta para a fila e pausa
+          await supabase.from("campaign_contacts").update({ status: "pending" }).eq("id", contact.id);
+          if (sentCount > 0) {
+            await supabase.from("bulk_campaigns").update({
+              sent_count: (campaign.sent_count || 0) + sentCount,
+              total_tokens_used: (campaign.total_tokens_used || 0) + sentCount * TOKENS_PER_MESSAGE,
+            }).eq("id", campaign_id);
+          }
+          return await pauseForConnection(PAUSE_REASONS.connection_error);
         } else {
           await supabase.from("campaign_contacts").update({
             status: "failed",
