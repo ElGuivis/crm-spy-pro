@@ -5,6 +5,8 @@ import { requireResource } from "../_shared/resource-guard.ts";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { canContact, recordTouches, REASON_TEXT } from "../_shared/contact-policy.ts";
+import { checkDailyLimit, secondsUntilNextBrtDay, isWithinSendingWindow } from "./pacing.ts";
+import { renderBulkMessage } from "../_shared/spintax.ts";
 import { getInstanceState, hasWhatsApp, isConnectionError, typingDelayMs, PAUSE_REASONS } from "./evolution-guard.ts";
 
 const TOKENS_PER_MESSAGE = 2;
@@ -14,45 +16,6 @@ function formatPhoneNumber(phone: string): string {
   if (cleaned.startsWith("0")) cleaned = cleaned.substring(1);
   if (!cleaned.startsWith("55") && cleaned.length <= 11) cleaned = "55" + cleaned;
   return cleaned;
-}
-
-/**
- * Check if current time (in campaign timezone) falls within the sending schedule.
- * Returns true if no schedule is set or if currently within a valid window.
- */
-function isWithinSendingWindow(
-  schedule: Record<string, { start: string; end: string }> | null,
-  tz: string | null
-): boolean {
-  if (!schedule || Object.keys(schedule).length === 0) return true;
-
-  const timezone = tz || "America/Sao_Paulo";
-  // Get current time in the campaign's timezone
-  const now = new Date();
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    weekday: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-  const parts = formatter.formatToParts(now);
-  const weekdayStr = parts.find(p => p.type === "weekday")?.value || "";
-  const hour = parts.find(p => p.type === "hour")?.value || "00";
-  const minute = parts.find(p => p.type === "minute")?.value || "00";
-  const currentTime = `${hour}:${minute}`;
-
-  // Map weekday name to JS day number (0=Sun)
-  const dayMap: Record<string, string> = {
-    Sun: "0", Mon: "1", Tue: "2", Wed: "3", Thu: "4", Fri: "5", Sat: "6",
-  };
-  const dayKey = dayMap[weekdayStr];
-  if (!dayKey) return true;
-
-  const window = schedule[dayKey];
-  if (!window) return false; // Day not in schedule = no sending
-
-  return currentTime >= window.start && currentTime < window.end;
 }
 
 serve(async (req) => {
@@ -96,7 +59,7 @@ serve(async (req) => {
     // Load campaign
     const { data: campaign, error: campErr } = await supabase
       .from("bulk_campaigns")
-      .select("id, tenant_id, name, status, message_template, whatsapp_integration_id, media_url, media_type, delay_seconds, delay_max_seconds, sent_count, failed_count, total_tokens_used, timezone, sending_schedule")
+      .select("id, tenant_id, name, status, message_template, whatsapp_integration_id, media_url, media_type, delay_seconds, delay_max_seconds, sent_count, failed_count, total_tokens_used, timezone, sending_schedule, daily_limit, daily_limit_step, pause_reason")
       .eq("id", campaign_id)
       .single();
 
@@ -208,6 +171,13 @@ serve(async (req) => {
     let failedCount = 0;
     let stoppedByWindow = false;
 
+    const saveStats = (clearReason = false) => supabase.from("bulk_campaigns").update({
+      ...(clearReason && campaign.pause_reason ? { pause_reason: null } : {}),
+      sent_count: (campaign.sent_count || 0) + sentCount,
+      failed_count: (campaign.failed_count || 0) + failedCount,
+      total_tokens_used: (campaign.total_tokens_used || 0) + sentCount * TOKENS_PER_MESSAGE,
+    }).eq("id", campaign_id);
+
     // Número caído/restrito: pausa em vez de queimar a lista com "Connection Closed".
     const pauseForConnection = async (reason: string) => {
       await supabase.from("bulk_campaigns").update({
@@ -264,6 +234,20 @@ serve(async (req) => {
         break;
       }
 
+      // Limite diário do número (com aquecimento): passou do limite, continua amanhã.
+      const daily = await checkDailyLimit(supabase, campaign_id, campaign.daily_limit, campaign.daily_limit_step);
+      if (!daily.allowed) {
+        const wait = secondsUntilNextBrtDay();
+        await supabase.from("bulk_campaigns").update({
+          pause_reason: `Limite do dia atingido (${daily.sentToday}/${daily.limit} neste número). Continua amanhã sozinho.`,
+        }).eq("id", campaign_id);
+        await supabase.rpc("release_bulk_campaign_lock", { _campaign_id: campaign_id, _next_send_seconds: wait });
+        log.info(`📉 Limite diário ${daily.sentToday}/${daily.limit}; volta em ${wait}s`);
+        return new Response(JSON.stringify({ success: true, skipped: "daily_limit", sent_today: daily.sentToday, limit: daily.limit }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       // regra única de contato (telefone bloqueado, limite diário, prioridade de quem recebeu mensagem automática há pouco)
       const rule = await canContact(supabase, campaign.tenant_id, { phone: contact.phone }, "bulk");
       if (!rule.ok) {
@@ -285,16 +269,8 @@ serve(async (req) => {
       // Update status to sending
       await supabase.from("campaign_contacts").update({ status: "sending" }).eq("id", contact.id);
 
-      // Replace variables in message
-      let message = campaign.message_template;
-      const variables = (contact.variables || {}) as Record<string, string>;
-      const contactName = contact.name || "";
-      message = message.replace(/{nome}/gi, contactName);
-      message = message.replace(/{primeiro_nome}/gi, contactName.split(/\s+/)[0] || "");
-      for (const [key, val] of Object.entries(variables)) {
-        if (key === "nome" || key === "primeiro_nome") continue;
-        message = message.replace(new RegExp(`\\{${key}\\}`, "gi"), String(val));
-      }
+      // Variáveis ({nome}...) e variações de texto ({Oi|Olá|Fala})
+      const message = renderBulkMessage(campaign.message_template, contact.name, contact.variables as Record<string, unknown> | null);
 
       const hasMedia = campaign.media_url && campaign.media_type && campaign.media_type !== "text";
 
@@ -365,11 +341,7 @@ serve(async (req) => {
           log.info(`✅ Sent to ${formattedPhone}`);
 
           // Update campaign stats immediately after each successful send
-          await supabase.from("bulk_campaigns").update({
-            sent_count: (campaign.sent_count || 0) + sentCount,
-            failed_count: (campaign.failed_count || 0) + failedCount,
-            total_tokens_used: (campaign.total_tokens_used || 0) + sentCount * TOKENS_PER_MESSAGE,
-          }).eq("id", campaign_id);
+          await saveStats(true);
         } else if (isConnectionError(result)) {
           // culpa da conexão, não do contato: volta para a fila e pausa
           await supabase.from("campaign_contacts").update({ status: "pending" }).eq("id", contact.id);
@@ -389,11 +361,7 @@ serve(async (req) => {
         log.error(`❌ Failed for ${formattedPhone}:`, result);
 
           // Update campaign stats immediately after each failure
-          await supabase.from("bulk_campaigns").update({
-            sent_count: (campaign.sent_count || 0) + sentCount,
-            failed_count: (campaign.failed_count || 0) + failedCount,
-            total_tokens_used: (campaign.total_tokens_used || 0) + sentCount * TOKENS_PER_MESSAGE,
-          }).eq("id", campaign_id);
+          await saveStats();
         }
       } catch (err: unknown) {
         const errMsg = err instanceof Error ? err.message : "Unknown error";
@@ -405,11 +373,7 @@ serve(async (req) => {
         log.error(`❌ Error for ${formattedPhone}:`, errMsg);
 
         // Update campaign stats immediately after each error
-        await supabase.from("bulk_campaigns").update({
-          sent_count: (campaign.sent_count || 0) + sentCount,
-          failed_count: (campaign.failed_count || 0) + failedCount,
-          total_tokens_used: (campaign.total_tokens_used || 0) + sentCount * TOKENS_PER_MESSAGE,
-        }).eq("id", campaign_id);
+        await saveStats();
       }
 
       // Delay is now applied between invocations (see below), not inside the request,

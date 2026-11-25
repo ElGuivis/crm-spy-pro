@@ -23,6 +23,10 @@ export interface Campaign {
   ab_test_id: string | null;
   ab_variant: string | null;
   pause_reason?: string | null;
+  reply_message?: string | null;
+  replied_count?: number;
+  daily_limit?: number | null;
+  daily_limit_step?: number;
 }
 
 export interface WhatsAppIntegration {

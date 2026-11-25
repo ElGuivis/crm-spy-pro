@@ -68,7 +68,7 @@ export function CampaignCard({ campaign, onStart, onPause, onView, onDelete, onE
               {formatDistanceToNow(new Date(campaign.created_at), { addSuffix: true, locale: ptBR })}
             </span>
           </div>
-          {campaign.status === "paused" && campaign.pause_reason && (
+          {(campaign.status === "paused" || campaign.status === "processing") && campaign.pause_reason && (
             <p className="mt-1 text-xs text-orange-600">{campaign.pause_reason}</p>
           )}
         </div>
@@ -81,6 +81,9 @@ export function CampaignCard({ campaign, onStart, onPause, onView, onDelete, onE
               <span>{campaign.total_contacts}</span>
               {campaign.failed_count > 0 && (
                 <span className="text-destructive">({campaign.failed_count} falhas)</span>
+              )}
+              {(campaign.replied_count ?? 0) > 0 && (
+                <span className="text-green-600">· {campaign.replied_count} responderam</span>
               )}
             </div>
             <Progress value={progress} className="h-2 w-[120px]" />

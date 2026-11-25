@@ -20,6 +20,7 @@ import { handleChatbotFlow } from "../_shared/wa-webhook-flow-handler.ts";
 import { routeToAI } from "../_shared/wa-webhook-ai-routing.ts";
 import { saveInboundMedia } from "../_shared/wa-webhook-media.ts";
 import { handleOptout } from "../_shared/wa-webhook-optout.ts";
+import { handleBulkReply } from "../_shared/wa-webhook-bulk-reply.ts";
 import { verifyWaWebhookToken, waTokenFromUrl } from "../_shared/wa-webhook-token.ts";
 
 declare const EdgeRuntime: { waitUntil: (promise: Promise<void>) => void } | undefined;
@@ -205,6 +206,10 @@ serve(async (req) => {
 
     // "SAIR": descadastro das mensagens automáticas (antes de bot/IA/menu responderem)
     result = await handleOptout(ctx);
+    if (result) return result;
+
+    // Resposta a disparo em massa com resposta automática (manda o link uma vez)
+    result = await handleBulkReply(ctx);
     if (result) return result;
 
     result = await handleLidPhoneCapture(ctx);

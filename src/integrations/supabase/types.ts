@@ -1739,6 +1739,8 @@ export type Database = {
           ab_variant: string | null
           completed_at: string | null
           created_at: string
+          daily_limit: number | null
+          daily_limit_step: number
           delay_max_seconds: number | null
           delay_seconds: number
           delivered_count: number
@@ -1752,6 +1754,8 @@ export type Database = {
           pause_reason: string | null
           processing_lock_until: string | null
           read_count: number
+          replied_count: number
+          reply_message: string | null
           scheduled_at: string | null
           sending_schedule: Json | null
           sent_count: number
@@ -1770,6 +1774,8 @@ export type Database = {
           ab_variant?: string | null
           completed_at?: string | null
           created_at?: string
+          daily_limit?: number | null
+          daily_limit_step?: number
           delay_max_seconds?: number | null
           delay_seconds?: number
           delivered_count?: number
@@ -1783,6 +1789,8 @@ export type Database = {
           pause_reason?: string | null
           processing_lock_until?: string | null
           read_count?: number
+          replied_count?: number
+          reply_message?: string | null
           scheduled_at?: string | null
           sending_schedule?: Json | null
           sent_count?: number
@@ -1801,6 +1809,8 @@ export type Database = {
           ab_variant?: string | null
           completed_at?: string | null
           created_at?: string
+          daily_limit?: number | null
+          daily_limit_step?: number
           delay_max_seconds?: number | null
           delay_seconds?: number
           delivered_count?: number
@@ -1814,6 +1824,8 @@ export type Database = {
           pause_reason?: string | null
           processing_lock_until?: string | null
           read_count?: number
+          replied_count?: number
+          reply_message?: string | null
           scheduled_at?: string | null
           sending_schedule?: Json | null
           sent_count?: number
@@ -1895,6 +1907,8 @@ export type Database = {
           name: string | null
           phone: string
           read_at: string | null
+          replied_at: string | null
+          reply_status: string | null
           sent_at: string | null
           status: string
           tenant_id: string
@@ -1910,6 +1924,8 @@ export type Database = {
           name?: string | null
           phone: string
           read_at?: string | null
+          replied_at?: string | null
+          reply_status?: string | null
           sent_at?: string | null
           status?: string
           tenant_id: string
@@ -1925,6 +1941,8 @@ export type Database = {
           name?: string | null
           phone?: string
           read_at?: string | null
+          replied_at?: string | null
+          reply_status?: string | null
           sent_at?: string | null
           status?: string
           tenant_id?: string
@@ -14003,6 +14021,7 @@ export type Database = {
       }
       archive_orphan_flow_campaigns: { Args: never; Returns: number }
       br_phone_key: { Args: { p: string }; Returns: string }
+      bulk_contact_phone_key: { Args: { p: string }; Returns: string }
       bump_flow_campaign: {
         Args: { p_campaign_id: string; p_ok: boolean }
         Returns: undefined
@@ -14036,6 +14055,16 @@ export type Database = {
         Returns: {
           conversation_id: string
           message_ids: string[]
+        }[]
+      }
+      claim_bulk_reply: {
+        Args: { _phone_key: string; _status: string; _tenant_id: string }
+        Returns: {
+          campaign_id: string
+          contact_id: string
+          name: string
+          reply_message: string
+          variables: Json
         }[]
       }
       claim_domain_events: {
@@ -14190,6 +14219,13 @@ export type Database = {
         Returns: {
           hour_of_day: number
           open_count: number
+        }[]
+      }
+      get_bulk_daily_usage: {
+        Args: { _campaign_id: string }
+        Returns: {
+          days_before: number
+          sent_today: number
         }[]
       }
       get_cashback_statement: {

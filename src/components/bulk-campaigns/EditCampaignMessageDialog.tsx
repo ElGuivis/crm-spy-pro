@@ -9,6 +9,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import type { Campaign } from "./types";
+import { CampaignSafetyFields } from "./create/CampaignSafetyFields";
+import { safetyPayload } from "./create/safetyPayload";
 
 interface Props {
   campaign: Campaign | null;
@@ -19,10 +21,17 @@ interface Props {
 export function EditCampaignMessageDialog({ campaign, onClose, onSaved }: Props) {
   const { toast } = useToast();
   const [message, setMessage] = useState("");
+  const [reply, setReply] = useState("");
+  const [dailyLimit, setDailyLimit] = useState("");
+  const [dailyStep, setDailyStep] = useState("0");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (campaign) setMessage(campaign.message_template);
+    if (!campaign) return;
+    setMessage(campaign.message_template);
+    setReply(campaign.reply_message ?? "");
+    setDailyLimit(campaign.daily_limit ? String(campaign.daily_limit) : "");
+    setDailyStep(String(campaign.daily_limit_step ?? 0));
   }, [campaign]);
 
   const handleSave = async () => {
@@ -31,10 +40,10 @@ export function EditCampaignMessageDialog({ campaign, onClose, onSaved }: Props)
     try {
       const { error } = await supabase
         .from("bulk_campaigns")
-        .update({ message_template: message })
+        .update({ message_template: message, ...safetyPayload(reply, dailyLimit, dailyStep) })
         .eq("id", campaign.id);
       if (error) throw error;
-      toast({ title: "Mensagem atualizada!" });
+      toast({ title: "Campanha atualizada!" });
       onSaved();
       onClose();
     } catch (e: unknown) {
@@ -47,9 +56,9 @@ export function EditCampaignMessageDialog({ campaign, onClose, onSaved }: Props)
 
   return (
     <Dialog open={!!campaign} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Editar Mensagem</DialogTitle>
+          <DialogTitle>Editar mensagem e proteção</DialogTitle>
           <DialogDescription>Altere o texto da campanha "{campaign?.name}"</DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
@@ -61,9 +70,18 @@ export function EditCampaignMessageDialog({ campaign, onClose, onSaved }: Props)
             placeholder="Texto da mensagem..."
           />
           <p className="text-xs text-muted-foreground">
-            Use {"{nome}"}, {"{primeiro_nome}"} ou variáveis personalizadas.
+            Use {"{nome}"}, {"{primeiro_nome}"} ou variáveis personalizadas. Variações: {"{Oi|Olá|Fala}"}.
           </p>
         </div>
+        <CampaignSafetyFields
+          messageTemplate={message}
+          replyMessage={reply}
+          onReplyChange={setReply}
+          dailyLimit={dailyLimit}
+          onDailyLimitChange={setDailyLimit}
+          dailyStep={dailyStep}
+          onDailyStepChange={setDailyStep}
+        />
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button onClick={handleSave} disabled={saving || !message.trim()}>

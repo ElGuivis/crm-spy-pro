@@ -44,6 +44,9 @@ export const CampaignMessageEditor = forwardRef<HTMLTextAreaElement, Props>(({
           </button>
         ))}
       </div>
+      <p className="text-xs text-muted-foreground">
+        Variações: escreva {"{Oi|Olá|Fala}"} e cada pessoa recebe uma das opções. Texto igual para todos pesa contra o número.
+      </p>
       {messageTemplate && hasContacts && (
         <div className="p-3 bg-muted/40 rounded-lg border border-border/50 space-y-1">
           <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">

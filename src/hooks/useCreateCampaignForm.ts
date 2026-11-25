@@ -5,6 +5,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTokens } from "@/contexts/TokenContext";
 import { createLogger } from "@/lib/logger";
 import type { ContactRow } from "@/components/bulk-campaigns/types";
+import { resolveSpintax } from "@/lib/spintax";
+import { safetyPayload } from "@/components/bulk-campaigns/create/safetyPayload";
 
 const logger = createLogger("useCreateCampaignForm");
 
@@ -29,7 +31,7 @@ export function buildPreview(template: string, contact: ContactRow | undefined):
   for (const [key, val] of Object.entries(contact.variables)) {
     msg = msg.replace(new RegExp(`\\{${key}\\}`, "gi"), val);
   }
-  return msg;
+  return resolveSpintax(msg);
 }
 
 interface Options {
@@ -62,6 +64,9 @@ export function useCreateCampaignForm({ onCreated, onOpenChange }: Options) {
   const [contactSource, setContactSource] = useState<"csv" | "rfm">("csv");
   const [selectedRfmAudienceId, setSelectedRfmAudienceId] = useState("");
   const [loadingRfmContacts, setLoadingRfmContacts] = useState(false);
+  const [replyMessage, setReplyMessage] = useState("");
+  const [dailyLimit, setDailyLimit] = useState("40");
+  const [dailyStep, setDailyStep] = useState("10");
 
   const parseCSV = (text: string): Record<string, string>[] => {
     const lines = text.split(/\r?\n/).filter(l => l.trim());
@@ -194,6 +199,7 @@ export function useCreateCampaignForm({ onCreated, onOpenChange }: Options) {
     setScheduledDate(""); setScheduledTime(""); setTimezone("America/Sao_Paulo");
     setSendingScheduleEnabled(false); setSendingSchedule({ ...DEFAULT_SCHEDULE });
     setContactSource("csv"); setSelectedRfmAudienceId("");
+    setReplyMessage(""); setDailyLimit("40"); setDailyStep("10");
   };
 
   const handleCreate = async () => {
@@ -252,6 +258,7 @@ export function useCreateCampaignForm({ onCreated, onOpenChange }: Options) {
         delay_max_seconds: parseInt(delayMax) || 360, total_contacts: contacts.length,
         tokens_per_message: 2, status: initialStatus, media_url: mediaUrl, media_type: mediaType,
         scheduled_at: scheduledAt, timezone, sending_schedule: schedulePayload,
+        ...safetyPayload(replyMessage, dailyLimit, dailyStep),
       };
       const { data: campaign, error: campError } = await supabase.from("bulk_campaigns").insert(insertPayload).select().single();
       if (campError) throw campError;
@@ -282,6 +289,7 @@ export function useCreateCampaignForm({ onCreated, onOpenChange }: Options) {
     sendingScheduleEnabled, setSendingScheduleEnabled, sendingSchedule, setSendingSchedule,
     contactSource, setContactSource, selectedRfmAudienceId, setSelectedRfmAudienceId,
     loadingRfmContacts, loadRfmAudienceContacts, setContacts, setFileName,
+    replyMessage, setReplyMessage, dailyLimit, setDailyLimit, dailyStep, setDailyStep,
     textareaRef, insertVariable, handleFileUpload,
     resetForm, handleCreate,
   };

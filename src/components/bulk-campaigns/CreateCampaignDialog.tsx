@@ -8,6 +8,7 @@ import { CampaignSendingWindow } from "./create/CampaignSendingWindow";
 import { CampaignContactSource } from "./create/CampaignContactSource";
 import { CampaignMessageEditor } from "./create/CampaignMessageEditor";
 import { CampaignMediaUpload } from "./create/CampaignMediaUpload";
+import { CampaignSafetyFields } from "./create/CampaignSafetyFields";
 import type { WhatsAppIntegration } from "./types";
 
 interface Props {
@@ -89,6 +90,16 @@ export function CreateCampaignDialog({ open, onOpenChange, integrations, onCreat
             onInsertVariable={f.insertVariable}
             previewMessage={previewMessage}
             hasContacts={f.contacts.length > 0}
+          />
+
+          <CampaignSafetyFields
+            messageTemplate={f.messageTemplate}
+            replyMessage={f.replyMessage}
+            onReplyChange={f.setReplyMessage}
+            dailyLimit={f.dailyLimit}
+            onDailyLimitChange={f.setDailyLimit}
+            dailyStep={f.dailyStep}
+            onDailyStepChange={f.setDailyStep}
           />
 
           <CampaignMediaUpload
