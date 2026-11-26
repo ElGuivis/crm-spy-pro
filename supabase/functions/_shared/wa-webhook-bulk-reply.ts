@@ -7,6 +7,9 @@ import type { WaCtx } from "./wa-webhook-types.ts";
 import { sendTextWithTokenCharge } from "./whatsapp-sender.ts";
 import { optoutPhone } from "./wa-webhook-optout.ts";
 import { renderBulkMessage } from "./spintax.ts";
+import { humanPause, planReplyDelay } from "./bulk-reply-humanize.ts";
+
+declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void } | undefined;
 
 const NEGATIVE = new Set([
   "nao", "n", "nao obrigado", "nao obrigada", "nao quero", "nao tenho interesse", "sem interesse",
@@ -19,10 +22,13 @@ export function isNegativeReply(text: string): boolean {
   return NEGATIVE.has(t);
 }
 
-interface Claimed { contact_id: string; campaign_id: string; name: string | null; variables: Record<string, unknown> | null; reply_message: string }
+interface Claimed {
+  contact_id: string; campaign_id: string; name: string | null; variables: Record<string, unknown> | null;
+  reply_message: string; delay_min: number | null; delay_max: number | null;
+}
 
 export async function handleBulkReply(ctx: WaCtx): Promise<Response | null> {
-  const { supabase, log, corsHeaders, tenantId, conversation, messageContent, phone, whatsAppConfig, buttonClickId } = ctx;
+  const { supabase, log, corsHeaders, tenantId, conversation, messageContent, phone, whatsAppConfig, buttonClickId, payload } = ctx;
   if (buttonClickId || !conversation) return null;
   const key = optoutPhone(ctx);
   if (!key) return null;
@@ -35,13 +41,21 @@ export async function handleBulkReply(ctx: WaCtx): Promise<Response | null> {
   if (status === "declined") { log.info(`📣 ${key} recusou o disparo ${row.campaign_id}`); return null; }
 
   const text = renderBulkMessage(row.reply_message, row.name, row.variables);
-  const sent = await sendTextWithTokenCharge(whatsAppConfig, phone, text, supabase, tenantId, "bulk_campaign", "Disparo em massa: resposta automática", row.contact_id);
-  await supabase.from("campaign_contacts").update({ reply_status: sent.success ? "sent" : "failed" }).eq("id", row.contact_id);
-  await supabase.from("messages").insert({
-    conversation_id: conversation.id, tenant_id: tenantId, sender_type: "bot", direction: "outbound",
-    content: text, status: sent.success ? "sent" : "failed",
-  });
-  log.info(`📣 Resposta automática do disparo para ${key}: ${sent.success ? "enviada" : "falhou"}`);
+  const plan = planReplyDelay(row.delay_min, row.delay_max, text.length);
+  // Espera humana (lida → digitando → envia) em segundo plano: o webhook responde já.
+  // Se o runtime cair no meio, a reserva 'sending' fica presa e é reivindicada de novo após 10 min (claim_bulk_reply).
+  const task = (async () => {
+    await humanPause(whatsAppConfig, phone, payload?.data?.key ?? null, plan, (m) => log.warn(`📣 ${m}`));
+    const sent = await sendTextWithTokenCharge(whatsAppConfig, phone, text, supabase, tenantId, "bulk_campaign", "Disparo em massa: resposta automática", row.contact_id);
+    await supabase.from("campaign_contacts").update({ reply_status: sent.success ? "sent" : "failed" }).eq("id", row.contact_id);
+    await supabase.from("messages").insert({
+      conversation_id: conversation.id, tenant_id: tenantId, sender_type: "bot", direction: "outbound",
+      content: text, status: sent.success ? "sent" : "failed",
+    });
+    log.info(`📣 Resposta automática do disparo para ${key} após ${Math.round(plan.totalMs / 1000)}s: ${sent.success ? "enviada" : "falhou"}`);
+  })().catch((e) => log.error("📣 Resposta automática falhou:", e));
+  if (typeof EdgeRuntime !== "undefined" && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(task);
+  else await task;
   return new Response(JSON.stringify({ success: true, action: "bulk_reply", conversation_id: conversation.id }), {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });

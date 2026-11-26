@@ -29,6 +29,8 @@ export interface Campaign {
   replied_count?: number;
   daily_limit?: number | null;
   daily_limit_step?: number;
+  reply_delay_min_seconds?: number;
+  reply_delay_max_seconds?: number;
 }
 
 export interface WhatsAppIntegration {

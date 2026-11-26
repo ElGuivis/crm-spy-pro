@@ -1757,6 +1757,8 @@ export type Database = {
           processing_lock_until: string | null
           read_count: number
           replied_count: number
+          reply_delay_max_seconds: number
+          reply_delay_min_seconds: number
           reply_message: string | null
           scheduled_at: string | null
           sending_schedule: Json | null
@@ -1795,6 +1797,8 @@ export type Database = {
           processing_lock_until?: string | null
           read_count?: number
           replied_count?: number
+          reply_delay_max_seconds?: number
+          reply_delay_min_seconds?: number
           reply_message?: string | null
           scheduled_at?: string | null
           sending_schedule?: Json | null
@@ -1833,6 +1837,8 @@ export type Database = {
           processing_lock_until?: string | null
           read_count?: number
           replied_count?: number
+          reply_delay_max_seconds?: number
+          reply_delay_min_seconds?: number
           reply_message?: string | null
           scheduled_at?: string | null
           sending_schedule?: Json | null
@@ -14081,6 +14087,8 @@ export type Database = {
         Returns: {
           campaign_id: string
           contact_id: string
+          delay_max: number
+          delay_min: number
           name: string
           reply_message: string
           variables: Json

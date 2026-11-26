@@ -10,6 +10,7 @@ import { CampaignMessageEditor } from "./create/CampaignMessageEditor";
 import { CampaignMediaUpload } from "./create/CampaignMediaUpload";
 import { CampaignSafetyFields } from "./create/CampaignSafetyFields";
 import { CampaignMessageVariants } from "./create/CampaignMessageVariants";
+import { ReplyDelayFields } from "./create/ReplyDelayFields";
 import type { WhatsAppIntegration } from "./types";
 
 interface Props {
@@ -104,6 +105,7 @@ export function CreateCampaignDialog({ open, onOpenChange, integrations, onCreat
             dailyStep={f.dailyStep}
             onDailyStepChange={f.setDailyStep}
           />
+          <ReplyDelayFields value={f.replyDelay} onChange={f.setReplyDelay} />
 
           <CampaignMediaUpload
             mediaFile={f.mediaFile}

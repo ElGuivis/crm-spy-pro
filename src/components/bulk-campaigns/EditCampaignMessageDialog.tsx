@@ -11,6 +11,8 @@ import { Loader2 } from "lucide-react";
 import type { Campaign, WhatsAppIntegration } from "./types";
 import { CampaignNumbersPicker } from "./create/CampaignNumbersPicker";
 import { CampaignMessageVariants } from "./create/CampaignMessageVariants";
+import { ReplyDelayFields } from "./create/ReplyDelayFields";
+import { DEFAULT_REPLY_DELAY, replyDelayPayload, type ReplyDelay } from "./create/replyDelay";
 import { CampaignSafetyFields } from "./create/CampaignSafetyFields";
 import { safetyPayload } from "./create/safetyPayload";
 
@@ -26,6 +28,7 @@ export function EditCampaignMessageDialog({ campaign, integrations, onClose, onS
   const [message, setMessage] = useState("");
   const [variants, setVariants] = useState<string[]>([]);
   const [reply, setReply] = useState("");
+  const [replyDelay, setReplyDelay] = useState<ReplyDelay>(DEFAULT_REPLY_DELAY);
   const [dailyLimit, setDailyLimit] = useState("");
   const [dailyStep, setDailyStep] = useState("0");
   const [numbers, setNumbers] = useState<string[]>([]);
@@ -40,6 +43,10 @@ export function EditCampaignMessageDialog({ campaign, integrations, onClose, onS
       : campaign.whatsapp_integration_id ? [campaign.whatsapp_integration_id] : [];
     setNumbers(ids);
     setReply(campaign.reply_message ?? "");
+    setReplyDelay({
+      min: String(campaign.reply_delay_min_seconds ?? DEFAULT_REPLY_DELAY.min),
+      max: String(campaign.reply_delay_max_seconds ?? DEFAULT_REPLY_DELAY.max),
+    });
     setDailyLimit(campaign.daily_limit ? String(campaign.daily_limit) : "");
     setDailyStep(String(campaign.daily_limit_step ?? 0));
   }, [campaign]);
@@ -56,6 +63,7 @@ export function EditCampaignMessageDialog({ campaign, integrations, onClose, onS
           whatsapp_integration_id: numbers[0],
           whatsapp_integration_ids: numbers,
           ...safetyPayload(reply, dailyLimit, dailyStep),
+          ...replyDelayPayload(replyDelay),
         })
         .eq("id", campaign.id);
       if (error) throw error;
@@ -100,6 +108,7 @@ export function EditCampaignMessageDialog({ campaign, integrations, onClose, onS
           dailyStep={dailyStep}
           onDailyStepChange={setDailyStep}
         />
+        <ReplyDelayFields value={replyDelay} onChange={setReplyDelay} />
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
           <Button onClick={handleSave} disabled={saving || !message.trim() || numbers.length === 0}>

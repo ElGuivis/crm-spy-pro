@@ -7,6 +7,7 @@ import { createLogger } from "@/lib/logger";
 import type { ContactRow } from "@/components/bulk-campaigns/types";
 import { resolveSpintax } from "@/lib/spintax";
 import { safetyPayload } from "@/components/bulk-campaigns/create/safetyPayload";
+import { DEFAULT_REPLY_DELAY, replyDelayPayload, type ReplyDelay } from "@/components/bulk-campaigns/create/replyDelay";
 
 const logger = createLogger("useCreateCampaignForm");
 
@@ -49,6 +50,7 @@ export function useCreateCampaignForm({ onCreated, onOpenChange }: Options) {
   const [messageTemplate, setMessageTemplate] = useState("");
   const [selectedIntegrations, setSelectedIntegrations] = useState<string[]>([]);
   const [messageVariants, setMessageVariants] = useState<string[]>([]);
+  const [replyDelay, setReplyDelay] = useState<ReplyDelay>(DEFAULT_REPLY_DELAY);
   const [delayMin, setDelayMin] = useState("120");
   const [delayMax, setDelayMax] = useState("360");
   const [contacts, setContacts] = useState<ContactRow[]>([]);
@@ -195,7 +197,7 @@ export function useCreateCampaignForm({ onCreated, onOpenChange }: Options) {
   };
 
   const resetForm = () => {
-    setCampaignName(""); setMessageTemplate(""); setSelectedIntegrations([]); setMessageVariants([]); setDelayMin("120"); setDelayMax("360");
+    setCampaignName(""); setMessageTemplate(""); setSelectedIntegrations([]); setMessageVariants([]); setReplyDelay(DEFAULT_REPLY_DELAY); setDelayMin("120"); setDelayMax("360");
     setContacts([]); setFileName(""); setExtraColumns([]); removeMedia();
     setScheduledDate(""); setScheduledTime(""); setTimezone("America/Sao_Paulo");
     setSendingScheduleEnabled(false); setSendingSchedule({ ...DEFAULT_SCHEDULE });
@@ -261,6 +263,7 @@ export function useCreateCampaignForm({ onCreated, onOpenChange }: Options) {
         tokens_per_message: 2, status: initialStatus, media_url: mediaUrl, media_type: mediaType,
         scheduled_at: scheduledAt, timezone, sending_schedule: schedulePayload,
         ...safetyPayload(replyMessage, dailyLimit, dailyStep),
+        ...replyDelayPayload(replyDelay),
       };
       const { data: campaign, error: campError } = await supabase.from("bulk_campaigns").insert(insertPayload).select().single();
       if (campError) throw campError;
@@ -284,7 +287,7 @@ export function useCreateCampaignForm({ onCreated, onOpenChange }: Options) {
 
   return {
     campaignName, setCampaignName, messageTemplate, setMessageTemplate,
-    selectedIntegrations, setSelectedIntegrations, messageVariants, setMessageVariants, delayMin, setDelayMin, delayMax, setDelayMax,
+    selectedIntegrations, setSelectedIntegrations, messageVariants, setMessageVariants, replyDelay, setReplyDelay, delayMin, setDelayMin, delayMax, setDelayMax,
     contacts, fileName, saving, extraColumns,
     mediaFile, mediaPreview, removeMedia, handleMediaUpload,
     scheduledDate, setScheduledDate, scheduledTime, setScheduledTime, timezone, setTimezone,
