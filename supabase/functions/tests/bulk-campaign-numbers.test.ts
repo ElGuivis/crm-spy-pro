@@ -17,3 +17,13 @@ Deno.test("revezamento: começa no número seguinte ao último tentado", () => {
   assertEquals(rotationOrder(["a", "b", "c"], "x"), ["a", "b", "c"]); // número tirado da lista
   assertEquals(rotationOrder(["a"], "a"), ["a"]);
 });
+
+import { pickVariant } from "../_shared/spintax.ts";
+
+Deno.test("variações completas: sorteia entre a principal e as variações, ignorando vazias", () => {
+  assertEquals(pickVariant("A", ["B", " ", "C"], () => 0), "A");
+  assertEquals(pickVariant("A", ["B", " ", "C"], () => 0.5), "B");
+  assertEquals(pickVariant("A", ["B", " ", "C"], () => 0.99), "C");
+  assertEquals(pickVariant("A", null, () => 0.99), "A");
+  assertEquals(pickVariant("A", [], () => 0.5), "A");
+});

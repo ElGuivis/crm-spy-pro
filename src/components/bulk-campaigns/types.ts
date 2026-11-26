@@ -2,6 +2,7 @@ export interface Campaign {
   id: string;
   name: string;
   message_template: string;
+  message_variants?: string[] | null;
   whatsapp_integration_id: string | null;
   whatsapp_integration_ids?: string[] | null;
   delay_seconds: number;

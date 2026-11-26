@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import type { Campaign, WhatsAppIntegration } from "./types";
 import { CampaignNumbersPicker } from "./create/CampaignNumbersPicker";
+import { CampaignMessageVariants } from "./create/CampaignMessageVariants";
 import { CampaignSafetyFields } from "./create/CampaignSafetyFields";
 import { safetyPayload } from "./create/safetyPayload";
 
@@ -23,6 +24,7 @@ interface Props {
 export function EditCampaignMessageDialog({ campaign, integrations, onClose, onSaved }: Props) {
   const { toast } = useToast();
   const [message, setMessage] = useState("");
+  const [variants, setVariants] = useState<string[]>([]);
   const [reply, setReply] = useState("");
   const [dailyLimit, setDailyLimit] = useState("");
   const [dailyStep, setDailyStep] = useState("0");
@@ -32,6 +34,7 @@ export function EditCampaignMessageDialog({ campaign, integrations, onClose, onS
   useEffect(() => {
     if (!campaign) return;
     setMessage(campaign.message_template);
+    setVariants(campaign.message_variants ?? []);
     const ids = campaign.whatsapp_integration_ids?.length
       ? campaign.whatsapp_integration_ids
       : campaign.whatsapp_integration_id ? [campaign.whatsapp_integration_id] : [];
@@ -49,6 +52,7 @@ export function EditCampaignMessageDialog({ campaign, integrations, onClose, onS
         .from("bulk_campaigns")
         .update({
           message_template: message,
+          message_variants: variants.map((v) => v.trim()).filter(Boolean),
           whatsapp_integration_id: numbers[0],
           whatsapp_integration_ids: numbers,
           ...safetyPayload(reply, dailyLimit, dailyStep),
@@ -86,6 +90,7 @@ export function EditCampaignMessageDialog({ campaign, integrations, onClose, onS
             Use {"{nome}"}, {"{primeiro_nome}"} ou variáveis personalizadas. Variações: {"{Oi|Olá|Fala}"}.
           </p>
         </div>
+        <CampaignMessageVariants variants={variants} onChange={setVariants} />
         <CampaignSafetyFields
           messageTemplate={message}
           replyMessage={reply}

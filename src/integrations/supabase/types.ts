@@ -1750,6 +1750,7 @@ export type Database = {
           media_type: string | null
           media_url: string | null
           message_template: string
+          message_variants: string[]
           name: string
           next_send_at: string | null
           pause_reason: string | null
@@ -1787,6 +1788,7 @@ export type Database = {
           media_type?: string | null
           media_url?: string | null
           message_template: string
+          message_variants?: string[]
           name: string
           next_send_at?: string | null
           pause_reason?: string | null
@@ -1824,6 +1826,7 @@ export type Database = {
           media_type?: string | null
           media_url?: string | null
           message_template?: string
+          message_variants?: string[]
           name?: string
           next_send_at?: string | null
           pause_reason?: string | null

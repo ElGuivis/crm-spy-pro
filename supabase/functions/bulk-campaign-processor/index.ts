@@ -7,7 +7,7 @@ import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { canContact, recordTouches, REASON_TEXT } from "../_shared/contact-policy.ts";
 import { secondsUntilNextBrtDay, isWithinSendingWindow } from "./pacing.ts";
 import { pickNumber } from "./numbers.ts";
-import { renderBulkMessage } from "../_shared/spintax.ts";
+import { renderBulkMessage, pickVariant } from "../_shared/spintax.ts";
 import { hasWhatsApp, isConnectionError, typingDelayMs, PAUSE_REASONS } from "./evolution-guard.ts";
 
 const TOKENS_PER_MESSAGE = 2;
@@ -60,7 +60,7 @@ serve(async (req) => {
     // Load campaign
     const { data: campaign, error: campErr } = await supabase
       .from("bulk_campaigns")
-      .select("id, tenant_id, name, status, message_template, whatsapp_integration_id, whatsapp_integration_ids, last_integration_id, media_url, media_type, delay_seconds, delay_max_seconds, sent_count, failed_count, total_tokens_used, timezone, sending_schedule, daily_limit, daily_limit_step, pause_reason")
+      .select("id, tenant_id, name, status, message_template, message_variants, whatsapp_integration_id, whatsapp_integration_ids, last_integration_id, media_url, media_type, delay_seconds, delay_max_seconds, sent_count, failed_count, total_tokens_used, timezone, sending_schedule, daily_limit, daily_limit_step, pause_reason")
       .eq("id", campaign_id)
       .single();
 
@@ -252,7 +252,7 @@ serve(async (req) => {
       await supabase.from("campaign_contacts").update({ status: "sending" }).eq("id", contact.id);
 
       // Variáveis ({nome}...) e variações de texto ({Oi|Olá|Fala})
-      const message = renderBulkMessage(campaign.message_template, contact.name, contact.variables as Record<string, unknown> | null);
+      const message = renderBulkMessage(pickVariant(campaign.message_template, campaign.message_variants), contact.name, contact.variables as Record<string, unknown> | null);
 
       const hasMedia = campaign.media_url && campaign.media_type && campaign.media_type !== "text";
 

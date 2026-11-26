@@ -9,6 +9,7 @@ import { CampaignContactSource } from "./create/CampaignContactSource";
 import { CampaignMessageEditor } from "./create/CampaignMessageEditor";
 import { CampaignMediaUpload } from "./create/CampaignMediaUpload";
 import { CampaignSafetyFields } from "./create/CampaignSafetyFields";
+import { CampaignMessageVariants } from "./create/CampaignMessageVariants";
 import type { WhatsAppIntegration } from "./types";
 
 interface Props {
@@ -91,6 +92,8 @@ export function CreateCampaignDialog({ open, onOpenChange, integrations, onCreat
             previewMessage={previewMessage}
             hasContacts={f.contacts.length > 0}
           />
+
+          <CampaignMessageVariants variants={f.messageVariants} onChange={f.setMessageVariants} />
 
           <CampaignSafetyFields
             messageTemplate={f.messageTemplate}

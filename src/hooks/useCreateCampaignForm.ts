@@ -48,6 +48,7 @@ export function useCreateCampaignForm({ onCreated, onOpenChange }: Options) {
   const [campaignName, setCampaignName] = useState("");
   const [messageTemplate, setMessageTemplate] = useState("");
   const [selectedIntegrations, setSelectedIntegrations] = useState<string[]>([]);
+  const [messageVariants, setMessageVariants] = useState<string[]>([]);
   const [delayMin, setDelayMin] = useState("120");
   const [delayMax, setDelayMax] = useState("360");
   const [contacts, setContacts] = useState<ContactRow[]>([]);
@@ -194,7 +195,7 @@ export function useCreateCampaignForm({ onCreated, onOpenChange }: Options) {
   };
 
   const resetForm = () => {
-    setCampaignName(""); setMessageTemplate(""); setSelectedIntegrations([]); setDelayMin("120"); setDelayMax("360");
+    setCampaignName(""); setMessageTemplate(""); setSelectedIntegrations([]); setMessageVariants([]); setDelayMin("120"); setDelayMax("360");
     setContacts([]); setFileName(""); setExtraColumns([]); removeMedia();
     setScheduledDate(""); setScheduledTime(""); setTimezone("America/Sao_Paulo");
     setSendingScheduleEnabled(false); setSendingSchedule({ ...DEFAULT_SCHEDULE });
@@ -254,6 +255,7 @@ export function useCreateCampaignForm({ onCreated, onOpenChange }: Options) {
       }
       const insertPayload = {
         tenant_id: tenantId, name: campaignName, message_template: messageTemplate,
+        message_variants: messageVariants.map((v) => v.trim()).filter(Boolean),
         whatsapp_integration_id: selectedIntegrations[0], whatsapp_integration_ids: selectedIntegrations, delay_seconds: parseInt(delayMin) || 120,
         delay_max_seconds: parseInt(delayMax) || 360, total_contacts: contacts.length,
         tokens_per_message: 2, status: initialStatus, media_url: mediaUrl, media_type: mediaType,
@@ -282,7 +284,7 @@ export function useCreateCampaignForm({ onCreated, onOpenChange }: Options) {
 
   return {
     campaignName, setCampaignName, messageTemplate, setMessageTemplate,
-    selectedIntegrations, setSelectedIntegrations, delayMin, setDelayMin, delayMax, setDelayMax,
+    selectedIntegrations, setSelectedIntegrations, messageVariants, setMessageVariants, delayMin, setDelayMin, delayMax, setDelayMax,
     contacts, fileName, saving, extraColumns,
     mediaFile, mediaPreview, removeMedia, handleMediaUpload,
     scheduledDate, setScheduledDate, scheduledTime, setScheduledTime, timezone, setTimezone,

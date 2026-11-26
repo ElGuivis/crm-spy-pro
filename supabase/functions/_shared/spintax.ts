@@ -13,6 +13,12 @@ export function resolveSpintax(text: string, rand: () => number = Math.random): 
   return out;
 }
 
+/** Sorteia um dos textos completos (mensagem principal + variações não vazias). */
+export function pickVariant(main: string, variants: string[] | null | undefined, rand: () => number = Math.random): string {
+  const all = [main, ...(variants ?? [])].filter((t) => (t ?? "").trim() !== "");
+  return all.length ? all[Math.floor(rand() * all.length)] : (main ?? "");
+}
+
 /** Troca {nome}, {primeiro_nome} e as colunas extras e depois sorteia as variações. */
 export function renderBulkMessage(template: string, name: string | null, variables: Record<string, unknown> | null): string {
   const contactName = name || "";
