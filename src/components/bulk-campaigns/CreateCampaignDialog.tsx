@@ -46,8 +46,8 @@ export function CreateCampaignDialog({ open, onOpenChange, integrations, onCreat
             campaignName={f.campaignName}
             onNameChange={f.setCampaignName}
             integrations={integrations}
-            selectedIntegration={f.selectedIntegration}
-            onIntegrationChange={f.setSelectedIntegration}
+            selectedIntegrations={f.selectedIntegrations}
+            onIntegrationsChange={f.setSelectedIntegrations}
             delayMin={f.delayMin}
             onDelayMinChange={f.setDelayMin}
             delayMax={f.delayMax}

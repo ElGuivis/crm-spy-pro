@@ -108,6 +108,7 @@ const BulkCampaignsPage = () => {
 
       <EditCampaignMessageDialog
         campaign={editCampaign}
+        integrations={integrations}
         onClose={() => setEditCampaign(null)}
         onSaved={loadCampaigns}
       />

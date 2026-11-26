@@ -1,4 +1,4 @@
-// Limite diário por número (instância) com aquecimento.
+// Limite diário POR NÚMERO (instância) com aquecimento; com vários números, cada um tem o seu.
 // Limite de hoje = daily_limit + daily_limit_step × (dias anteriores em que esta campanha enviou).
 // Conta TODOS os disparos do mesmo número no dia (Brasília), para duas campanhas não somarem acima do limite.
 // deno-lint-ignore no-explicit-any
@@ -7,10 +7,10 @@ type Client = any;
 export interface DailyCheck { allowed: boolean; limit: number | null; sentToday: number }
 
 export async function checkDailyLimit(
-  supabase: Client, campaignId: string, dailyLimit: number | null, step: number | null,
+  supabase: Client, campaignId: string, integrationId: string, dailyLimit: number | null, step: number | null,
 ): Promise<DailyCheck> {
   if (!dailyLimit || dailyLimit <= 0) return { allowed: true, limit: null, sentToday: 0 };
-  const { data, error } = await supabase.rpc("get_bulk_daily_usage", { _campaign_id: campaignId });
+  const { data, error } = await supabase.rpc("get_bulk_daily_usage", { _campaign_id: campaignId, _integration_id: integrationId });
   if (error) throw new Error(`get_bulk_daily_usage: ${error.message}`);
   const row = (Array.isArray(data) ? data[0] : data) as { sent_today?: number; days_before?: number } | null;
   const sentToday = row?.sent_today ?? 0;

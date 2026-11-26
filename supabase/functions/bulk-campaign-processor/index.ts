@@ -5,9 +5,10 @@ import { requireResource } from "../_shared/resource-guard.ts";
 import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { canContact, recordTouches, REASON_TEXT } from "../_shared/contact-policy.ts";
-import { checkDailyLimit, secondsUntilNextBrtDay, isWithinSendingWindow } from "./pacing.ts";
+import { secondsUntilNextBrtDay, isWithinSendingWindow } from "./pacing.ts";
+import { pickNumber } from "./numbers.ts";
 import { renderBulkMessage } from "../_shared/spintax.ts";
-import { getInstanceState, hasWhatsApp, isConnectionError, typingDelayMs, PAUSE_REASONS } from "./evolution-guard.ts";
+import { hasWhatsApp, isConnectionError, typingDelayMs, PAUSE_REASONS } from "./evolution-guard.ts";
 
 const TOKENS_PER_MESSAGE = 2;
 
@@ -59,7 +60,7 @@ serve(async (req) => {
     // Load campaign
     const { data: campaign, error: campErr } = await supabase
       .from("bulk_campaigns")
-      .select("id, tenant_id, name, status, message_template, whatsapp_integration_id, media_url, media_type, delay_seconds, delay_max_seconds, sent_count, failed_count, total_tokens_used, timezone, sending_schedule, daily_limit, daily_limit_step, pause_reason")
+      .select("id, tenant_id, name, status, message_template, whatsapp_integration_id, whatsapp_integration_ids, last_integration_id, media_url, media_type, delay_seconds, delay_max_seconds, sent_count, failed_count, total_tokens_used, timezone, sending_schedule, daily_limit, daily_limit_step, pause_reason")
       .eq("id", campaign_id)
       .single();
 
@@ -95,22 +96,6 @@ serve(async (req) => {
     if (!lockAcquired) {
       log.info(`🔒 Skipping ${campaign_id} — another invocation is active or next_send_at is in the future.`);
       return new Response(JSON.stringify({ success: true, skipped: "locked_or_throttled" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Get WhatsApp integration
-    const { data: integration } = await supabase
-      .from("integrations")
-      .select("metadata")
-      .eq("id", campaign.whatsapp_integration_id)
-      .single();
-
-    const instanceName = (integration?.metadata as Record<string, string> | null)?.instanceName;
-    if (!instanceName) {
-      await supabase.from("bulk_campaigns").update({ status: "cancelled" }).eq("id", campaign_id);
-      return new Response(JSON.stringify({ error: "WhatsApp instance not found" }), {
-        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -171,8 +156,9 @@ serve(async (req) => {
     let failedCount = 0;
     let stoppedByWindow = false;
 
+    let note: string | null = null; // aviso no cartão (ex.: um dos números caiu e os outros seguem)
     const saveStats = (clearReason = false) => supabase.from("bulk_campaigns").update({
-      ...(clearReason && campaign.pause_reason ? { pause_reason: null } : {}),
+      ...(clearReason && campaign.pause_reason !== note ? { pause_reason: note } : {}),
       sent_count: (campaign.sent_count || 0) + sentCount,
       failed_count: (campaign.failed_count || 0) + failedCount,
       total_tokens_used: (campaign.total_tokens_used || 0) + sentCount * TOKENS_PER_MESSAGE,
@@ -189,17 +175,27 @@ serve(async (req) => {
       });
     };
 
-    const state = await getInstanceState(baseUrl, evolutionApiKey, instanceName);
-    if (state === "close" || state === "connecting") {
-      return await pauseForConnection(PAUSE_REASONS.disconnected);
-    }
-    if (state === "unknown") {
+    // Número da vez (revezamento entre os números da campanha; pula desconectado e quem bateu o limite do dia)
+    const pick = await pickNumber(supabase, baseUrl, evolutionApiKey, campaign);
+    if (!pick.ok) {
+      if (pick.wait === "pause") return await pauseForConnection(pick.reason || PAUSE_REASONS.disconnected);
+      if (pick.wait === "daily") {
+        const wait = secondsUntilNextBrtDay();
+        await supabase.from("bulk_campaigns").update({ pause_reason: pick.reason }).eq("id", campaign_id);
+        await supabase.rpc("release_bulk_campaign_lock", { _campaign_id: campaign_id, _next_send_seconds: wait });
+        log.info(`📉 ${pick.reason} Volta em ${wait}s`);
+        return new Response(JSON.stringify({ success: true, skipped: "daily_limit" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       // Evolution fora do ar ou lenta: tenta de novo em 2 min, sem gastar contato.
       await supabase.rpc("release_bulk_campaign_lock", { _campaign_id: campaign_id, _next_send_seconds: 120 });
       return new Response(JSON.stringify({ success: false, skipped: "evolution_unreachable" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const instanceName = pick.number.instanceName;
+    note = pick.note;
 
     for (const contact of contacts) {
       // Check if campaign was paused
@@ -232,20 +228,6 @@ serve(async (req) => {
         log.warn("⚠️ Insufficient tokens, pausing campaign");
         await supabase.from("bulk_campaigns").update({ status: "paused" }).eq("id", campaign_id);
         break;
-      }
-
-      // Limite diário do número (com aquecimento): passou do limite, continua amanhã.
-      const daily = await checkDailyLimit(supabase, campaign_id, campaign.daily_limit, campaign.daily_limit_step);
-      if (!daily.allowed) {
-        const wait = secondsUntilNextBrtDay();
-        await supabase.from("bulk_campaigns").update({
-          pause_reason: `Limite do dia atingido (${daily.sentToday}/${daily.limit} neste número). Continua amanhã sozinho.`,
-        }).eq("id", campaign_id);
-        await supabase.rpc("release_bulk_campaign_lock", { _campaign_id: campaign_id, _next_send_seconds: wait });
-        log.info(`📉 Limite diário ${daily.sentToday}/${daily.limit}; volta em ${wait}s`);
-        return new Response(JSON.stringify({ success: true, skipped: "daily_limit", sent_today: daily.sentToday, limit: daily.limit }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
       }
 
       // regra única de contato (telefone bloqueado, limite diário, prioridade de quem recebeu mensagem automática há pouco)
@@ -325,6 +307,7 @@ serve(async (req) => {
             status: "sent",
             sent_at: new Date().toISOString(),
             whatsapp_message_id: whatsappMessageId,
+            sent_integration_id: pick.number.id,
           }).eq("id", contact.id);
 
           // Deduct tokens
@@ -338,7 +321,7 @@ serve(async (req) => {
 
           sentCount++;
           await recordTouches(supabase, campaign.tenant_id, [{ target: { phone: contact.phone }, channel: "whatsapp", purpose: "bulk", ref: campaign_id }]);
-          log.info(`✅ Sent to ${formattedPhone}`);
+          log.info(`✅ Sent to ${formattedPhone} via ${pick.number.name}`);
 
           // Update campaign stats immediately after each successful send
           await saveStats(true);
@@ -351,7 +334,15 @@ serve(async (req) => {
               total_tokens_used: (campaign.total_tokens_used || 0) + sentCount * TOKENS_PER_MESSAGE,
             }).eq("id", campaign_id);
           }
-          return await pauseForConnection(PAUSE_REASONS.connection_error);
+          if (pick.total === 1) return await pauseForConnection(PAUSE_REASONS.connection_error);
+          // vários números: só este caiu; registra e tenta de novo em 1 min (o revezamento passa ao próximo)
+          await supabase.from("bulk_campaigns").update({
+            pause_reason: `${pick.number.name} fechou a conexão no envio (provável restrição). Enviando pelos outros números.`,
+          }).eq("id", campaign_id);
+          await supabase.rpc("release_bulk_campaign_lock", { _campaign_id: campaign_id, _next_send_seconds: 60 });
+          return new Response(JSON.stringify({ success: false, skipped: "number_connection_error", number: pick.number.name }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         } else {
           await supabase.from("campaign_contacts").update({
             status: "failed",

@@ -115,8 +115,8 @@ export function CampaignCard({ campaign, onStart, onPause, onView, onDelete, onE
               Reenviar falhas
             </Button>
           )}
-          {(campaign.status === "paused" || campaign.status === "draft") && onEdit && (
-            <Button size="sm" variant="ghost" onClick={() => onEdit(campaign)} title="Editar mensagem">
+          {["paused", "draft", "scheduled", "processing"].includes(campaign.status) && onEdit && (
+            <Button size="sm" variant="ghost" onClick={() => onEdit(campaign)} title="Editar campanha (números, texto, proteção)">
               <Pencil className="h-4 w-4" />
             </Button>
           )}

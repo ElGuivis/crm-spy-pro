@@ -1,14 +1,14 @@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CampaignNumbersPicker } from "./CampaignNumbersPicker";
 import type { WhatsAppIntegration } from "../types";
 
 interface Props {
   campaignName: string;
   onNameChange: (v: string) => void;
   integrations: WhatsAppIntegration[];
-  selectedIntegration: string;
-  onIntegrationChange: (v: string) => void;
+  selectedIntegrations: string[];
+  onIntegrationsChange: (v: string[]) => void;
   delayMin: string;
   onDelayMinChange: (v: string) => void;
   delayMax: string;
@@ -16,7 +16,7 @@ interface Props {
 }
 
 export function CampaignBasicFields({
-  campaignName, onNameChange, integrations, selectedIntegration, onIntegrationChange,
+  campaignName, onNameChange, integrations, selectedIntegrations, onIntegrationsChange,
   delayMin, onDelayMinChange, delayMax, onDelayMaxChange,
 }: Props) {
   return (
@@ -26,19 +26,7 @@ export function CampaignBasicFields({
         <Input placeholder="Ex: Promoção de Natal" value={campaignName} onChange={(e) => onNameChange(e.target.value)} />
       </div>
 
-      <div className="space-y-2">
-        <Label>WhatsApp para envio</Label>
-        <Select value={selectedIntegration} onValueChange={onIntegrationChange}>
-          <SelectTrigger><SelectValue placeholder="Selecione uma instância" /></SelectTrigger>
-          <SelectContent>
-            {integrations.map(i => (
-              <SelectItem key={i.id} value={i.id}>
-                {i.name} {i.metadata?.instanceName ? `(${i.metadata.instanceName})` : ""}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <CampaignNumbersPicker integrations={integrations} selected={selectedIntegrations} onChange={onIntegrationsChange} />
 
       <div className="space-y-2">
         <Label>Intervalo entre mensagens (segundos)</Label>

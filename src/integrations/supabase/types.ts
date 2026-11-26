@@ -1746,6 +1746,7 @@ export type Database = {
           delivered_count: number
           failed_count: number
           id: string
+          last_integration_id: string | null
           media_type: string | null
           media_url: string | null
           message_template: string
@@ -1768,6 +1769,7 @@ export type Database = {
           total_tokens_used: number
           updated_at: string
           whatsapp_integration_id: string | null
+          whatsapp_integration_ids: string[] | null
         }
         Insert: {
           ab_test_id?: string | null
@@ -1781,6 +1783,7 @@ export type Database = {
           delivered_count?: number
           failed_count?: number
           id?: string
+          last_integration_id?: string | null
           media_type?: string | null
           media_url?: string | null
           message_template: string
@@ -1803,6 +1806,7 @@ export type Database = {
           total_tokens_used?: number
           updated_at?: string
           whatsapp_integration_id?: string | null
+          whatsapp_integration_ids?: string[] | null
         }
         Update: {
           ab_test_id?: string | null
@@ -1816,6 +1820,7 @@ export type Database = {
           delivered_count?: number
           failed_count?: number
           id?: string
+          last_integration_id?: string | null
           media_type?: string | null
           media_url?: string | null
           message_template?: string
@@ -1838,6 +1843,7 @@ export type Database = {
           total_tokens_used?: number
           updated_at?: string
           whatsapp_integration_id?: string | null
+          whatsapp_integration_ids?: string[] | null
         }
         Relationships: [
           {
@@ -1910,6 +1916,7 @@ export type Database = {
           replied_at: string | null
           reply_status: string | null
           sent_at: string | null
+          sent_integration_id: string | null
           status: string
           tenant_id: string
           variables: Json | null
@@ -1927,6 +1934,7 @@ export type Database = {
           replied_at?: string | null
           reply_status?: string | null
           sent_at?: string | null
+          sent_integration_id?: string | null
           status?: string
           tenant_id: string
           variables?: Json | null
@@ -1944,6 +1952,7 @@ export type Database = {
           replied_at?: string | null
           reply_status?: string | null
           sent_at?: string | null
+          sent_integration_id?: string | null
           status?: string
           tenant_id?: string
           variables?: Json | null
@@ -1955,6 +1964,13 @@ export type Database = {
             columns: ["campaign_id"]
             isOneToOne: false
             referencedRelation: "bulk_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_contacts_sent_integration_id_fkey"
+            columns: ["sent_integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
             referencedColumns: ["id"]
           },
           {
@@ -14221,13 +14237,21 @@ export type Database = {
           open_count: number
         }[]
       }
-      get_bulk_daily_usage: {
-        Args: { _campaign_id: string }
-        Returns: {
-          days_before: number
-          sent_today: number
-        }[]
-      }
+      get_bulk_daily_usage:
+        | {
+            Args: { _campaign_id: string }
+            Returns: {
+              days_before: number
+              sent_today: number
+            }[]
+          }
+        | {
+            Args: { _campaign_id: string; _integration_id: string }
+            Returns: {
+              days_before: number
+              sent_today: number
+            }[]
+          }
       get_cashback_statement: {
         Args: {
           p_limit?: number

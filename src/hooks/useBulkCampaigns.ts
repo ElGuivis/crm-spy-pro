@@ -29,7 +29,7 @@ export function useBulkCampaigns() {
     try {
       const { data, error } = await supabase
         .from("bulk_campaigns")
-        .select("id, name, message_template, whatsapp_integration_id, delay_seconds, delay_max_seconds, status, total_contacts, sent_count, delivered_count, read_count, failed_count, tokens_per_message, total_tokens_used, scheduled_at, started_at, completed_at, created_at, media_url, media_type, timezone, ab_test_id, ab_variant, pause_reason, reply_message, replied_count, daily_limit, daily_limit_step")
+        .select("id, name, message_template, whatsapp_integration_id, whatsapp_integration_ids, delay_seconds, delay_max_seconds, status, total_contacts, sent_count, delivered_count, read_count, failed_count, tokens_per_message, total_tokens_used, scheduled_at, started_at, completed_at, created_at, media_url, media_type, timezone, ab_test_id, ab_variant, pause_reason, reply_message, replied_count, daily_limit, daily_limit_step")
         .order("created_at", { ascending: false });
       if (error) throw error;
       setCampaigns((data || []) as Campaign[]);
@@ -44,9 +44,9 @@ export function useBulkCampaigns() {
     try {
       const { data, error } = await supabase
         .from("integrations")
-        .select("id, name, metadata")
+        .select("id, name, status, metadata")
         .eq("type", "evolution_whatsapp")
-        .eq("status", "connected");
+        .order("name");
       if (error) throw error;
       setIntegrations((data || []) as WhatsAppIntegration[]);
     } catch (e) {

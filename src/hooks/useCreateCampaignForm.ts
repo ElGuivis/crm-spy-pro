@@ -47,7 +47,7 @@ export function useCreateCampaignForm({ onCreated, onOpenChange }: Options) {
 
   const [campaignName, setCampaignName] = useState("");
   const [messageTemplate, setMessageTemplate] = useState("");
-  const [selectedIntegration, setSelectedIntegration] = useState("");
+  const [selectedIntegrations, setSelectedIntegrations] = useState<string[]>([]);
   const [delayMin, setDelayMin] = useState("120");
   const [delayMax, setDelayMax] = useState("360");
   const [contacts, setContacts] = useState<ContactRow[]>([]);
@@ -194,7 +194,7 @@ export function useCreateCampaignForm({ onCreated, onOpenChange }: Options) {
   };
 
   const resetForm = () => {
-    setCampaignName(""); setMessageTemplate(""); setSelectedIntegration(""); setDelayMin("120"); setDelayMax("360");
+    setCampaignName(""); setMessageTemplate(""); setSelectedIntegrations([]); setDelayMin("120"); setDelayMax("360");
     setContacts([]); setFileName(""); setExtraColumns([]); removeMedia();
     setScheduledDate(""); setScheduledTime(""); setTimezone("America/Sao_Paulo");
     setSendingScheduleEnabled(false); setSendingSchedule({ ...DEFAULT_SCHEDULE });
@@ -203,7 +203,7 @@ export function useCreateCampaignForm({ onCreated, onOpenChange }: Options) {
   };
 
   const handleCreate = async () => {
-    if (!tenantId || !campaignName || !messageTemplate || !selectedIntegration || contacts.length === 0) {
+    if (!tenantId || !campaignName || !messageTemplate || selectedIntegrations.length === 0 || contacts.length === 0) {
       toast({ title: "Preencha todos os campos", description: "Nome, mensagem, WhatsApp e contatos são obrigatórios.", variant: "destructive" });
       return;
     }
@@ -254,7 +254,7 @@ export function useCreateCampaignForm({ onCreated, onOpenChange }: Options) {
       }
       const insertPayload = {
         tenant_id: tenantId, name: campaignName, message_template: messageTemplate,
-        whatsapp_integration_id: selectedIntegration, delay_seconds: parseInt(delayMin) || 120,
+        whatsapp_integration_id: selectedIntegrations[0], whatsapp_integration_ids: selectedIntegrations, delay_seconds: parseInt(delayMin) || 120,
         delay_max_seconds: parseInt(delayMax) || 360, total_contacts: contacts.length,
         tokens_per_message: 2, status: initialStatus, media_url: mediaUrl, media_type: mediaType,
         scheduled_at: scheduledAt, timezone, sending_schedule: schedulePayload,
@@ -282,7 +282,7 @@ export function useCreateCampaignForm({ onCreated, onOpenChange }: Options) {
 
   return {
     campaignName, setCampaignName, messageTemplate, setMessageTemplate,
-    selectedIntegration, setSelectedIntegration, delayMin, setDelayMin, delayMax, setDelayMax,
+    selectedIntegrations, setSelectedIntegrations, delayMin, setDelayMin, delayMax, setDelayMax,
     contacts, fileName, saving, extraColumns,
     mediaFile, mediaPreview, removeMedia, handleMediaUpload,
     scheduledDate, setScheduledDate, scheduledTime, setScheduledTime, timezone, setTimezone,

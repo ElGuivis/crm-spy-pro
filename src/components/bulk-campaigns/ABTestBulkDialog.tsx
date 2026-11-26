@@ -69,6 +69,7 @@ export function ABTestBulkDialog({ campaign, open, onOpenChange, onCreated }: Pr
         name:                    `${campaign.name} — Variante B`,
         message_template:        messageB.trim(),
         whatsapp_integration_id: campaign.whatsapp_integration_id,
+        whatsapp_integration_ids: campaign.whatsapp_integration_ids ?? null,
         delay_seconds:           campaign.delay_seconds,
         delay_max_seconds:       null as number | null,
         total_contacts:          contactsB.length,

@@ -3,6 +3,7 @@ export interface Campaign {
   name: string;
   message_template: string;
   whatsapp_integration_id: string | null;
+  whatsapp_integration_ids?: string[] | null;
   delay_seconds: number;
   status: string;
   total_contacts: number;
@@ -32,6 +33,7 @@ export interface Campaign {
 export interface WhatsAppIntegration {
   id: string;
   name: string;
+  status?: string | null;
   metadata: { instanceName?: string } | null;
 }
 
