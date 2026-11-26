@@ -1,6 +1,6 @@
 # CRM Spy Pro
 
-CRM/ERP multi-tenant em produção (https://spypro.com.br) com integrações de e-commerce, mensageria e marketing. Originado no Lovable Cloud, migrado em 2026-05-08 para um Supabase próprio no cloud e, em **2026-10-03, para um Supabase auto-hospedado numa VPS própria** (Fase M). O projeto cloud (`fsrgtnasverkkqkbnmzf`) segue ligado só até ser pausado após a validação. Frontend self-hosted via EasyPanel.
+CRM/ERP multi-tenant em produção (https://spypro.com.br) com integrações de e-commerce, mensageria e marketing. Originado no Lovable Cloud, migrado em 2026-05-08 para um Supabase próprio no cloud e, em **2026-10-03, para um Supabase auto-hospedado numa VPS própria** (Fase M). O projeto cloud (`fsrgtnasverkkqkbnmzf`) segue ligado só até ser pausado após a validação. Frontend self-hosted via EasyPanel **na mesma VPS do backend desde 26/11/2026** (antes ficava em outro servidor, 201.76.43.130, mantido só como cópia até ser desligado).
 
 > **Secrets** (DB password, service_role JWT, CRON_SECRET, edge function secret values, PATs) **não estão neste arquivo**. Estão na auto memory local em `~/.claude/projects/.../memory/reference_secrets.md` (gitignored). Se precisar deles e não tiver acesso à memory: pegar com o owner do projeto.
 
@@ -23,6 +23,7 @@ CRM/ERP multi-tenant em produção (https://spypro.com.br) com integrações de 
 | Secrets das edge functions | `/opt/supabase/functions.env` (`docker compose up -d functions` após editar) |
 | Banco | só por túnel SSH: `ssh -L 6543:127.0.0.1:6543 root@37.148.134.55`, usuário `postgres`, senha em `.env` (`POSTGRES_PASSWORD`) |
 | Backup | diário 03:30 em `/opt/backups` (3 versões) + cópia criptografada no Google Drive (rclone) |
+| EasyPanel (fronts) | `https://easypanel.spypro.com.br` (ou `:3000`); apps `spypro/crm-spy-pro` (spypro.com.br, www, grupovip/cadastro.lojaoutback.com.br) e `outback/formulario-recomeco` (lojaoutback.com.br, www). O Traefik do EasyPanel atende 80/443 de tudo (api, studio, evolution, r.usechronic). Domínio novo que não ganhou certificado: `docker service update --force easypanel-traefik` |
 
 > Detalhes operacionais, pendências e armadilhas da migração: memory `project_vps_migration.md`. Projetos antigos: Lovable `vmqyklqchwtwbrpowdgk` (desativado) e Supabase cloud `fsrgtnasverkkqkbnmzf` (a pausar).
 
