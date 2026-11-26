@@ -78,6 +78,15 @@ serve(async (req) => {
       });
     }
 
+    // Grupos, canais (newsletter) e status não são atendimento: o bot chegou a responder o menu dentro de um grupo (25/11/2026).
+    const remoteJidEarly = String(payload.data?.key?.remoteJid ?? '');
+    if (/@(g\.us|newsletter|broadcast)$/.test(remoteJidEarly)) {
+      log.info('⏭️ Skipping: mensagem de grupo/canal/status');
+      return new Response(JSON.stringify({ success: true, skipped: true, reason: 'group_or_broadcast' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const instanceName: string = payload.instance;
 
     // Fetch integration early — needed for LID phone number filtering
