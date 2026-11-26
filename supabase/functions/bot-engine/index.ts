@@ -132,6 +132,15 @@ serve(async (req) => {
       agent = data as AIAgentRecord | null;
     }
 
+    // Sem agente configurado (conversa/caixa de entrada) não há menu: o menu padrão abaixo só vale para agente sem botões.
+    if (!agent || agent.is_active === false) {
+      log.info('⏭️ Bot skipped: nenhum agente configurado para esta caixa de entrada');
+      await supabase.rpc('release_bot_lock', { _conversation_id: conversation_id });
+      return new Response(JSON.stringify({ skipped: true, reason: 'no_agent' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const state: BotState = conversation.bot_state_json || { stage: 'welcome', context: {} };
     const lowerMsg = message_content.toLowerCase().trim();
 

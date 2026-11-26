@@ -2,6 +2,23 @@ import type { WaCtx } from "./wa-webhook-types.ts";
 
 declare const EdgeRuntime: { waitUntil: (promise: Promise<void>) => void } | undefined;
 
+/** Há agente ATIVO para esta conversa? (da conversa/coluna, da caixa de entrada ou o padrão da loja)
+ *  Sem nenhum, o bot-engine mandaria um menu fixo do código e o ai-chat responderia com IA genérica:
+ *  caixa sem chatbot/agente configurado não responde sozinha (26/11/2026). */
+async function hasActiveAgent(ctx: WaCtx, currentAgentId: string | null): Promise<boolean> {
+  const { supabase, tenantId, conversation } = ctx;
+  const ids: string[] = currentAgentId ? [currentAgentId] : [];
+  if (conversation.inbox_id) {
+    const { data: inbox } = await supabase.from('inboxes').select('ai_agent_id').eq('id', conversation.inbox_id).maybeSingle();
+    if (inbox?.ai_agent_id) ids.push(inbox.ai_agent_id);
+  }
+  const { data: cfg } = await supabase.from('ai_assistant_configs').select('default_ai_agent_id').eq('tenant_id', tenantId).maybeSingle();
+  if (cfg?.default_ai_agent_id) ids.push(cfg.default_ai_agent_id);
+  if (ids.length === 0) return false;
+  const { data: active } = await supabase.from('ai_agents').select('id').in('id', ids).eq('is_active', true).limit(1);
+  return (active?.length ?? 0) > 0;
+}
+
 /** Automation guard + global menu intercept + AI/bot-engine routing.
  *  Returns null after handling (AI calls are fire-and-return, no early-exit needed). */
 export async function routeToAI(ctx: WaCtx): Promise<Response | null> {
@@ -28,7 +45,8 @@ export async function routeToAI(ctx: WaCtx): Promise<Response | null> {
   const lowerMsg = messageContent.toLowerCase().trim();
   const userWantsMenu = menuKeywords.includes(lowerMsg);
 
-  if (userWantsMenu && (conversation.handoff_mode || !conversation.ai_enabled) && conversation.status !== 'closed') {
+  if (userWantsMenu && (conversation.handoff_mode || !conversation.ai_enabled) && conversation.status !== 'closed'
+    && await hasActiveAgent(ctx, conversation.current_ai_agent_id)) {
     log.info('📋 User typed menu keyword while in handoff/disabled — routing to bot-engine');
     let inboxBotEnabled = false;
     if (conversation.inbox_id) {
@@ -78,6 +96,15 @@ export async function routeToAI(ctx: WaCtx): Promise<Response | null> {
       log.info('📍 Found AI agent from column assignment:', currentAgentId);
       await supabase.from('conversations').update({ current_ai_agent_id: currentAgentId }).eq('id', conversation.id);
     }
+  }
+
+  if (!(await hasActiveAgent(ctx, currentAgentId))) {
+    log.info('🙋 Nenhum agente/chatbot configurado para esta conversa: sem resposta automática, vai para atendimento humano');
+    await supabase.from('conversations').update({ status: 'pending', ai_enabled: false })
+      .eq('id', conversation.id).eq('status', 'bot');
+    return new Response(JSON.stringify({ success: true, action: 'no_bot_configured_to_human', conversation_id: conversation.id, message_id: message.id }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 
   let bufferEnabled = false;
@@ -139,7 +166,8 @@ export async function routeToAI(ctx: WaCtx): Promise<Response | null> {
         });
         const botResult = await botResponse.json();
         log.info('🤖 Bot-engine result:', botResult);
-        shouldCallAI = botResult.action === 'delegate_to_ai';
+        // no_agent: a caixa não tem agente, mas a loja tem um padrão (hasActiveAgent passou): o ai-chat o encontra
+        shouldCallAI = botResult.action === 'delegate_to_ai' || botResult.reason === 'no_agent';
         if (!shouldCallAI) log.info('🤖 Bot-engine handled it, skipping ai-chat');
       } catch (botErr) {
         log.error('❌ Bot-engine error, falling back to ai-chat:', botErr);
