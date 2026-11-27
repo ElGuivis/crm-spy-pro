@@ -1,5 +1,5 @@
 // Envia as respostas automáticas do disparo que chegaram FORA do horário da campanha (reply_status 'scheduled',
-// gravadas por _shared/wa-webhook-bulk-reply.ts). Cron `bulk-reply-scheduled` a cada 2 min (migration 20261127000001).
+// gravadas por _shared/wa-webhook-bulk-reply.ts) e reenvia as presas em 'sending' há 10+ min (runtime caiu na espera). Cron `bulk-reply-scheduled` a cada 2 min (migration 20261127000001).
 // Só envia com a janela da campanha aberta (Brasília), espaçado (20–45 s entre mensagens, "digitando..." antes)
 // e no máximo PER_RUN por campanha por chamada, para não sair uma rajada quando a janela abre.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     const { data: due } = await supabase.from("campaign_contacts").select("campaign_id")
-      .or("reply_status.eq.scheduled,and(reply_status.eq.sending,reply_claimed_at.not.is.null)").limit(500);
+      .or("reply_status.eq.scheduled,and(reply_status.eq.sending,reply_integration_id.not.is.null)").limit(500);
     const campaignIds = [...new Set((due ?? []).map((r: { campaign_id: string }) => r.campaign_id))];
     if (!campaignIds.length) return json({ success: true, sent: 0 });
 

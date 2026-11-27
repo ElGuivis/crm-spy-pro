@@ -54,21 +54,23 @@ export async function handleBulkReply(ctx: WaCtx): Promise<Response | null> {
   }
   if (status === "declined") { log.info(`📣 ${key} recusou o disparo ${row.campaign_id}`); return null; }
 
+  // De onde responder: usado pelo envio agendado E para reenviar se o runtime cair no meio da espera
+  // (bulk-reply-scheduled pega 'sending' parado há 10+ min; migration 20261127000004).
+  const replyTarget = { reply_integration_id: ctx.integration.id, reply_phone: phone, reply_conversation_id: conversation.id };
   const { data: camp } = await supabase.from("bulk_campaigns").select("sending_schedule, timezone").eq("id", row.campaign_id).maybeSingle();
   if (!replyWindowOpen(camp?.sending_schedule ?? null, camp?.timezone ?? null)) {
-    await supabase.from("campaign_contacts").update({
-      reply_status: "scheduled", reply_integration_id: ctx.integration.id, reply_phone: phone, reply_conversation_id: conversation.id,
-    }).eq("id", row.contact_id);
+    await supabase.from("campaign_contacts").update({ reply_status: "scheduled", ...replyTarget }).eq("id", row.contact_id);
     log.info(`📣 ${key} respondeu fora do horário da campanha: resposta agendada para a abertura da janela`);
     return new Response(JSON.stringify({ success: true, action: "bulk_reply_scheduled", conversation_id: conversation.id }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
+  await supabase.from("campaign_contacts").update(replyTarget).eq("id", row.contact_id);
   const text = renderBulkMessage(row.reply_message, row.name, row.variables);
   const plan = planReplyDelay(row.delay_min, row.delay_max, text.length);
   // Espera humana (lida → digitando → envia) em segundo plano: o webhook responde já.
-  // Se o runtime cair no meio, a reserva 'sending' fica presa e é reivindicada de novo após 10 min (claim_bulk_reply).
+  // Se o runtime cair no meio, a reserva 'sending' é reenviada pela bulk-reply-scheduled após 10 min.
   const task = (async () => {
     await humanPause(whatsAppConfig, phone, payload?.data?.key ?? null, plan, (m) => log.warn(`📣 ${m}`));
     const sent = await sendTextWithTokenCharge(whatsAppConfig, phone, text, supabase, tenantId, "bulk_campaign", "Disparo em massa: resposta automática", row.contact_id);
