@@ -37,7 +37,8 @@ export async function handleBulkReply(ctx: WaCtx): Promise<Response | null> {
   if (!key) return null;
 
   const status = isNegativeReply(messageContent) ? "declined" : "sending";
-  const { data, error } = await supabase.rpc("claim_bulk_reply", { _tenant_id: tenantId, _phone_key: key, _status: status });
+  // Só vale resposta ao MESMO número que enviou o disparo, em até 24 h (migration 20261127000003).
+  const { data, error } = await supabase.rpc("claim_bulk_reply", { _tenant_id: tenantId, _phone_key: key, _status: status, _integration_id: ctx.integration.id });
   if (error) { log.error("📣 claim_bulk_reply:", error.message); return null; }
   const row = (Array.isArray(data) ? data[0] : data) as Claimed | null;
   if (!row) {
