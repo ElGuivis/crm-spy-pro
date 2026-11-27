@@ -18,7 +18,7 @@ export interface CampaignNumbers {
 export interface Picked { id: string; name: string; instanceName: string }
 
 export type PickResult =
-  | { ok: true; number: Picked; note: string | null; total: number }
+  | { ok: true; number: Picked; note: string | null; total: number; available: number }
   | { ok: false; wait: "daily" | "unreachable" | "pause"; reason: string };
 
 export function campaignNumberIds(c: CampaignNumbers): string[] {
@@ -35,6 +35,13 @@ export function rotationOrder(ids: string[], lastUsed: string | null): string[] 
 
 const list = (names: string[]) => names.join(", ");
 
+/** Cada número disponível a mais acelera a fila em +50% (1 → 1x, 2 → 1,5x, 3 → 2x).
+ *  Linear de propósito: cada número nunca envia mais rápido que o intervalo configurado. */
+export const SPEEDUP_PER_EXTRA_NUMBER = 0.5;
+export function speedFactor(available: number): number {
+  return 1 + SPEEDUP_PER_EXTRA_NUMBER * Math.max(0, Math.floor(available) - 1);
+}
+
 export async function pickNumber(
   supabase: Client, baseUrl: string, apiKey: string, campaign: CampaignNumbers,
 ): Promise<PickResult> {
@@ -48,6 +55,8 @@ export async function pickNumber(
   );
 
   const down: string[] = [], unreachable: string[] = [], limited: string[] = [];
+  let chosen: Picked | null = null;
+  let available = 0; // números prontos para enviar agora (base da velocidade da fila)
   for (const id of rotationOrder(ids, campaign.last_integration_id)) {
     const info = byId.get(id);
     if (!info?.instanceName) { down.push(info?.name ?? "número removido"); continue; }
@@ -56,14 +65,18 @@ export async function pickNumber(
     if (state === "unknown") { unreachable.push(info.name); continue; }
     const daily = await checkDailyLimit(supabase, campaign.id, id, campaign.daily_limit, campaign.daily_limit_step);
     if (!daily.allowed) { limited.push(`${info.name} ${daily.sentToday}/${daily.limit}`); continue; }
+    available++;
+    if (!chosen) chosen = { id, name: info.name, instanceName: info.instanceName };
+  }
 
-    await supabase.from("bulk_campaigns").update({ last_integration_id: id }).eq("id", campaign.id);
+  if (chosen) {
+    await supabase.from("bulk_campaigns").update({ last_integration_id: chosen.id }).eq("id", campaign.id);
     const notes = [
       down.length ? `Desconectado: ${list(down)}.` : "",
       limited.length ? `Limite do dia: ${list(limited)}.` : "",
     ].filter(Boolean);
     return {
-      ok: true, number: { id, name: info.name, instanceName: info.instanceName }, total: ids.length,
+      ok: true, number: chosen, total: ids.length, available,
       note: notes.length ? `${notes.join(" ")} Enviando pelos outros números.` : null,
     };
   }

@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.168.0/testing/asserts.ts";
-import { campaignNumberIds, rotationOrder } from "../bulk-campaign-processor/numbers.ts";
+import { campaignNumberIds, rotationOrder, speedFactor } from "../bulk-campaign-processor/numbers.ts";
 
 const base = { id: "c", daily_limit: null, daily_limit_step: 0, last_integration_id: null };
 
@@ -26,4 +26,16 @@ Deno.test("variações completas: sorteia entre a principal e as variações, ig
   assertEquals(pickVariant("A", ["B", " ", "C"], () => 0.99), "C");
   assertEquals(pickVariant("A", null, () => 0.99), "A");
   assertEquals(pickVariant("A", [], () => 0.5), "A");
+});
+
+Deno.test("velocidade: +50% por número disponível; cada número nunca passa do intervalo configurado", () => {
+  assertEquals(speedFactor(0), 1);
+  assertEquals(speedFactor(1), 1);
+  assertEquals(speedFactor(2), 1.5);
+  assertEquals(speedFactor(3), 2);
+  assertEquals(speedFactor(4), 2.5);
+  for (let n = 1; n <= 20; n++) {
+    // intervalo de cada número = intervalo da campanha × n / fator, tem de ser >= 1×
+    if (n / speedFactor(n) < 1) throw new Error(`número ${n} enviaria rápido demais`);
+  }
 });

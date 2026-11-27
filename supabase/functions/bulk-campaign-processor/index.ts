@@ -6,7 +6,7 @@ import { getRestrictedCorsHeaders } from "../_shared/cors.ts";
 import { getCorrelationId, createLogger } from "../_shared/correlation.ts";
 import { canContact, recordTouches, REASON_TEXT } from "../_shared/contact-policy.ts";
 import { secondsUntilNextBrtDay, isWithinSendingWindow } from "./pacing.ts";
-import { pickNumber } from "./numbers.ts";
+import { pickNumber, speedFactor } from "./numbers.ts";
 import { renderBulkMessage, pickVariant } from "../_shared/spintax.ts";
 import { hasWhatsApp, isConnectionError, typingDelayMs, PAUSE_REASONS } from "./evolution-guard.ts";
 
@@ -406,8 +406,12 @@ serve(async (req) => {
       } else {
         // Schedule next batch in background after the humanized delay,
         // without blocking the current response (avoids 150s idle timeout).
-        const randomDelay = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
-        log.info(`📋 ${totalRemaining} remaining. Next batch in ${randomDelay}s`);
+        // Vários números disponíveis: +50% de velocidade por número extra (o intervalo de cada número
+        // continua >= o configurado). Desconectado/limite do dia não contam (pick.available).
+        const factor = pick.ok ? speedFactor(pick.available) : 1;
+        const baseDelay = Math.floor(Math.random() * (maxDelay - minDelay + 1)) + minDelay;
+        const randomDelay = Math.max(5, Math.round(baseDelay / factor));
+        log.info(`📋 ${totalRemaining} remaining. Next batch in ${randomDelay}s (${factor}x)`);
 
         // Release the lock and set next_send_at so the cron scheduler does NOT
         // re-invoke before this delay has elapsed (prevents parallel sends).

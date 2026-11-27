@@ -36,7 +36,7 @@ export function CampaignBasicFields({
           <Input type="number" min="10" max="600" value={delayMax} onChange={(e) => onDelayMaxChange(e.target.value)} className="w-24" />
           <span className="text-sm text-muted-foreground">seg</span>
         </div>
-        <p className="text-xs text-muted-foreground">Delay aleatório entre cada envio para simular comportamento humano (recomendado: 120-360s)</p>
+        <p className="text-xs text-muted-foreground">Delay aleatório entre cada envio para simular comportamento humano (recomendado: 120-360s). Com mais de um número, a fila anda +50% mais rápido por número extra conectado (2 números = 1,5x, 3 = 2x), e cada número continua respeitando este intervalo.</p>
       </div>
     </>
   );

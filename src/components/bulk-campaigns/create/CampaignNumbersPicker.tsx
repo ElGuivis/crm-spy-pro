@@ -51,7 +51,7 @@ export function CampaignNumbersPicker({ integrations, selected, onChange }: Prop
       )}
       <p className="text-xs text-muted-foreground">
         {selected.length > 1
-          ? `${selected.length} números: o envio reveza entre eles. Se um cair ou bater o limite do dia, segue pelos outros. O limite diário vale para cada número.`
+          ? `${selected.length} números: o envio reveza entre eles e a fila anda ${(1 + 0.5 * (selected.length - 1)).toLocaleString("pt-BR")}x mais rápido. Se um cair ou bater o limite do dia, segue pelos outros (e desacelera). O limite diário vale para cada número.`
           : "Escolha mais de um número para revezar o envio e dividir o volume entre os chips."}
       </p>
     </div>
