@@ -87,6 +87,14 @@ serve(async (req) => {
       });
     }
 
+    // Teste automático de recebimento entre os números da loja (scripts/vps/wa_health.py): não vira conversa nem aciona bot.
+    const pingText = String(payload.data?.message?.conversation ?? payload.data?.message?.extendedTextMessage?.text ?? '');
+    if (pingText.startsWith('[spypro-ping]')) {
+      return new Response(JSON.stringify({ success: true, skipped: true, reason: 'health_ping' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const instanceName: string = payload.instance;
 
     // Fetch integration early — needed for LID phone number filtering
