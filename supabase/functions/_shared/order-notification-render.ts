@@ -21,6 +21,8 @@ export interface RenderVars {
   firstName: string; name: string; orderNumber: string; status: string; total: string; products: string;
   /** null = ainda sem código: o marcador fica no texto e é preenchido na hora do envio (applyTracking). */
   tracking: string | null;
+  /** {{forma_envio}} (ex.: "Motoboy", "Retirar pessoalmente") e {{forma_pagamento}} (ex.: "Pagamento na entrega"). */
+  shipping?: string; payment?: string;
 }
 
 const escapeHtml = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -35,7 +37,9 @@ export function renderTemplate(tpl: string, v: RenderVars, html = false): string
     .replace(/\{\{(numero_pedido|order_number)\}\}/g, put(v.orderNumber))
     .replace(/\{\{status\}\}/g, put(v.status))
     .replace(/\{\{valor_total\}\}/g, put(v.total))
-    .replace(/\{\{produtos\}\}/g, products || "—");
+    .replace(/\{\{produtos\}\}/g, products || "—")
+    .replace(/\{\{forma_envio\}\}/g, put(v.shipping || "—"))
+    .replace(/\{\{forma_pagamento\}\}/g, put(v.payment || "—"));
   if (v.tracking != null) out = out.replace(CODE_RE, put(v.tracking)).replace(LINK_RE, put(trackingUrl(v.tracking)));
   return out;
 }
@@ -59,6 +63,23 @@ export function trackingFromOrder(...sources: Array<Record<string, unknown> | nu
     if (code) return code;
   }
   return "";
+}
+
+/** Forma de envio e de pagamento do pedido (resposta da API da loja ou raw_json da linha de li_orders). */
+export function shippingAndPayment(...sources: Array<Record<string, unknown> | null | undefined>): { shipping: string; payment: string } {
+  let shipping = "", payment = "";
+  for (const s of sources) {
+    if (!s) continue;
+    const raw = typeof s.raw_json === "string" ? safeJson(s.raw_json) : (s.raw_json as Record<string, unknown> | null);
+    for (const o of [s, raw]) {
+      if (!o) continue;
+      const envio = Array.isArray(o.envios) ? (o.envios[0] as Record<string, unknown> | undefined) : undefined;
+      const pag = Array.isArray(o.pagamentos) ? (o.pagamentos[0] as Record<string, unknown> | undefined) : undefined;
+      shipping ||= pick((envio?.forma_envio as Record<string, unknown> | undefined)?.nome);
+      payment ||= pick((pag?.forma_pagamento as Record<string, unknown> | undefined)?.nome);
+    }
+  }
+  return { shipping, payment };
 }
 
 function safeJson(text: string): Record<string, unknown> | null {

@@ -1923,6 +1923,10 @@ export type Database = {
           phone: string
           read_at: string | null
           replied_at: string | null
+          reply_claimed_at: string | null
+          reply_conversation_id: string | null
+          reply_integration_id: string | null
+          reply_phone: string | null
           reply_status: string | null
           sent_at: string | null
           sent_integration_id: string | null
@@ -1941,6 +1945,10 @@ export type Database = {
           phone: string
           read_at?: string | null
           replied_at?: string | null
+          reply_claimed_at?: string | null
+          reply_conversation_id?: string | null
+          reply_integration_id?: string | null
+          reply_phone?: string | null
           reply_status?: string | null
           sent_at?: string | null
           sent_integration_id?: string | null
@@ -1959,6 +1967,10 @@ export type Database = {
           phone?: string
           read_at?: string | null
           replied_at?: string | null
+          reply_claimed_at?: string | null
+          reply_conversation_id?: string | null
+          reply_integration_id?: string | null
+          reply_phone?: string | null
           reply_status?: string | null
           sent_at?: string | null
           sent_integration_id?: string | null
@@ -1973,6 +1985,20 @@ export type Database = {
             columns: ["campaign_id"]
             isOneToOne: false
             referencedRelation: "bulk_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_contacts_reply_conversation_id_fkey"
+            columns: ["reply_conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_contacts_reply_integration_id_fkey"
+            columns: ["reply_integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
             referencedColumns: ["id"]
           },
           {
@@ -13847,6 +13873,60 @@ export type Database = {
           },
         ]
       }
+      whatsapp_health_alerts: {
+        Row: {
+          created_at: string
+          details: Json
+          id: string
+          instance_name: string
+          integration_id: string | null
+          kind: string
+          last_seen_at: string
+          message: string
+          resolved_at: string | null
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          details?: Json
+          id?: string
+          instance_name: string
+          integration_id?: string | null
+          kind: string
+          last_seen_at?: string
+          message: string
+          resolved_at?: string | null
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          details?: Json
+          id?: string
+          instance_name?: string
+          integration_id?: string | null
+          kind?: string
+          last_seen_at?: string
+          message?: string
+          resolved_at?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_health_alerts_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_health_alerts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       customer_rfm_latest: {
@@ -14162,6 +14242,19 @@ export type Database = {
         Args: { p_limit?: number }
         Returns: {
           id: string
+        }[]
+      }
+      claim_scheduled_bulk_replies: {
+        Args: { _campaign_id: string; _limit: number }
+        Returns: {
+          contact_id: string
+          name: string
+          reply_conversation_id: string
+          reply_integration_id: string
+          reply_message: string
+          reply_phone: string
+          tenant_id: string
+          variables: Json
         }[]
       }
       cleanup_customer_touches: { Args: never; Returns: number }

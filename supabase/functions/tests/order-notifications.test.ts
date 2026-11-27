@@ -296,3 +296,13 @@ Deno.test("nextWindowOpen: dentro da janela envia; fora espera a abertura (Bras�
   assertEquals(new Date(nextWindowOpen(at("2026-11-12T07:00:00Z"), 8, 21)!).toISOString(), "2026-11-12T11:00:00.000Z"); // 4h → 8h do mesmo dia
   assertEquals(nextWindowOpen(at("2026-11-12T00:00:00Z"), 21, 8), null); // janela inválida não restringe
 });
+
+Deno.test("forma de envio e de pagamento: lê da API e do raw_json; vazio vira —", async () => {
+  const { shippingAndPayment, renderTemplate } = await import("../_shared/order-notification-render.ts");
+  const api = { envios: [{ forma_envio: { nome: "Motoboy" } }], pagamentos: [{ forma_pagamento: { nome: "Pagamento na entrega" } }] };
+  assertEquals(shippingAndPayment(api, null), { shipping: "Motoboy", payment: "Pagamento na entrega" });
+  assertEquals(shippingAndPayment({}, { raw_json: JSON.stringify(api) }), { shipping: "Motoboy", payment: "Pagamento na entrega" });
+  const base = { firstName: "Ana", name: "Ana", orderNumber: "1", status: "x", total: "R$ 1", products: "", tracking: null };
+  assertEquals(renderTemplate("{{forma_envio}} / {{forma_pagamento}}", { ...base, shipping: "Retirar pessoalmente", payment: "Pix" }), "Retirar pessoalmente / Pix");
+  assertEquals(renderTemplate("{{forma_envio}}", base), "—");
+});

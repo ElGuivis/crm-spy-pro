@@ -13,7 +13,7 @@ import { sendEmail, getEmailConfig } from "../_shared/email-sender.ts";
  * informado, usando o texto que está na tela (mesmo sem salvar). Custa 1 token, como qualquer mensagem automática. Não mexe em pedidos.
  */
 const SAMPLE = {
-  firstName: "Cliente", name: "Cliente Teste", orderNumber: "9999", status: "Pedido Enviado", total: "R$ 199,90",
+  firstName: "Cliente", name: "Cliente Teste", orderNumber: "9999", status: "Pedido Enviado", total: "R$ 199,90", shipping: "Motoboy", payment: "Pagamento na entrega",
   products: "• 1x Camiseta Exemplo - R$ 129,90\n• 1x Boné Exemplo - R$ 70,00", tracking: "BR123456789BR",
 };
 const MAX_TEXT = 4000;

@@ -4,7 +4,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { createLogger } from "./correlation.ts";
 import { canContact, normEmail, normPhone } from "./contact-policy.ts";
-import { lookupTracking, normStatus, renderTemplate, trackingFromOrder, usesTracking, type RenderVars } from "./order-notification-render.ts";
+import { lookupTracking, normStatus, renderTemplate, shippingAndPayment, trackingFromOrder, usesTracking, type RenderVars } from "./order-notification-render.ts";
 
 const log = createLogger("order-notifications", "shared");
 type Supabase = ReturnType<typeof createClient>;
@@ -36,9 +36,10 @@ async function buildContext(supabase: Supabase, apiOrder: Row, dbOrder: Row, sta
   let tracking = trackingFromOrder(dbOrder, apiOrder);
   if (!tracking) tracking = await lookupTracking(supabase, orderRowId);
   const orderNumber = String(dbOrder.numero);
+  const { shipping, payment } = shippingAndPayment(apiOrder, dbOrder);
   return {
     phone, email, orderRowId, orderNumber, tenantId, liId: String(apiOrder.id || dbOrder.li_id || ""),
-    vars: { firstName: name.split(" ")[0], name, orderNumber, status: statusName, total: total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }), products, tracking: tracking || null },
+    vars: { firstName: name.split(" ")[0], name, orderNumber, status: statusName, total: total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }), products, tracking: tracking || null, shipping, payment },
   };
 }
 

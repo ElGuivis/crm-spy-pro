@@ -52,6 +52,8 @@ export const MESSAGE_PLACEHOLDERS = [
   { key: "{{produtos}}", label: "Produtos" },
   { key: "{{rastreamento}}", label: "Código Rastreamento" },
   { key: "{{link_rastreio}}", label: "Link de Rastreio" },
+  { key: "{{forma_envio}}", label: "Forma de Entrega" },
+  { key: "{{forma_pagamento}}", label: "Forma de Pagamento" },
 ];
 
 export const DEFAULT_MESSAGES: Record<string, string> = {

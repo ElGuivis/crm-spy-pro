@@ -11,6 +11,7 @@ import { OnboardingTour } from "@/components/onboarding/OnboardingTour";
 import { ChangelogDialog } from "@/components/help/ChangelogDialog";
 import { MobileMenuProvider } from "@/contexts/MobileMenuContext";
 import { useHandoffAlert } from "@/hooks/useHandoffAlert";
+import { WhatsAppHealthBanner } from "@/components/layout/WhatsAppHealthBanner";
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -55,6 +56,9 @@ export function MainLayout({ children }: MainLayoutProps) {
             </div>
           </header>
         )}
+
+        {/* Número de WhatsApp com problema (alarme da VPS) */}
+        <WhatsAppHealthBanner floating={isFullscreen} />
 
         {/* Page Content with transition */}
         <div className={isFullscreen 
