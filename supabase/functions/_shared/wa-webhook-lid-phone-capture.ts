@@ -1,5 +1,4 @@
 import type { WaCtx } from "./wa-webhook-types.ts";
-import { sendReplyWithTokenCharge } from "./whatsapp-sender.ts";
 import { replaceMessagePlaceholders } from "./wa-webhook-message-parser.ts";
 import { RECEPTIONIST_CONFIG_COLUMNS } from "./select-columns.ts";
 
@@ -7,7 +6,7 @@ import { RECEPTIONIST_CONFIG_COLUMNS } from "./select-columns.ts";
  *  On valid phone: merges contacts if needed, dispatches welcome to real number.
  *  On invalid phone: asks again. */
 export async function handleLidPhoneCapture(ctx: WaCtx): Promise<Response | null> {
-  const { supabase, log, corsHeaders, tenantId, integration, contact, conversation, messageContent, phone, whatsAppConfig, instanceName, payload } = ctx;
+  const { supabase, log, corsHeaders, tenantId, integration, contact, conversation, messageContent, phone, instanceName } = ctx;
 
   if (!conversation.awaiting_phone_input || !ctx.isLidContact) return null;
 
@@ -108,19 +107,11 @@ export async function handleLidPhoneCapture(ctx: WaCtx): Promise<Response | null
     });
   }
 
-  // Invalid phone format — ask again
-  log.info('⚠️ Invalid phone format received:', messageContent);
-  const retryMessage =
-    `Hmm, não consegui identificar um número válido. 🤔\n\n` +
-    `Por favor, envie seu número de WhatsApp com DDD (10 ou 11 dígitos).\n` +
-    `Exemplo: 11999998888`;
-  const retryResult = await sendReplyWithTokenCharge(
-    whatsAppConfig, phone, retryMessage, payload.data.key.id,
-    supabase, tenantId, 'receptionist', 'Recepcionista: retry solicitação telefone', conversation.id,
-  );
-  await supabase.from('messages').insert({ conversation_id: conversation.id, tenant_id: tenantId, sender_type: 'bot', direction: 'outbound', content: retryMessage, status: retryResult.success ? 'sent' : 'failed' });
-
-  return new Response(JSON.stringify({ success: true, action: 'retry_ask_phone', conversation_id: conversation.id }), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
+  // Não é telefone: NUNCA responder "não consegui identificar um número" (a espera é silenciosa; o cliente nem
+  // foi perguntado). 27/11/2026: depois de reparear o guivis os contatos chegaram como @lid sem número e o bot
+  // mandou essa frase para quem só respondeu "pode sim" ao disparo. Desliga a espera e segue o fluxo normal.
+  log.info('⚠️ LID awaiting phone, mensagem não é telefone: segue o fluxo normal');
+  await supabase.from('conversations').update({ awaiting_phone_input: false }).eq('id', conversation.id);
+  conversation.awaiting_phone_input = false;
+  return null;
 }
