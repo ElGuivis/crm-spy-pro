@@ -491,3 +491,7 @@ verify_jwt = false
 [functions.r]
 # PÚBLICO (links curtos): só redireciona para o que está em short_links; limite de taxa por IP
 verify_jwt = false
+
+[functions.bulk-reply-scheduled]
+# INTERNAL — cron envia respostas do disparo agendadas para o horário da campanha
+verify_jwt = false

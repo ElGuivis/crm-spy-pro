@@ -3,11 +3,14 @@
 // gera denúncia/restrição). Quem responder recebe `bulk_campaigns.reply_message` (com o link) uma única vez:
 // conversa iniciada pelo cliente não pesa contra o número. Resposta negativa ("não") só registra.
 // Roda depois do SAIR e antes do menu/bot. Reivindicação atômica em `claim_bulk_reply` (migration 20261125000002).
+// Fora do horário da campanha (Brasília) a resposta fica 'scheduled' e sai pela função bulk-reply-scheduled
+// quando a janela abrir (migration 20261127000001): nada de link às 4 h da manhã.
 import type { WaCtx } from "./wa-webhook-types.ts";
 import { sendTextWithTokenCharge } from "./whatsapp-sender.ts";
 import { optoutPhone } from "./wa-webhook-optout.ts";
 import { renderBulkMessage } from "./spintax.ts";
 import { humanPause, planReplyDelay } from "./bulk-reply-humanize.ts";
+import { replyWindowOpen } from "./bulk-schedule.ts";
 
 declare const EdgeRuntime: { waitUntil: (p: Promise<unknown>) => void } | undefined;
 
@@ -37,8 +40,29 @@ export async function handleBulkReply(ctx: WaCtx): Promise<Response | null> {
   const { data, error } = await supabase.rpc("claim_bulk_reply", { _tenant_id: tenantId, _phone_key: key, _status: status });
   if (error) { log.error("📣 claim_bulk_reply:", error.message); return null; }
   const row = (Array.isArray(data) ? data[0] : data) as Claimed | null;
-  if (!row) return null; // não respondeu a disparo com resposta automática
+  if (!row) {
+    // Já tem resposta agendada (respondeu fora do horário e mandou mais mensagens): segura também, sem bot de madrugada.
+    const { data: pending } = await supabase.from("campaign_contacts").select("id")
+      .eq("tenant_id", tenantId).eq("reply_status", "scheduled").eq("reply_conversation_id", conversation.id).limit(1);
+    if (pending?.length) {
+      return new Response(JSON.stringify({ success: true, action: "bulk_reply_scheduled", conversation_id: conversation.id }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    return null; // não respondeu a disparo com resposta automática
+  }
   if (status === "declined") { log.info(`📣 ${key} recusou o disparo ${row.campaign_id}`); return null; }
+
+  const { data: camp } = await supabase.from("bulk_campaigns").select("sending_schedule, timezone").eq("id", row.campaign_id).maybeSingle();
+  if (!replyWindowOpen(camp?.sending_schedule ?? null, camp?.timezone ?? null)) {
+    await supabase.from("campaign_contacts").update({
+      reply_status: "scheduled", reply_integration_id: ctx.integration.id, reply_phone: phone, reply_conversation_id: conversation.id,
+    }).eq("id", row.contact_id);
+    log.info(`📣 ${key} respondeu fora do horário da campanha: resposta agendada para a abertura da janela`);
+    return new Response(JSON.stringify({ success: true, action: "bulk_reply_scheduled", conversation_id: conversation.id }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
   const text = renderBulkMessage(row.reply_message, row.name, row.variables);
   const plan = planReplyDelay(row.delay_min, row.delay_max, text.length);
